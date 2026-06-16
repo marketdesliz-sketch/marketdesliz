@@ -223,3 +223,70 @@ export async function getNotificacionesNegocio(negocioId) {
     return [];
   }
 }
+
+// Agregar estas funciones al final de src/lib/notificaciones.js
+
+/**
+ * Marcar notificación como leída
+ */
+export async function marcarNotificacionLeida(notificacionId) {
+  try {
+    if (!pb) {
+      console.error('❌ PocketBase no está disponible');
+      return { success: false };
+    }
+    
+    await pb.collection('notificaciones').update(notificacionId, {
+      leida: true,
+      leidaEn: new Date().toISOString()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Error marcando notificación como leída:', error);
+    return { success: false };
+  }
+}
+
+/**
+ * Crear notificación para un negocio
+ */
+export async function crearNotificacionNegocio(data) {
+  try {
+    if (!pb) {
+      console.error('❌ PocketBase no está disponible');
+      return { success: false };
+    }
+    
+    const notificacion = await pb.collection('notificaciones').create({
+      ...data,
+      tipoUsuario: 'negocio',
+      leida: false,
+      created: new Date().toISOString()
+    });
+    return { success: true, data: notificacion };
+  } catch (error) {
+    console.error('Error creando notificación:', error);
+    return { success: false };
+  }
+}
+
+/**
+ * Obtener notificaciones no leídas de un negocio
+ */
+export async function getNotificacionesNoLeidas(negocioId) {
+  try {
+    if (!pb) {
+      console.error('❌ PocketBase no está disponible');
+      return [];
+    }
+    
+    const notifications = await pb.collection('notificaciones').getFullList({
+      filter: `entidadId = "${negocioId}" && entidadTipo = "negocio" && leida = false`,
+      sort: '-created'
+    });
+    return notifications;
+  } catch (error) {
+    console.error('Error obteniendo notificaciones no leídas:', error);
+    return [];
+  }
+}
