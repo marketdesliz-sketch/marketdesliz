@@ -294,4 +294,4 @@ export default function TarjetaCliente({ datos, tipo = 'frente' }) {
       </div>
     </div>
   );
-}
+}"// Updated $(date)" 

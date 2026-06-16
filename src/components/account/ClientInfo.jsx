@@ -332,4 +332,4 @@ export default function ClientInfo({ client, onUpdate }) {
       </div>
     </div>
   );
-}
+}"// Updated $(date)" 

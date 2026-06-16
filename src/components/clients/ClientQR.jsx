@@ -106,4 +106,4 @@ export default function ClientQR({ clientId, clientName }) {
       </div>
     </div>
   );
-}
+}"// Updated $(date)" 

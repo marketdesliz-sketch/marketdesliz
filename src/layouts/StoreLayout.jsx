@@ -67,4 +67,4 @@ export default function StoreLayout({ children, noPadding = false }) {
       </main>
     </div>
   );
-}
+}"// Updated $(date)" 
