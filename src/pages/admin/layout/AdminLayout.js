@@ -20,7 +20,7 @@ import {
   X,
   Crown
 } from 'lucide-react';
-import pb from '../lib/pocketbase';
+import pb from '../../lib/pocketbase';
 
 export default function AdminLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
