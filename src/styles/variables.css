@@ -1,0 +1,52 @@
+/* src/styles/variables.css */
+:root {
+  /* Colores principales */
+  --primary: #6C3BFF;
+  --primary-dark: #5a2ed9;
+  --primary-light: #9A7BFF;
+  --secondary: #10b981;
+  --dark: #1e293b;
+  --gray: #64748b;
+  --light-gray: #f8fafc;
+  --white: #ffffff;
+  --black: #000000;
+  
+  /* Sombras */
+  --shadow-sm: 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.05);
+  --shadow-lg: 0 20px 30px -10px rgba(108,59,255,0.2);
+  --shadow-button: 0 4px 15px rgba(0,0,0,0.2);
+  
+  /* Bordes */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 50px;
+  
+  /* Espaciados */
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --spacing-3xl: 48px;
+  --spacing-4xl: 56px;
+  
+  /* Fuentes */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-xs: 12px;
+  --font-sm: 14px;
+  --font-md: 16px;
+  --font-lg: 18px;
+  --font-xl: 20px;
+  --font-2xl: 32px;
+  --font-3xl: 42px;
+  
+  /* Z-index */
+  --z-low: 1;
+  --z-medium: 10;
+  --z-high: 20;
+  --z-modal: 100;
+}

@@ -1,0 +1,8 @@
+node_modules/ 
+.next/ 
+.env.local 
+.env.production 
+pb_data/ 
+.vercel/ 
+dist/ 
+.DS_Store 

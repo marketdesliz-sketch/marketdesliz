@@ -1,0 +1,43 @@
+// pb_migrations/configure_api_rules.js
+migrate((db) => {
+  // Configurar colección carrusel
+  const carruselCollection = dao.findCollectionByNameOrId("carrusel");
+  carruselCollection.listRule = "1=1";
+  carruselCollection.viewRule = "1=1";
+  carruselCollection.createRule = "@request.auth.id != \"\"";
+  carruselCollection.updateRule = "@request.auth.id != \"\"";
+  carruselCollection.deleteRule = "@request.auth.id != \"\"";
+  dao.saveCollection(carruselCollection);
+
+  // Configurar colección products
+  const productsCollection = dao.findCollectionByNameOrId("products");
+  productsCollection.listRule = "1=1";
+  productsCollection.viewRule = "1=1";
+  productsCollection.createRule = "@request.auth.id != \"\"";
+  productsCollection.updateRule = "@request.auth.id != \"\"";
+  productsCollection.deleteRule = "@request.auth.id != \"\"";
+  dao.saveCollection(productsCollection);
+
+  // Configurar colecciones privadas
+  const collections = ["clients", "orders", "payments", "kyc_verifications", "tandas", "tanda_members", "tanda_payments"];
+  
+  collections.forEach(collectionName => {
+    try {
+      const collection = dao.findCollectionByNameOrId(collectionName);
+      collection.listRule = "@request.auth.id != \"\"";
+      collection.viewRule = "@request.auth.id != \"\"";
+      collection.createRule = "@request.auth.id != \"\"";
+      collection.updateRule = "@request.auth.id != \"\"";
+      collection.deleteRule = "@request.auth.id != \"\"";
+      dao.saveCollection(collection);
+      console.log(`Configurada colección: ${collectionName}`);
+    } catch (e) {
+      console.log(`Colección no encontrada: ${collectionName}`);
+    }
+  });
+
+  return true;
+}, (db) => {
+  // Rollback (opcional)
+  return true;
+});
