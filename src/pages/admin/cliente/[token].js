@@ -20,6 +20,7 @@ import StoreLayout from '../../../layouts/StoreLayout';
 import { getDatosTarjeta } from '../../lib/tarjetaService';
 import TarjetaCliente from '../../components/TarjetaCliente';
 import { formatDate } from '../../lib/utils';
+import pb from '../../lib/pocketbase';
 
 // ─── Validación de token ──────────────────────────────────────────────
 const TOKEN_REGEX = /^MDZ-[A-Z]{3}-\d{4}$/;
@@ -78,8 +79,8 @@ export default function ClientePage() {
       setDatos(data);
 
       // Registrar visita (opcional)
+      // Registrar visita (opcional)
       try {
-        const pb = (await import('../../lib/pocketbase')).default;
         await pb.collection('log_actividad').create({
           entidad: 'tarjeta',
           entidadId: data.idCliente,
@@ -263,18 +264,16 @@ export default function ClientePage() {
           <div className="flex justify-center gap-4 mb-8">
             <button
               onClick={() => toggleVista(true)}
-              className={`px-6 py-2 rounded-lg font-medium transition ${
-                mostrarFrente ? 'bg-[#6C3BFF] text-white shadow-sm' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
+              className={`px-6 py-2 rounded-lg font-medium transition ${mostrarFrente ? 'bg-[#6C3BFF] text-white shadow-sm' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
               aria-label="Mostrar frente de la tarjeta"
             >
               Frente
             </button>
             <button
               onClick={() => toggleVista(false)}
-              className={`px-6 py-2 rounded-lg font-medium transition ${
-                !mostrarFrente ? 'bg-[#6C3BFF] text-white shadow-sm' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
+              className={`px-6 py-2 rounded-lg font-medium transition ${!mostrarFrente ? 'bg-[#6C3BFF] text-white shadow-sm' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
               aria-label="Mostrar reverso de la tarjeta"
             >
               Reverso
