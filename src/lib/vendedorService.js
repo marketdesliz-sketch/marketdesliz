@@ -689,30 +689,6 @@ export async function desactivarVendedor(vendedorId) {
 }
 
 // ============================================================
-// DESACTIVAR VENDEDOR
-// ============================================================
-export async function desactivarVendedor(vendedorId) {
-  try {
-    await pb.collection(COLLECTIONS.VENDEDORES).update(vendedorId, {
-      activo: false
-    });
-
-    const vendedor = await pb.collection(COLLECTIONS.VENDEDORES).getOne(vendedorId);
-    if (vendedor.userId) {
-      await pb.collection(COLLECTIONS.USERS).update(vendedor.userId, {
-        activo: false
-      });
-    }
-
-    console.log(`🔒 Vendedor ${vendedorId} desactivado`);
-    return true;
-  } catch (error) {
-    console.error('Error desactivando vendedor:', error);
-    throw error;
-  }
-}
-
-// ============================================================
 // OBTENER VENDEDOR COMPLETO (CON DATOS DEL USUARIO)
 // ============================================================
 export async function getVendedorCompleto(vendedorId) {
