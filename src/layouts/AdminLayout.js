@@ -2,202 +2,207 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import pb from '../lib/pocketbase';
+import {
+  LayoutDashboard,
+  Users,
+  Store,
+  Package,
+  ShoppingBag,
+  DollarSign,
+  Target,
+  ShieldCheck,
+  Briefcase,
+  Bike,
+  BarChart3,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  Crown,
+  QrCode
+} from 'lucide-react';
+import pb, { isAdmin, getCurrentAdmin } from '../lib/pocketbase';
 
 export default function AdminLayout({ children }) {
-  const router = useRouter();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [adminUser, setAdminUser] = useState(null);
+  const router = useRouter();
 
   useEffect(() => {
-    checkAdmin();
+    verificarAcceso();
   }, []);
 
-  const checkAdmin = async () => {
+  const verificarAcceso = async () => {
     try {
-      if (!pb.authStore.isValid) {
-        console.log('No hay sesión activa');
-        router.push('/admin/login');
+      // ✅ PASO 1: Cargar la sesión de admin desde localStorage
+      const hasAdminSession = pb.authStore.loadAdminFromStorage();
+
+      // ✅ PASO 2: Verificar si hay sesión de admin válida
+      if (!hasAdminSession || !isAdmin()) {
+        console.warn('🚨 No hay sesión de admin válida');
+        // Limpiar cualquier residuo y redirigir al login
+        pb.authStore.clearAll();
+        router.replace('/admin/login');
         return;
       }
 
-      const user = pb.authStore.model;
-      console.log('Usuario autenticado:', user?.email, 'Rol:', user?.role);
-
-      if (!user || user.role !== 'admin') {
-        console.log('No es administrador');
-        pb.authStore.clear();
-        router.push('/admin/login');
+      const user = getCurrentAdmin();
+      if (!user) {
+        console.warn('🚨 No se encontró usuario admin');
+        pb.authStore.clearAll();
+        router.replace('/admin/login');
         return;
       }
 
+      // ✅ Sesión válida
       setAdminUser(user);
-
-      // Autenticar como admin de PocketBase para tener permisos totales
-      try {
-        const adminEmail = process.env.NEXT_PUBLIC_PB_ADMIN_EMAIL || 'admin@marketdesliz.com';
-        const adminPassword = process.env.NEXT_PUBLIC_PB_ADMIN_PASSWORD || '';
-        
-        if (adminPassword) {
-          await pb.admins.authWithPassword(adminEmail, adminPassword);
-          console.log('✅ Autenticado como admin de PocketBase');
-        }
-      } catch (adminError) {
-        console.warn('No se pudo autenticar como admin de PocketBase:', adminError.message);
-      }
-
-      setIsAdmin(true);
+      setLoading(false);
     } catch (error) {
-      console.error('Error en verificación:', error);
-      router.push('/admin/login');
+      console.error('❌ Error verificando acceso:', error);
+      pb.authStore.clearAll();
+      router.replace('/admin/login');
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogout = () => {
-    pb.authStore.clear();
+    pb.authStore.clearAll();
     router.push('/admin/login');
   };
 
   const menuItems = [
-    { name: 'Dashboard', icon: '📊', path: '/admin/dashboard' },
-    { name: 'KYC Pendientes', icon: '🔐', path: '/admin/kyc' },
-    { name: 'Tandas', icon: '🎯', path: '/admin/tandas' },
-    { name: 'Clientes', icon: '👥', path: '/admin/clientes' },
-    { name: 'Tarjetas', icon: '💳', path: '/admin/tarjetas' },
-    { name: 'Productos', icon: '📦', path: '/admin/productos' },
-    { name: 'Negocios Aliados', icon: '🏪', path: '/admin/negocios' },
-    { name: 'Órdenes', icon: '🛒', path: '/admin/ordenes' },
-    { name: 'Pagos', icon: '💰', path: '/admin/pagos' },
-    { name: 'Vendedores', icon: '👔', path: '/admin/vendedores' },
-    { name: 'Cobradores', icon: '🏍️', path: '/admin/cobradores' },
-    { name: 'Reportes', icon: '📈', path: '/admin/reportes' },
-    { name: 'Configuración', icon: '⚙️', path: '/admin/configuracion' },
+    { name: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
+    { name: 'KYC Pendientes', icon: ShieldCheck, path: '/admin/kyc' },
+    { name: 'Tandas', icon: Target, path: '/admin/tandas' },
+    { name: 'Clientes', icon: Users, path: '/admin/clientes' },
+    { name: 'Tarjetas', icon: DollarSign, path: '/admin/tarjetas' },
+    { name: 'Productos', icon: Package, path: '/admin/productos' },
+    { name: 'Negocios Aliados', icon: Store, path: '/admin/negocios' },
+    { name: 'Órdenes', icon: ShoppingBag, path: '/admin/ordenes' },
+    { name: 'Pagos', icon: DollarSign, path: '/admin/pagos' },
+    { name: 'Vendedores', icon: Briefcase, path: '/admin/vendedores' },
+    { name: 'Cobradores', icon: Bike, path: '/admin/cobradores' },
+    { name: 'Cobranza en campo', icon: QrCode, path: '/admin/collector' },
+    { name: 'Reportes', icon: BarChart3, path: '/admin/reportes' },
+    { name: 'Configuración', icon: Settings, path: '/admin/configuracion' },
   ];
 
   const isActive = (path) => router.pathname === path || router.pathname.startsWith(path + '/');
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#6C3BFF] border-t-transparent mx-auto mb-4"></div>
-          <p className="text-gray-500">Verificando acceso...</p>
+          <div className="w-12 h-12 border-4 border-[#6C3BFF] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-sm text-gray-500">Verificando acceso...</p>
         </div>
       </div>
     );
   }
 
-  if (!isAdmin) return null;
+  if (!adminUser) return null;
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="lg:hidden mr-4 text-gray-500 hover:text-[#6C3BFF] transition"
-                aria-label="Menú"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-              <Link href="/admin/dashboard" className="text-2xl font-bold text-[#6C3BFF]">
-                Admin <span className="text-gray-900">MarketDesliz</span>
-              </Link>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-600 hidden sm:block">
-                👑 {adminUser?.nombre || adminUser?.email || 'Admin'}
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
+        <div className="flex justify-between items-center px-4 sm:px-6 py-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="lg:hidden p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Menú"
+            >
+              {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+            <Link href="/admin/dashboard" className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-[#6C3BFF]/10 rounded-lg flex items-center justify-center">
+                <Crown size={18} className="text-[#6C3BFF]" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-[#6C3BFF]">
+                  MarketDesliz <span className="text-gray-900">Admin</span>
+                </h1>
+              </div>
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full">
+              <div className="w-6 h-6 bg-[#6C3BFF]/10 rounded-full flex items-center justify-center">
+                <Crown size={12} className="text-[#6C3BFF]" />
+              </div>
+              <span className="text-xs font-medium text-gray-700">
+                {adminUser?.nombre || adminUser?.email?.split('@')[0] || 'Admin'}
               </span>
-              <button
-                onClick={handleLogout}
-                className="text-sm text-red-600 hover:text-red-800 font-medium transition"
-              >
-                🚪 Cerrar sesión
-              </button>
             </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
+            >
+              <LogOut size={16} /> <span className="hidden sm:inline">Cerrar sesión</span>
+            </button>
           </div>
         </div>
       </header>
 
       <div className="flex">
         {/* Sidebar desktop */}
-        <aside className="hidden lg:block w-64 bg-white shadow-sm min-h-[calc(100vh-64px)] sticky top-16">
+        <aside
+          className={`
+          fixed lg:sticky top-0 left-0 transform 
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
+          lg:translate-x-0 transition-transform duration-200 ease-in-out
+          w-64 bg-white border-r border-gray-200 shadow-lg z-20 h-screen overflow-y-auto
+        `}
+        >
           <nav className="p-4 space-y-1">
-            {menuItems.map((item) => (
-              <Link
-                key={item.path}
-                href={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                  isActive(item.path)
-                    ? 'bg-[#6C3BFF] text-white shadow-md'
-                    : 'text-gray-700 hover:bg-[#F3F0FF] hover:text-[#6C3BFF]'
-                }`}
-              >
-                <span className="text-lg">{item.icon}</span>
-                <span className="font-medium">{item.name}</span>
-                {isActive(item.path) && (
-                  <span className="ml-auto w-1.5 h-1.5 bg-white rounded-full"></span>
-                )}
-              </Link>
-            ))}
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(item.path);
+              return (
+                <Link
+                  key={item.path}
+                  href={item.path}
+                  onClick={() => setSidebarOpen(false)}
+                  className={`
+                    flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all
+                    ${active
+                      ? 'bg-[#6C3BFF] text-white shadow-md'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    }
+                  `}
+                >
+                  <Icon size={18} className={active ? 'text-white' : 'text-gray-400'} />
+                  <span className="font-medium text-sm">{item.name}</span>
+                  {active && (
+                    <span className="ml-auto w-1.5 h-1.5 bg-white rounded-full" />
+                  )}
+                </Link>
+              );
+            })}
           </nav>
+
+          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100 bg-white">
+            <div className="flex items-center gap-2 px-2 py-1.5">
+              <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
+                <Crown size={12} className="text-gray-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] text-gray-400">MarketDesliz v1.0</p>
+              </div>
+            </div>
+          </div>
         </aside>
 
-        {/* Sidebar móvil */}
-        {menuOpen && (
-          <aside className="fixed inset-0 z-50 lg:hidden">
-            <div 
-              className="absolute inset-0 bg-black/50" 
-              onClick={() => setMenuOpen(false)}
-            ></div>
-            <div className="absolute left-0 top-0 bottom-0 w-72 bg-white shadow-xl animate-slide-right">
-              <div className="p-4 border-b flex justify-between items-center">
-                <h3 className="font-bold text-[#6C3BFF] text-lg">Menú Admin</h3>
-                <button 
-                  onClick={() => setMenuOpen(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  ✕
-                </button>
-              </div>
-              <nav className="p-4 space-y-1 overflow-y-auto max-h-[calc(100vh-80px)]">
-                {menuItems.map((item) => (
-                  <Link
-                    key={item.path}
-                    href={item.path}
-                    onClick={() => setMenuOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                      isActive(item.path)
-                        ? 'bg-[#6C3BFF] text-white'
-                        : 'text-gray-700 hover:bg-[#F3F0FF]'
-                    }`}
-                  >
-                    <span>{item.icon}</span>
-                    <span className="font-medium">{item.name}</span>
-                  </Link>
-                ))}
-              </nav>
-            </div>
-            
-            <style>{`
-              @keyframes slide-right {
-                from { transform: translateX(-100%); }
-                to { transform: translateX(0); }
-              }
-              .animate-slide-right {
-                animation: slide-right 0.3s ease-out;
-              }
-            `}</style>
-          </aside>
+        {/* Overlay móvil */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-10 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
         )}
 
         {/* Contenido principal */}

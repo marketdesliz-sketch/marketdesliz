@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import Image from 'next/image';
 import {
   Store,
   MapPin,
@@ -30,34 +29,29 @@ import {
   Copy,
   AlertCircle,
   ExternalLink,
-  Twitter,
-  Facebook,
-  Linkedin,
-  Mail
+  Mail,
+  Globe
 } from 'lucide-react';
 import StoreLayout from '../../layouts/StoreLayout';
 import pb from '../../lib/pocketbase';
+import { getNegocioById, registrarVisita } from '../../lib/negociosService';
 
 export default function NegocioDetallePage() {
   const router = useRouter();
   const { id } = router.query;
 
-  // Estados principales
   const [negocio, setNegocio] = useState(null);
   const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Estados de imágenes
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imagesList, setImagesList] = useState([]);
   const [showLightbox, setShowLightbox] = useState(false);
 
-  // Estados de usuario
   const [user, setUser] = useState(null);
   const [isFavorite, setIsFavorite] = useState(false);
 
-  // Estados de comentarios
   const [calificacionUsuario, setCalificacionUsuario] = useState(5);
   const [comentario, setComentario] = useState('');
   const [comentarios, setComentarios] = useState([]);
@@ -66,25 +60,19 @@ export default function NegocioDetallePage() {
   const [calificacionPromedio, setCalificacionPromedio] = useState(0);
   const [totalComentarios, setTotalComentarios] = useState(0);
 
-  // Estados de UI
   const [estaAbierto, setEstaAbierto] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [mostrarQR, setMostrarQR] = useState(false);
   const [mostrarCompartir, setMostrarCompartir] = useState(false);
   const [likedComments, setLikedComments] = useState({});
 
-  // Verificar autenticación
   useEffect(() => {
-    const checkUser = () => {
-      const currentUser = pb.authStore.model;
-      setUser(currentUser);
-    };
+    const checkUser = () => setUser(pb.authStore.model);
     checkUser();
     const unsubscribe = pb.authStore.onChange(() => checkUser());
     return () => unsubscribe();
   }, []);
 
-  // Cargar datos del negocio
   useEffect(() => {
     if (id) {
       cargarNegocio();
@@ -93,7 +81,6 @@ export default function NegocioDetallePage() {
     }
   }, [id]);
 
-  // Función para verificar si el negocio está en favoritos
   const verificarFavorito = async () => {
     if (!user) return;
     try {
@@ -106,14 +93,11 @@ export default function NegocioDetallePage() {
     }
   };
 
-  // Función para agregar/quitar de favoritos
   const toggleFavorito = async () => {
     if (!user) {
-      alert('Inicia sesión para guardar negocios favoritos');
       router.push(`/solicitar?redirect=${encodeURIComponent(router.asPath)}`);
       return;
     }
-
     try {
       if (isFavorite) {
         const favorito = await pb.collection('favoritos_negocios').getFirstListItem(
@@ -134,21 +118,22 @@ export default function NegocioDetallePage() {
     }
   };
 
-  // Cargar negocio
   const cargarNegocio = async () => {
     try {
       setLoading(true);
 
-      const negocioData = await pb.collection('negocios').getOne(id);
+      // Usar el servicio actualizado que trae los expands geográficos
+      const negocioData = await getNegocioById(id);
+      if (!negocioData) throw new Error('Negocio no encontrado');
       setNegocio(negocioData);
 
-      // Verificar horario
+      // Verificar horario (básico)
       if (negocioData.horario) {
         verificarHorario(negocioData.horario);
       }
 
       // Registrar visita
-      await registrarVisita(negocioData);
+      await registrarVisita(id);
 
       // Procesar imágenes
       const imagenes = [];
@@ -176,6 +161,12 @@ export default function NegocioDetallePage() {
         console.log('No hay productos/servicios registrados');
       }
 
+      // Usar calificación del campo del negocio (si existe)
+      if (negocioData.calificacion !== undefined && negocioData.calificacion !== null) {
+        setCalificacionPromedio(negocioData.calificacion);
+        setTotalComentarios(negocioData.totalComentarios || 0);
+      }
+
     } catch (error) {
       console.error('Error cargando negocio:', error);
       setError('No se pudo cargar el negocio');
@@ -185,36 +176,17 @@ export default function NegocioDetallePage() {
     }
   };
 
-  // Verificar horario de apertura
   const verificarHorario = (horario) => {
     const horaActual = new Date().getHours();
-    const diaActual = new Date().getDay();
-
-    // Análisis básico de horario (se puede mejorar)
     const estaAbiertoHoy = horario.toLowerCase().includes('lun') ||
       horario.toLowerCase().includes('mar') ||
       horario.toLowerCase().includes('mié') ||
       horario.toLowerCase().includes('jue') ||
       horario.toLowerCase().includes('vie');
-
     const estaEnHorario = horaActual >= 9 && horaActual <= 20;
-
     setEstaAbierto(estaAbiertoHoy && estaEnHorario);
   };
 
-  // Registrar visita al negocio
-  const registrarVisita = async (negocioData) => {
-    try {
-      const nuevasVisitas = (negocioData.visitas || 0) + 1;
-      await pb.collection('negocios').update(id, {
-        visitas: nuevasVisitas
-      });
-    } catch (error) {
-      console.log('Error registrando visita:', error);
-    }
-  };
-
-  // Cargar comentarios
   const cargarComentarios = async () => {
     try {
       const comentariosData = await pb.collection('comentarios_negocios').getFullList({
@@ -222,7 +194,6 @@ export default function NegocioDetallePage() {
         sort: '-created',
         expand: 'usuarioId'
       });
-
       setComentarios(comentariosData);
       setTotalComentarios(comentariosData.length);
 
@@ -235,30 +206,22 @@ export default function NegocioDetallePage() {
     }
   };
 
-  // Enviar comentario
   const enviarComentario = async () => {
     if (!user) {
-      alert('Inicia sesión para dejar un comentario');
       router.push(`/solicitar?redirect=${encodeURIComponent(router.asPath)}`);
       return;
     }
-
-    if (!comentario.trim()) {
-      alert('Escribe un comentario');
-      return;
-    }
+    if (!comentario.trim()) return;
 
     setEnviando(true);
-
     try {
-      const nuevoComentario = await pb.collection('comentarios_negocios').create({
+      await pb.collection('comentarios_negocios').create({
         negocioId: id,
         usuarioId: user.id,
-        usuarioNombre: user.nombre || user.email?.split('@')[0] || 'Usuario',
+        usuarioNombre: user.nombre || 'Usuario',
         calificacion: calificacionUsuario,
         comentario: comentario
       });
-
       setComentario('');
       setCalificacionUsuario(5);
       await cargarComentarios();
@@ -271,7 +234,6 @@ export default function NegocioDetallePage() {
     }
   };
 
-  // Dar like a comentario
   const darLike = (comentarioId) => {
     setLikedComments(prev => ({
       ...prev,
@@ -279,8 +241,7 @@ export default function NegocioDetallePage() {
     }));
   };
 
-  // Contacto por WhatsApp
-  const handleWhatsApp = async () => {
+  const handleWhatsApp = () => {
     if (negocio.whatsapp) {
       let whatsappNumber = negocio.whatsapp.replace(/\D/g, '');
       if (!whatsappNumber.startsWith('52') && whatsappNumber.length === 10) {
@@ -290,14 +251,12 @@ export default function NegocioDetallePage() {
     }
   };
 
-  // Llamar por teléfono
   const handleCall = () => {
     if (negocio.telefono) {
       window.location.href = `tel:${negocio.telefono.replace(/\D/g, '')}`;
     }
   };
 
-  // Abrir ubicación en mapa
   const abrirUbicacion = () => {
     if (negocio.ubicacion) {
       window.open(`https://maps.google.com/?q=${encodeURIComponent(negocio.ubicacion)}`, '_blank');
@@ -306,31 +265,25 @@ export default function NegocioDetallePage() {
     }
   };
 
-  // Compartir negocio
   const compartirNegocio = (plataforma) => {
     const url = window.location.href;
-    const titulo = encodeURIComponent(`${negocio.nombre} - Negocio Aliado MarketDesliz`);
+    const titulo = encodeURIComponent(`${negocio.nombre} - MarketDesliz`);
     const texto = encodeURIComponent(`Te recomiendo visitar ${negocio.nombre} en MarketDesliz`);
-
     const plataformas = {
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${url}`,
       twitter: `https://twitter.com/intent/tweet?text=${texto}&url=${url}`,
-      linkedin: `https://www.linkedin.com/shareArticle?mini=true&url=${url}&title=${titulo}`,
       whatsapp: `https://wa.me/?text=${texto}%20${url}`,
       email: `mailto:?subject=${titulo}&body=${texto}%20${url}`
     };
-
     window.open(plataformas[plataforma], '_blank', 'width=600,height=400');
   };
 
-  // Copiar enlace
   const copyLink = () => {
     navigator.clipboard.writeText(window.location.href);
     setCopiado(true);
     setTimeout(() => setCopiado(false), 2000);
   };
 
-  // Formatear teléfono
   const formatPhone = (phone) => {
     if (!phone) return '';
     const cleaned = phone.replace(/\D/g, '');
@@ -340,33 +293,22 @@ export default function NegocioDetallePage() {
     return phone;
   };
 
-  // Navegación de imágenes
-  const nextImage = () => {
-    setCurrentImageIndex((prev) => (prev + 1) % imagesList.length);
-  };
+  const nextImage = () => setCurrentImageIndex((prev) => (prev + 1) % imagesList.length);
+  const prevImage = () => setCurrentImageIndex((prev) => (prev - 1 + imagesList.length) % imagesList.length);
 
-  const prevImage = () => {
-    setCurrentImageIndex((prev) => (prev - 1 + imagesList.length) % imagesList.length);
-  };
-
-  // Renderizar estrellas
   const renderEstrellas = (puntuacion, interactive = false) => {
-    const estrellas = [];
-    for (let i = 1; i <= 5; i++) {
-      estrellas.push(
-        <button
-          key={i}
-          onClick={() => interactive && setCalificacionUsuario(i)}
-          className={`transition ${interactive ? 'hover:scale-110' : ''} ${interactive && i <= calificacionUsuario ? 'text-yellow-400' : ''}`}
-        >
-          <Star
-            size={interactive ? 24 : 16}
-            className={i <= puntuacion ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}
-          />
-        </button>
-      );
-    }
-    return estrellas;
+    return [1, 2, 3, 4, 5].map(i => (
+      <button
+        key={i}
+        onClick={() => interactive && setCalificacionUsuario(i)}
+        className={`transition ${interactive ? 'hover:scale-110' : ''} ${interactive && i <= calificacionUsuario ? 'text-yellow-400' : ''}`}
+      >
+        <Star
+          size={interactive ? 24 : 16}
+          className={i <= puntuacion ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}
+        />
+      </button>
+    ));
   };
 
   if (loading) {
@@ -396,6 +338,10 @@ export default function NegocioDetallePage() {
     );
   }
 
+  const municipio = negocio.expand?.municipioId?.nombre;
+  const localidad = negocio.expand?.localidadId?.nombre;
+  const sector = negocio.expand?.sectorId?.nombre;
+
   return (
     <>
       <Head>
@@ -405,7 +351,6 @@ export default function NegocioDetallePage() {
         <meta property="og:description" content={negocio.descripcion || `Negocio aliado en ${negocio.categoria || 'varias categorías'}`} />
         <meta property="og:type" content="business.business" />
         {imagesList[0] && <meta property="og:image" content={imagesList[0]} />}
-        <meta name="twitter:card" content="summary_large_image" />
       </Head>
 
       <StoreLayout>
@@ -496,16 +441,10 @@ export default function NegocioDetallePage() {
                     />
                     {imagesList.length > 1 && (
                       <>
-                        <button
-                          onClick={prevImage}
-                          className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black/50 text-white rounded-full p-2 hover:bg-black/70 transition"
-                        >
+                        <button onClick={prevImage} className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black/50 text-white rounded-full p-2 hover:bg-black/70 transition">
                           <ChevronLeft size={20} />
                         </button>
-                        <button
-                          onClick={nextImage}
-                          className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black/50 text-white rounded-full p-2 hover:bg-black/70 transition"
-                        >
+                        <button onClick={nextImage} className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black/50 text-white rounded-full p-2 hover:bg-black/70 transition">
                           <ChevronRight size={20} />
                         </button>
                         <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
@@ -527,9 +466,22 @@ export default function NegocioDetallePage() {
                 )}
 
                 {/* Badges flotantes */}
-                <div className="absolute top-3 right-3 bg-[#6C3BFF] text-white text-xs px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
-                  <Building2 size={12} /> Aliado
+                <div className="absolute top-3 right-3 flex gap-1.5">
+                  {negocio.verificado && (
+                    <span className="bg-blue-500 text-white text-xs px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm" title="Verificado por MarketDesliz">
+                      <CheckCircle size={12} /> Verificado
+                    </span>
+                  )}
+                  {negocio.destacado && (
+                    <span className="bg-yellow-500 text-white text-xs px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm" title="Destacado">
+                      <Star size={12} /> Destacado
+                    </span>
+                  )}
+                  <span className="bg-[#6C3BFF] text-white text-xs px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
+                    <Building2 size={12} /> Aliado
+                  </span>
                 </div>
+
                 {estaAbierto ? (
                   <div className="absolute bottom-3 left-3 bg-green-500 text-white text-xs px-2.5 py-1 rounded-full shadow-sm">
                     Abierto ahora
@@ -573,6 +525,14 @@ export default function NegocioDetallePage() {
                       <span className="text-sm">{negocio.direccion}</span>
                     </div>
                   )}
+                  {(municipio || localidad || sector) && (
+                    <div className="flex items-start gap-2 text-gray-600 bg-gray-50 p-2 rounded-lg">
+                      <MapPin size={16} className="text-[#6C3BFF] shrink-0 mt-0.5" />
+                      <span className="text-sm">
+                        {[municipio, localidad, sector].filter(Boolean).join(' › ')}
+                      </span>
+                    </div>
+                  )}
                   {negocio.telefono && (
                     <div className="flex items-start gap-2 text-gray-600 bg-gray-50 p-2 rounded-lg">
                       <Phone size={16} className="text-[#6C3BFF] shrink-0 mt-0.5" />
@@ -591,6 +551,37 @@ export default function NegocioDetallePage() {
                       <span className="text-sm">{negocio.horario}</span>
                     </div>
                   )}
+                  {negocio.email && (
+                    <div className="flex items-start gap-2 text-gray-600 bg-gray-50 p-2 rounded-lg">
+                      <Mail size={16} className="text-[#6C3BFF] shrink-0 mt-0.5" />
+                      <a href={`mailto:${negocio.email}`} className="text-sm text-[#6C3BFF] hover:underline">{negocio.email}</a>
+                    </div>
+                  )}
+                  {negocio.sitioWeb && (
+                    <div className="flex items-start gap-2 text-gray-600 bg-gray-50 p-2 rounded-lg">
+                      <Globe size={16} className="text-[#6C3BFF] shrink-0 mt-0.5" />
+                      <a href={negocio.sitioWeb} target="_blank" rel="noopener noreferrer" className="text-sm text-[#6C3BFF] hover:underline">Sitio web</a>
+                    </div>
+                  )}
+                </div>
+
+                {/* Redes sociales */}
+                <div className="flex gap-3 mt-3">
+                  {negocio.facebook && (
+                    <a href={negocio.facebook} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                    </a>
+                  )}
+                  {negocio.instagram && (
+                    <a href={negocio.instagram} target="_blank" rel="noopener noreferrer" className="text-pink-600 hover:text-pink-800">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                    </a>
+                  )}
+                  {negocio.tiktok && (
+                    <a href={negocio.tiktok} target="_blank" rel="noopener noreferrer" className="text-gray-800 hover:text-gray-600">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>
+                    </a>
+                  )}
                 </div>
 
                 {/* Descripción */}
@@ -600,28 +591,43 @@ export default function NegocioDetallePage() {
                   </div>
                 )}
 
+                {/* Servicios */}
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {negocio.atencionWhatsapp && (
+                    <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                      <MessageCircle size={12} /> WhatsApp
+                    </span>
+                  )}
+                  {negocio.citasPrevias && (
+                    <span className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                      <Calendar size={12} /> Cita previa
+                    </span>
+                  )}
+                  {negocio.domicilio && (
+                    <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">
+                      <Navigation size={12} /> Domicilio
+                    </span>
+                  )}
+                  {negocio.servicios && (
+                    <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                      <Award size={12} /> {negocio.servicios}
+                    </span>
+                  )}
+                </div>
+
                 {/* Botones de acción principal */}
                 <div className="flex flex-wrap gap-3 mt-6">
                   {negocio.telefono && (
-                    <button
-                      onClick={handleCall}
-                      className="flex-1 flex items-center justify-center gap-2 bg-gray-800 text-white py-2.5 rounded-xl font-medium hover:bg-gray-900 transition"
-                    >
+                    <button onClick={handleCall} className="flex-1 flex items-center justify-center gap-2 bg-gray-800 text-white py-2.5 rounded-xl font-medium hover:bg-gray-900 transition">
                       <Phone size={16} /> Llamar ahora
                     </button>
                   )}
                   {negocio.whatsapp && (
-                    <button
-                      onClick={handleWhatsApp}
-                      className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white py-2.5 rounded-xl font-medium hover:bg-green-700 transition"
-                    >
+                    <button onClick={handleWhatsApp} className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white py-2.5 rounded-xl font-medium hover:bg-green-700 transition">
                       <MessageCircle size={16} /> WhatsApp
                     </button>
                   )}
-                  <button
-                    onClick={abrirUbicacion}
-                    className="px-4 bg-blue-500 text-white py-2.5 rounded-xl font-medium hover:bg-blue-600 transition flex items-center justify-center gap-2"
-                  >
+                  <button onClick={abrirUbicacion} className="px-4 bg-blue-500 text-white py-2.5 rounded-xl font-medium hover:bg-blue-600 transition flex items-center justify-center gap-2">
                     <Navigation size={16} /> Llegar
                   </button>
                 </div>
@@ -629,14 +635,13 @@ export default function NegocioDetallePage() {
                 {/* Estadísticas adicionales */}
                 <div className="flex flex-wrap gap-4 mt-4 pt-3 border-t border-gray-100 text-xs text-gray-400">
                   <span className="flex items-center gap-1"><Calendar size={12} /> Registrado: {new Date(negocio.created).toLocaleDateString()}</span>
-                  <span className="flex items-center gap-1"><Award size={12} /> Negocio verificado</span>
-                  <span className="flex items-center gap-1"><Shield size={12} /> Compra segura</span>
+                  {negocio.verificado && <span className="flex items-center gap-1"><Shield size={12} /> Negocio verificado</span>}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Mostrar mensaje de activación pendiente si corresponde */}
+          {/* Mensaje de activación pendiente */}
           {negocio.estadoActivacion === 'pendiente_activacion' && user && user.id === negocio.usuarioId && (
             <div className="mt-4 p-4 bg-yellow-50 rounded-xl border border-yellow-200">
               <div className="flex items-start gap-3">
@@ -649,10 +654,7 @@ export default function NegocioDetallePage() {
                     Para que {negocio.nombre} aparezca en la lista de negocios aliados y los clientes puedan encontrarte,
                     <strong> realiza tu primera compra en MarketDesliz</strong>.
                   </p>
-                  <Link
-                    href="/productos"
-                    className="inline-flex items-center gap-1 mt-2 text-xs font-medium text-yellow-800 hover:text-yellow-900 underline"
-                  >
+                  <Link href="/productos" className="inline-flex items-center gap-1 mt-2 text-xs font-medium text-yellow-800 hover:text-yellow-900 underline">
                     Ver productos disponibles →
                   </Link>
                 </div>
@@ -660,7 +662,7 @@ export default function NegocioDetallePage() {
             </div>
           )}
 
-          {/* Lightbox para imágenes */}
+          {/* Lightbox */}
           {showLightbox && imagesList.length > 0 && (
             <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center" onClick={() => setShowLightbox(false)}>
               <button className="absolute top-4 right-4 text-white text-3xl hover:text-gray-300" onClick={() => setShowLightbox(false)}>✕</button>
@@ -726,7 +728,7 @@ export default function NegocioDetallePage() {
             </div>
           )}
 
-          {/* Sección de comentarios y opiniones */}
+          {/* Sección de comentarios (sin cambios) */}
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-8">
             <button
               onClick={() => setMostrarComentarios(!mostrarComentarios)}
@@ -743,7 +745,6 @@ export default function NegocioDetallePage() {
 
             {mostrarComentarios && (
               <div className="p-6 pt-0 border-t border-gray-100">
-                {/* Formulario para nuevo comentario */}
                 {user ? (
                   <div className="mb-8 p-5 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-100">
                     <h3 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
@@ -791,7 +792,6 @@ export default function NegocioDetallePage() {
                   </div>
                 )}
 
-                {/* Lista de comentarios */}
                 {comentarios.length === 0 ? (
                   <div className="text-center py-10">
                     <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -845,7 +845,7 @@ export default function NegocioDetallePage() {
             )}
           </div>
 
-          {/* Botón flotante de acción rápida (WhatsApp) */}
+          {/* Botón flotante WhatsApp */}
           {negocio.whatsapp && (
             <div className="fixed bottom-6 right-6 z-40">
               <button
@@ -858,7 +858,6 @@ export default function NegocioDetallePage() {
             </div>
           )}
 
-          {/* Volver al inicio */}
           <div className="text-center mt-6">
             <Link href="/" className="text-gray-400 text-sm hover:text-[#6C3BFF] transition inline-flex items-center gap-1">
               <ChevronLeft size={14} /> Volver al inicio

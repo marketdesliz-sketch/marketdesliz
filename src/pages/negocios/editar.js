@@ -5,6 +5,12 @@ import Head from 'next/head';
 import Link from 'next/link';
 import StoreLayout from '../../layouts/StoreLayout';
 import pb from '../../lib/pocketbase';
+import {
+  getEstados,
+  getMunicipios,
+  getLocalidades,
+  getSectores
+} from '../../lib/negociosService';
 
 export default function EditarNegocioPage() {
   const router = useRouter();
@@ -16,6 +22,7 @@ export default function EditarNegocioPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
+  // Campos básicos + nuevos
   const [formData, setFormData] = useState({
     nombre: '',
     categoria: '',
@@ -24,7 +31,23 @@ export default function EditarNegocioPage() {
     telefono: '',
     whatsapp: '',
     horario: '',
-    ubicacion: ''
+    ubicacion: '',
+    estadoId: '',
+    municipioId: '',
+    localidadId: '',
+    sectorId: '',
+    codigoPostal: '',
+    latitud: '',
+    longitud: '',
+    email: '',
+    sitioWeb: '',
+    facebook: '',
+    instagram: '',
+    tiktok: '',
+    servicios: '',
+    atencionWhatsapp: true,
+    citasPrevias: false,
+    domicilio: false
   });
   
   const [logoFile, setLogoFile] = useState(null);
@@ -33,6 +56,12 @@ export default function EditarNegocioPage() {
   const [imagenesPreviews, setImagenesPreviews] = useState([]);
   const [imagenesExistentes, setImagenesExistentes] = useState([]);
   const [imagenesAEliminar, setImagenesAEliminar] = useState([]);
+
+  // Listas para selects geográficos
+  const [estadosList, setEstadosList] = useState([]);
+  const [municipiosList, setMunicipiosList] = useState([]);
+  const [localidadesList, setLocalidadesList] = useState([]);
+  const [sectoresList, setSectoresList] = useState([]);
 
   const categorias = [
     'Abarrotes', 'Accesorios (bisutería, celulares, etc.)', 'Agencia de viajes',
@@ -50,16 +79,52 @@ export default function EditarNegocioPage() {
   useEffect(() => {
     if (id) {
       cargarNegocio();
+      cargarDatosGeograficos();
     } else {
       verificarNegocioUsuario();
     }
   }, [id]);
 
+  const cargarDatosGeograficos = async () => {
+    try {
+      const estados = await getEstados();
+      setEstadosList(estados);
+      // Si el negocio ya tiene estadoId, cargar sus municipios
+      // (se hará en el useEffect que vigila estadoId)
+    } catch (err) {
+      console.error('Error cargando datos geográficos:', err);
+    }
+  };
+
+  // Carga dinámica de municipios/localidades/sectores
+  useEffect(() => {
+    if (formData.estadoId) {
+      getMunicipios(formData.estadoId).then(setMunicipiosList).catch(() => setMunicipiosList([]));
+    } else {
+      setMunicipiosList([]);
+    }
+  }, [formData.estadoId]);
+
+  useEffect(() => {
+    if (formData.municipioId) {
+      getLocalidades(formData.municipioId).then(setLocalidadesList).catch(() => setLocalidadesList([]));
+    } else {
+      setLocalidadesList([]);
+    }
+  }, [formData.municipioId]);
+
+  useEffect(() => {
+    if (formData.localidadId) {
+      getSectores(formData.localidadId).then(setSectoresList).catch(() => setSectoresList([]));
+    } else {
+      setSectoresList([]);
+    }
+  }, [formData.localidadId]);
+
   const verificarNegocioUsuario = async () => {
     try {
       const user = pb.authStore.model;
       if (!user) {
-        // ✅ CORREGIDO: usar /solicitar en lugar de /auth/login
         router.push('/solicitar?redirect=/negocios/editar');
         return;
       }
@@ -95,7 +160,23 @@ export default function EditarNegocioPage() {
         telefono: negocioData.telefono || '',
         whatsapp: negocioData.whatsapp || '',
         horario: negocioData.horario || '',
-        ubicacion: negocioData.ubicacion || ''
+        ubicacion: negocioData.ubicacion || '',
+        estadoId: negocioData.estadoId || '',
+        municipioId: negocioData.municipioId || '',
+        localidadId: negocioData.localidadId || '',
+        sectorId: negocioData.sectorId || '',
+        codigoPostal: negocioData.codigoPostal || '',
+        latitud: negocioData.latitud || '',
+        longitud: negocioData.longitud || '',
+        email: negocioData.email || '',
+        sitioWeb: negocioData.sitioWeb || '',
+        facebook: negocioData.facebook || '',
+        instagram: negocioData.instagram || '',
+        tiktok: negocioData.tiktok || '',
+        servicios: negocioData.servicios || '',
+        atencionWhatsapp: negocioData.atencionWhatsapp !== false,
+        citasPrevias: negocioData.citasPrevias === true,
+        domicilio: negocioData.domicilio === true
       });
       
       if (negocioData.logo) {
@@ -118,8 +199,8 @@ export default function EditarNegocioPage() {
   };
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    const { name, value, type, checked } = e.target;
+    setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
   };
 
   const handleLogoChange = (e) => {
@@ -168,7 +249,15 @@ export default function EditarNegocioPage() {
       const formDataToSend = new FormData();
       
       Object.keys(formData).forEach(key => {
-        if (formData[key]) formDataToSend.append(key, formData[key]);
+        if (key !== 'logo' && key !== 'imagenes') {
+          // Convertir valores booleanos a string para FormData
+          const value = formData[key];
+          if (typeof value === 'boolean') {
+            formDataToSend.append(key, value ? 'true' : 'false');
+          } else if (value !== null && value !== undefined && value !== '') {
+            formDataToSend.append(key, value);
+          }
+        }
       });
       
       if (logoFile) formDataToSend.append('logo', logoFile);
@@ -179,7 +268,7 @@ export default function EditarNegocioPage() {
         formDataToSend.append('imagenesEliminar', JSON.stringify(imagenesAEliminar));
       }
 
-      const updated = await pb.collection('negocios').update(id, formDataToSend);
+      await pb.collection('negocios').update(id, formDataToSend);
       setSuccess('✅ Perfil actualizado correctamente');
       
       setTimeout(() => {
@@ -243,191 +332,283 @@ export default function EditarNegocioPage() {
                 </div>
               )}
 
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Nombre del negocio *
-                  </label>
-                  <input
-                    type="text"
-                    name="nombre"
-                    value={formData.nombre}
-                    onChange={handleInputChange}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500"
-                    placeholder="Ej: Ferretería El Martillo"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Categoría *
-                  </label>
-                  <select
-                    name="categoria"
-                    value={formData.categoria}
-                    onChange={handleInputChange}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500"
-                  >
-                    <option value="">Selecciona una categoría</option>
-                    {categorias.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Dirección *
-                  </label>
-                  <input
-                    type="text"
-                    name="direccion"
-                    value={formData.direccion}
-                    onChange={handleInputChange}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500"
-                    placeholder="Calle, número, colonia, ciudad"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-8">
+                {/* ── Información básica ─────────────────── */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Información básica</h3>
+                  
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Teléfono
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del negocio *</label>
                     <input
-                      type="tel"
-                      name="telefono"
-                      value={formData.telefono}
+                      type="text"
+                      name="nombre"
+                      value={formData.nombre}
                       onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                      placeholder="55 1234 5678"
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500"
+                      placeholder="Ej: Ferretería El Martillo"
                     />
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      WhatsApp
-                    </label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Categoría *</label>
+                    <select
+                      name="categoria"
+                      value={formData.categoria}
+                      onChange={handleInputChange}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="">Selecciona una categoría</option>
+                      {categorias.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Dirección *</label>
                     <input
-                      type="tel"
-                      name="whatsapp"
-                      value={formData.whatsapp}
+                      type="text"
+                      name="direccion"
+                      value={formData.direccion}
+                      onChange={handleInputChange}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500"
+                      placeholder="Calle, número, colonia, ciudad"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                      <input
+                        type="tel"
+                        name="telefono"
+                        value={formData.telefono}
+                        onChange={handleInputChange}
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                        placeholder="55 1234 5678"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label>
+                      <input
+                        type="tel"
+                        name="whatsapp"
+                        value={formData.whatsapp}
+                        onChange={handleInputChange}
+                        className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                        placeholder="521234567890"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Horario de atención</label>
+                    <input
+                      type="text"
+                      name="horario"
+                      value={formData.horario}
                       onChange={handleInputChange}
                       className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                      placeholder="521234567890"
+                      placeholder="Lun-Vie 9am-6pm, Sáb 9am-2pm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                    <textarea
+                      name="descripcion"
+                      value={formData.descripcion}
+                      onChange={handleInputChange}
+                      rows="3"
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                      placeholder="Breve descripción de tu negocio..."
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Horario de atención
-                  </label>
-                  <input
-                    type="text"
-                    name="horario"
-                    value={formData.horario}
-                    onChange={handleInputChange}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                    placeholder="Lun-Vie 9am-6pm, Sáb 9am-2pm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Ubicación (Google Maps)
-                  </label>
-                  <input
-                    type="text"
-                    name="ubicacion"
-                    value={formData.ubicacion}
-                    onChange={handleInputChange}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                    placeholder="Coordenadas o enlace de Google Maps"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Descripción
-                  </label>
-                  <textarea
-                    name="descripcion"
-                    value={formData.descripcion}
-                    onChange={handleInputChange}
-                    rows="3"
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                    placeholder="Breve descripción de tu negocio..."
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Logo / Foto principal
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleLogoChange}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                  />
-                  {logoPreview && (
-                    <div className="mt-2">
-                      <p className="text-xs text-gray-500">Logo actual:</p>
-                      <img src={logoPreview} alt="Logo" className="w-24 h-24 object-cover rounded-lg mt-1" />
+                {/* ── Ubicación geográfica ─────────────────── */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Ubicación (opcional)</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+                      <select name="estadoId" value={formData.estadoId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
+                        <option value="">Seleccionar estado</option>
+                        {estadosList.map(est => <option key={est.id} value={est.id}>{est.nombre}</option>)}
+                      </select>
                     </div>
-                  )}
-                </div>
-
-                {imagenesExistentes.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Fotos de tu local
-                    </label>
-                    <div className="flex gap-2 flex-wrap">
-                      {imagenesExistentes.map((img, idx) => (
-                        <div key={idx} className="relative group">
-                          <img
-                            src={pb.files.getURL(negocio, img)}
-                            alt={`Foto ${idx + 1}`}
-                            className="w-20 h-20 object-cover rounded-lg"
-                          />
-                          <button
-                            onClick={() => eliminarImagenExistente(img)}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Municipio</label>
+                      <select name="municipioId" value={formData.municipioId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
+                        <option value="">Seleccionar municipio</option>
+                        {municipiosList.map(mun => <option key={mun.id} value={mun.id}>{mun.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Localidad</label>
+                      <select name="localidadId" value={formData.localidadId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
+                        <option value="">Seleccionar localidad</option>
+                        {localidadesList.map(loc => <option key={loc.id} value={loc.id}>{loc.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Sector/Colonia</label>
+                      <select name="sectorId" value={formData.sectorId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
+                        <option value="">Seleccionar sector</option>
+                        {sectoresList.map(sec => <option key={sec.id} value={sec.id}>{sec.nombre}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Código Postal</label>
+                      <input type="text" name="codigoPostal" value={formData.codigoPostal} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="91000" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Latitud</label>
+                        <input type="number" step="any" name="latitud" value={formData.latitud} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="19.4326" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Longitud</label>
+                        <input type="number" step="any" name="longitud" value={formData.longitud} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="-99.1332" />
+                      </div>
                     </div>
                   </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Agregar nuevas fotos
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleImagenesChange}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                  />
-                  {imagenesPreviews.length > 0 && (
-                    <div className="mt-2 flex gap-2 flex-wrap">
-                      {imagenesPreviews.map((preview, idx) => (
-                        <img key={idx} src={preview} alt={`Nueva ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg" />
-                      ))}
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">Puedes subir varias fotos de tu negocio</p>
                 </div>
 
-                {/* Botones */}
+                {/* ── Presencia en línea ─────────────────── */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Presencia en línea</h3>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+                    <input type="email" name="email" value={formData.email} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="correo@negocio.com" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Sitio Web</label>
+                      <input type="url" name="sitioWeb" value={formData.sitioWeb} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="https://www.minegocio.com" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Facebook</label>
+                      <input type="text" name="facebook" value={formData.facebook} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="URL de Facebook" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Instagram</label>
+                      <input type="text" name="instagram" value={formData.instagram} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="URL de Instagram" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">TikTok</label>
+                      <input type="text" name="tiktok" value={formData.tiktok} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="URL de TikTok" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Horario y servicios ─────────────────── */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Horario y servicios</h3>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Horario (texto libre)</label>
+                    <input
+                      type="text"
+                      name="horario"
+                      value={formData.horario}
+                      onChange={handleInputChange}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                      placeholder="Lun-Vie 9am-6pm, Sáb 9am-2pm"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" name="atencionWhatsapp" checked={formData.atencionWhatsapp} onChange={handleInputChange} className="w-4 h-4" />
+                      <span className="text-sm">Atención por WhatsApp</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" name="citasPrevias" checked={formData.citasPrevias} onChange={handleInputChange} className="w-4 h-4" />
+                      <span className="text-sm">Requiere cita previa</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" name="domicilio" checked={formData.domicilio} onChange={handleInputChange} className="w-4 h-4" />
+                      <span className="text-sm">Servicio a domicilio</span>
+                    </label>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Otros servicios (separados por coma)</label>
+                    <input
+                      type="text"
+                      name="servicios"
+                      value={formData.servicios}
+                      onChange={handleInputChange}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                      placeholder="Estacionamiento, Wi-Fi, Pagos con tarjeta"
+                    />
+                  </div>
+                </div>
+
+                {/* ── Imágenes ────────────────────────────── */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Imágenes</h3>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Logo / Foto principal</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoChange}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                    />
+                    {logoPreview && (
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-500">Logo actual:</p>
+                        <img src={logoPreview} alt="Logo" className="w-24 h-24 object-cover rounded-lg mt-1" />
+                      </div>
+                    )}
+                  </div>
+
+                  {imagenesExistentes.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Fotos de tu local</label>
+                      <div className="flex gap-2 flex-wrap">
+                        {imagenesExistentes.map((img, idx) => (
+                          <div key={idx} className="relative group">
+                            <img
+                              src={pb.files.getURL(negocio, img)}
+                              alt={`Foto ${idx + 1}`}
+                              className="w-20 h-20 object-cover rounded-lg"
+                            />
+                            <button
+                              onClick={() => eliminarImagenExistente(img)}
+                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Agregar nuevas fotos</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleImagenesChange}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                    />
+                    {imagenesPreviews.length > 0 && (
+                      <div className="mt-2 flex gap-2 flex-wrap">
+                        {imagenesPreviews.map((preview, idx) => (
+                          <img key={idx} src={preview} alt={`Nueva ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg" />
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">Puedes subir varias fotos de tu negocio</p>
+                  </div>
+                </div>
+
+                {/* ─── Botones ────────────────────────────── */}
                 <div className="flex gap-3 pt-4">
                   <Link
-                    href={`/negocios/${id}`}  // ✅ CORREGIDO: /negocios en lugar de /servicios/negocio
+                    href={`/negocios/${id}`}
                     className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-medium text-center hover:bg-gray-300 transition"
                   >
                     Cancelar
@@ -439,12 +620,6 @@ export default function EditarNegocioPage() {
                   >
                     {saving ? 'Guardando...' : 'Guardar cambios'}
                   </button>
-                </div>
-
-                <div className="text-center pt-4">
-                  <Link href="/negocios" className="text-sm text-gray-500 hover:text-[#6C3BFF]">  // ✅ CORREGIDO: /negocios en lugar de /servicios
-                    ← Volver a negocios
-                  </Link>
                 </div>
               </div>
             </div>

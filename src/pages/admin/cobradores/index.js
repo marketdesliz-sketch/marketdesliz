@@ -1,5 +1,5 @@
 // src/pages/admin/cobradores/index.js
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import {
@@ -18,19 +18,52 @@ import {
   X,
   Wallet,
   TrendingUp,
-  Hash
+  Hash,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Filter
 } from 'lucide-react';
 import AdminLayout from '../../../layouts/AdminLayout';
 import pb from '../../../lib/pocketbase';
+import {
+  getCobradoresPaginated,
+  getCobradoresStats
+} from '../../../lib/cobradoresService';
+import { formatDate } from '../../../lib/utils';
+
+const ITEMS_PER_PAGE = 10;
 
 export default function AdminCobradoresPage() {
   const router = useRouter();
+
+  // ─── Parámetros de URL ────────────────────────────────────────────────
+  const { page = 1, search = '', status = 'todos', sort = '-created' } = router.query;
+  const currentPage = parseInt(page) || 1;
+
+  // ─── Estados ──────────────────────────────────────────────────────────
   const [cobradores, setCobradores] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('todos');
+  const [success, setSuccess] = useState('');
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
+  // ─── Filtros sincronizados con URL ──────────────────────────────────
+  const [searchTerm, setSearchTerm] = useState(search || '');
+  const [filterStatus, setFilterStatus] = useState(status || 'todos');
+  const [sortBy, setSortBy] = useState(sort || '-created');
+
+  // ─── Estadísticas ──────────────────────────────────────────────────────
+  const [stats, setStats] = useState({
+    total: 0,
+    activos: 0,
+    inactivos: 0,
+    cobrosAsignados: 0
+  });
+
+  // ─── Estados de modales ──────────────────────────────────────────────
   const [showModal, setShowModal] = useState(false);
   const [editingCobrador, setEditingCobrador] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -45,72 +78,83 @@ export default function AdminCobradoresPage() {
     activo: true
   });
 
-  useEffect(() => {
-    verificarAdmin();
-  }, []);
-
-  const verificarAdmin = async () => {
+  // ─── Cargar datos ──────────────────────────────────────────────────────
+  const cargarDatos = useCallback(async (showRefreshing = false) => {
     try {
-      if (!pb.authStore.isValid) {
-        router.push('/admin/login');
-        return;
-      }
-      const user = pb.authStore.model;
-      if (user?.role !== 'admin') {
-        router.push('/admin/login');
-        return;
-      }
-      await cargarCobradores();
-    } catch (error) {
-      console.error('Error en verificación:', error);
-      router.push('/admin/login');
-    }
-  };
-
-  const cargarCobradores = async () => {
-    try {
-      setLoading(true);
+      if (showRefreshing) setRefreshing(true);
+      else setLoading(true);
       setError('');
+      setSuccess('');
 
-      const data = await pb.collection('cobradores').getFullList({
-        sort: '-created',
-        expand: 'userId'
+      if (!showRefreshing) {
+        const statsData = await getCobradoresStats();
+        setStats(statsData);
+      }
+
+      const result = await getCobradoresPaginated({
+        page: currentPage,
+        perPage: ITEMS_PER_PAGE,
+        search: searchTerm,
+        status: filterStatus,
+        sort: sortBy
       });
 
-      const cobradoresConDatos = await Promise.all(
-        data.map(async (c) => {
-          let cobrosAsignados = 0;
-          let cobrosCompletados = 0;
+      setCobradores(result.items);
+      setTotalItems(result.totalItems);
+      setTotalPages(result.totalPages);
 
-          try {
-            const cobros = await pb.collection('cobros').getFullList({
-              filter: `cobradorId = "${c.id}"`
-            });
-            cobrosAsignados = cobros.length;
-            cobrosCompletados = cobros.filter(cb => cb.estado === 'completado').length;
-          } catch (e) {
-            // colección cobros puede no tener registros aún
-          }
-
-          return {
-            ...c,
-            nombre: c.nombre || c.expand?.userId?.nombre || 'Sin nombre',
-            telefono: c.telefono || c.expand?.userId?.telefono || 'N/A',
-            cobrosAsignados,
-            cobrosCompletados
-          };
-        })
-      );
-
-      setCobradores(cobradoresConDatos);
-    } catch (error) {
-      console.error('Error cargando cobradores:', error);
-      setError('Error al cargar los cobradores');
+    } catch (err) {
+      console.error('Error cargando cobradores:', err);
+      setError('No se pudieron cargar los cobradores. Intenta de nuevo.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  }, [currentPage, searchTerm, filterStatus, sortBy]);
+
+  useEffect(() => {
+    cargarDatos();
+  }, [cargarDatos]);
+
+  // ─── Actualizar URL con filtros ──────────────────────────────────────
+  const actualizarURL = useCallback((params) => {
+    const query = {
+      page: currentPage > 1 ? currentPage : undefined,
+      search: searchTerm || undefined,
+      status: filterStatus !== 'todos' ? filterStatus : undefined,
+      sort: sortBy !== '-created' ? sortBy : undefined,
+      ...params
+    };
+    Object.keys(query).forEach(key => {
+      if (query[key] === undefined || query[key] === '') delete query[key];
+    });
+    router.push({ pathname: '/admin/cobradores', query }, undefined, { shallow: true });
+  }, [currentPage, searchTerm, filterStatus, sortBy, router]);
+
+  // ─── Manejadores de eventos ──────────────────────────────────────────
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    const term = new FormData(e.target).get('search') || '';
+    setSearchTerm(term);
+    actualizarURL({ search: term, page: 1 });
   };
 
+  const handleStatusChange = (value) => {
+    setFilterStatus(value);
+    actualizarURL({ status: value, page: 1 });
+  };
+
+  const handleSortChange = (value) => {
+    setSortBy(value);
+    actualizarURL({ sort: value, page: 1 });
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    actualizarURL({ page: newPage });
+  };
+
+  // ─── CRUD ─────────────────────────────────────────────────────────────
   const generarCodigo = () => {
     const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let codigo = 'COB-';
@@ -129,6 +173,8 @@ export default function AdminCobradoresPage() {
       vehiculo: 'moto',
       activo: true
     });
+    setError('');
+    setSuccess('');
     setShowModal(true);
   };
 
@@ -141,6 +187,8 @@ export default function AdminCobradoresPage() {
       vehiculo: cobrador.vehiculo || 'moto',
       activo: cobrador.activo !== false
     });
+    setError('');
+    setSuccess('');
     setShowModal(true);
   };
 
@@ -162,6 +210,7 @@ export default function AdminCobradoresPage() {
 
     setSaving(true);
     setError('');
+    setSuccess('');
 
     try {
       if (editingCobrador) {
@@ -172,6 +221,7 @@ export default function AdminCobradoresPage() {
           vehiculo: formData.vehiculo,
           activo: formData.activo
         });
+        setSuccess('✅ Cobrador actualizado correctamente');
       } else {
         await pb.collection('cobradores').create({
           nombre: formData.nombre,
@@ -182,10 +232,11 @@ export default function AdminCobradoresPage() {
           codigo: generarCodigo(),
           totalCobros: 0
         });
+        setSuccess('✅ Cobrador creado correctamente');
       }
 
       setShowModal(false);
-      await cargarCobradores();
+      await cargarDatos(true);
     } catch (error) {
       console.error('Error guardando cobrador:', error);
       setError(error.message || 'Error al guardar el cobrador');
@@ -199,7 +250,8 @@ export default function AdminCobradoresPage() {
       await pb.collection('cobradores').update(cobrador.id, {
         activo: !cobrador.activo
       });
-      await cargarCobradores();
+      setSuccess(`✅ Cobrador ${cobrador.activo ? 'desactivado' : 'activado'}`);
+      await cargarDatos(true);
     } catch (error) {
       console.error('Error:', error);
       setError('Error al cambiar el estado del cobrador');
@@ -211,22 +263,14 @@ export default function AdminCobradoresPage() {
 
     try {
       await pb.collection('cobradores').delete(selectedCobrador.id);
+      setSuccess('✅ Cobrador eliminado correctamente');
       setShowDeleteConfirm(false);
       setSelectedCobrador(null);
-      await cargarCobradores();
+      await cargarDatos(true);
     } catch (error) {
       console.error('Error eliminando cobrador:', error);
       setError('Error al eliminar el cobrador');
     }
-  };
-
-  const formatDate = (date) => {
-    if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('es-MX', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
   };
 
   const getVehiculoLabel = (vehiculo) => {
@@ -239,27 +283,8 @@ export default function AdminCobradoresPage() {
     return labels[vehiculo] || vehiculo || 'No especificado';
   };
 
-  const cobradoresFiltrados = cobradores.filter(c => {
-    const matchesSearch = searchTerm === '' ||
-      c.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.telefono?.includes(searchTerm) ||
-      c.zona?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.codigo?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    if (filterStatus === 'todos') return matchesSearch;
-    if (filterStatus === 'activos') return matchesSearch && c.activo !== false;
-    if (filterStatus === 'inactivos') return matchesSearch && c.activo === false;
-    return matchesSearch;
-  });
-
-  const estadisticas = {
-    total: cobradores.length,
-    activos: cobradores.filter(c => c.activo !== false).length,
-    inactivos: cobradores.filter(c => c.activo === false).length,
-    cobrosAsignados: cobradores.reduce((sum, c) => sum + (c.cobrosAsignados || 0), 0)
-  };
-
-  if (loading) {
+  // ─── Renderizado ──────────────────────────────────────────────────────
+  if (loading && !refreshing) {
     return (
       <AdminLayout>
         <div className="flex justify-center items-center h-64">
@@ -278,7 +303,7 @@ export default function AdminCobradoresPage() {
       <AdminLayout>
         <div className="max-w-7xl mx-auto">
 
-          {/* Header */}
+          {/* ─── Header ─────────────────────────────────────────────────── */}
           <div className="mb-8">
             <div className="flex justify-between items-center flex-wrap gap-4">
               <div className="flex items-center gap-3">
@@ -290,21 +315,52 @@ export default function AdminCobradoresPage() {
                   <p className="text-sm text-gray-500">Administra el equipo de cobranza en campo</p>
                 </div>
               </div>
-              <button
-                onClick={openCreateModal}
-                className="flex items-center gap-2 bg-[#6C3BFF] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[#5a2ee6] transition shadow-sm"
-              >
-                <UserPlus size={16} /> Nuevo cobrador
-              </button>
+              <div className="flex gap-3 flex-wrap">
+                <button
+                  onClick={() => cargarDatos(true)}
+                  disabled={refreshing}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-[#6C3BFF] transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+                  {refreshing ? 'Actualizando...' : 'Actualizar'}
+                </button>
+                <button
+                  onClick={openCreateModal}
+                  className="flex items-center gap-2 bg-[#6C3BFF] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[#5a2ee6] transition shadow-sm"
+                >
+                  <UserPlus size={16} /> Nuevo cobrador
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Stats Cards */}
+          {/* ─── Mensajes de éxito/error ────────────────────────────────── */}
+          {success && (
+            <div className="mb-4 p-4 bg-green-50 rounded-xl border border-green-200 flex items-center gap-2 text-green-700">
+              <CheckCircle size={18} className="shrink-0" />
+              <span className="text-sm">{success}</span>
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 rounded-xl border border-red-200 flex items-center gap-2 text-red-700">
+              <AlertCircle size={18} className="shrink-0" />
+              <span className="text-sm">{error}</span>
+              <button
+                onClick={() => setError('')}
+                className="ml-auto text-sm font-medium hover:underline"
+              >
+                Descartar
+              </button>
+            </div>
+          )}
+
+          {/* ─── Stats Cards ───────────────────────────────────────────── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
               <div className="flex items-center justify-between mb-1">
                 <Bike size={18} className="text-purple-500" />
-                <span className="text-2xl font-bold text-gray-900">{estadisticas.total}</span>
+                <span className="text-2xl font-bold text-gray-900">{stats.total}</span>
               </div>
               <p className="text-xs text-gray-500">Total cobradores</p>
             </div>
@@ -312,7 +368,7 @@ export default function AdminCobradoresPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
               <div className="flex items-center justify-between mb-1">
                 <CheckCircle size={18} className="text-green-500" />
-                <span className="text-2xl font-bold text-green-600">{estadisticas.activos}</span>
+                <span className="text-2xl font-bold text-green-600">{stats.activos}</span>
               </div>
               <p className="text-xs text-gray-500">Activos</p>
             </div>
@@ -320,7 +376,7 @@ export default function AdminCobradoresPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
               <div className="flex items-center justify-between mb-1">
                 <XCircle size={18} className="text-gray-400" />
-                <span className="text-2xl font-bold text-gray-600">{estadisticas.inactivos}</span>
+                <span className="text-2xl font-bold text-gray-600">{stats.inactivos}</span>
               </div>
               <p className="text-xs text-gray-500">Inactivos</p>
             </div>
@@ -328,163 +384,194 @@ export default function AdminCobradoresPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
               <div className="flex items-center justify-between mb-1">
                 <Wallet size={18} className="text-blue-500" />
-                <span className="text-2xl font-bold text-gray-900">{estadisticas.cobrosAsignados}</span>
+                <span className="text-2xl font-bold text-gray-900">{stats.cobrosAsignados}</span>
               </div>
               <p className="text-xs text-gray-500">Cobros asignados</p>
             </div>
           </div>
 
-          {/* Search and Filters */}
+          {/* ─── Barra de búsqueda y filtros ───────────────────────────── */}
           <div className="bg-white rounded-xl border border-gray-100 p-4 mb-6 shadow-sm">
             <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
+              <form onSubmit={handleSearchSubmit} className="flex-1 relative">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent text-sm"
+                  name="search"
+                  defaultValue={searchTerm}
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#6C3BFF] text-sm"
                   placeholder="Buscar por nombre, teléfono, zona o código..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
                 />
+              </form>
+              <div className="relative">
+                <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <select
+                  className="pl-10 pr-8 py-2.5 border border-gray-200 rounded-xl bg-white text-sm"
+                  value={filterStatus}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                >
+                  <option value="todos">Todos</option>
+                  <option value="activos">Activos</option>
+                  <option value="inactivos">Inactivos</option>
+                </select>
               </div>
-              <div className="flex gap-2">
-                {[
-                  { id: 'todos', label: 'Todos', icon: Bike, color: 'purple' },
-                  { id: 'activos', label: 'Activos', icon: CheckCircle, color: 'green' },
-                  { id: 'inactivos', label: 'Inactivos', icon: XCircle, color: 'red' }
-                ].map(f => {
-                  const Icono = f.icon;
-                  const isActive = filterStatus === f.id;
-                  return (
-                    <button
-                      key={f.id}
-                      onClick={() => setFilterStatus(f.id)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
-                        isActive
-                          ? `bg-${f.color}-500 text-white shadow-sm`
-                          : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                      }`}
-                    >
-                      <Icono size={14} /> {f.label}
-                    </button>
-                  );
-                })}
+              <div className="relative">
+                <select
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm"
+                  value={sortBy}
+                  onChange={(e) => handleSortChange(e.target.value)}
+                >
+                  <option value="-created">Más recientes</option>
+                  <option value="created">Más antiguos</option>
+                  <option value="nombre">Por nombre</option>
+                  <option value="zona">Por zona</option>
+                </select>
               </div>
             </div>
           </div>
 
-          {/* Error */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 rounded-xl border border-red-200 flex items-center gap-2">
-              <AlertCircle size={16} className="text-red-500" />
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          )}
-
-          {/* Lista de cobradores */}
-          {cobradoresFiltrados.length === 0 ? (
+          {/* ─── Lista de cobradores ────────────────────────────────────── */}
+          {cobradores.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center">
               <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Bike size={32} className="text-gray-300" />
               </div>
-              <h3 className="text-base font-semibold text-gray-700 mb-1">No hay cobradores registrados</h3>
-              <p className="text-sm text-gray-400 mb-4">Comienza agregando tu primer cobrador</p>
-              <button
-                onClick={openCreateModal}
-                className="inline-flex items-center gap-2 text-[#6C3BFF] hover:underline text-sm"
-              >
-                <UserPlus size={14} /> Crear nuevo cobrador
-              </button>
+              <h3 className="text-base font-semibold text-gray-700 mb-1">
+                {searchTerm || filterStatus !== 'todos' ? 'No se encontraron cobradores' : 'No hay cobradores registrados'}
+              </h3>
+              <p className="text-sm text-gray-400 mb-4">
+                {searchTerm || filterStatus !== 'todos'
+                  ? 'Intenta con otros filtros de búsqueda'
+                  : 'Comienza agregando tu primer cobrador'}
+              </p>
+              {!searchTerm && filterStatus === 'todos' && (
+                <button
+                  onClick={openCreateModal}
+                  className="inline-flex items-center gap-2 text-[#6C3BFF] hover:underline text-sm"
+                >
+                  <UserPlus size={14} /> Crear nuevo cobrador
+                </button>
+              )}
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-100">
-                    <tr>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Código</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nombre</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Teléfono</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Zona</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Vehículo</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cobros</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Registro</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {cobradoresFiltrados.map((c, index) => (
-                      <tr key={c.id} className={`hover:bg-gray-50 transition ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                        <td className="px-5 py-3">
-                          <code className="text-xs font-mono font-medium text-gray-600 flex items-center gap-1">
-                            <Hash size={10} /> {c.codigo || '—'}
-                          </code>
-                        </td>
-                        <td className="px-5 py-3">
-                          <span className="font-medium text-gray-900">{c.nombre}</span>
-                        </td>
-                        <td className="px-5 py-3">
-                          <span className="text-sm text-gray-500 flex items-center gap-1">
-                            <Phone size={12} /> {c.telefono}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3">
-                          <span className="text-sm text-gray-500 flex items-center gap-1">
-                            <MapPin size={12} /> {c.zona || '—'}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3">
-                          <span className="text-sm text-gray-500">{getVehiculoLabel(c.vehiculo)}</span>
-                        </td>
-                        <td className="px-5 py-3">
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                            <TrendingUp size={10} /> {c.cobrosCompletados}/{c.cobrosAsignados}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3">
-                          <span className="text-sm text-gray-500 flex items-center gap-1">
-                            <Calendar size={12} /> {formatDate(c.created)}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3">
-                          <button
-                            onClick={() => toggleActivo(c)}
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition ${
-                              c.activo !== false
-                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                                : 'bg-red-100 text-red-700 hover:bg-red-200'
-                            }`}
-                          >
-                            {c.activo !== false ? <CheckCircle size={10} /> : <XCircle size={10} />}
-                            {c.activo !== false ? 'Activo' : 'Inactivo'}
-                          </button>
-                        </td>
-                        <td className="px-5 py-3">
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => openEditModal(c)}
-                              className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-100 transition flex items-center gap-1"
-                            >
-                              <Edit size={12} /> Editar
-                            </button>
-                            <button
-                              onClick={() => { setSelectedCobrador(c); setShowDeleteConfirm(true); }}
-                              className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-medium hover:bg-red-100 transition flex items-center gap-1"
-                            >
-                              <Trash2 size={12} /> Eliminar
-                            </button>
-                          </div>
-                        </td>
+            <>
+              <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Código</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nombre</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Teléfono</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Zona</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Vehículo</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cobros</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Registro</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
+                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {cobradores.map((c, index) => (
+                        <tr key={c.id} className={`hover:bg-gray-50 transition ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                          <td className="px-5 py-3">
+                            <code className="text-xs font-mono font-medium text-gray-600 flex items-center gap-1">
+                              <Hash size={10} /> {c.codigo || '—'}
+                            </code>
+                          </td>
+                          <td className="px-5 py-3">
+                            <span className="font-medium text-gray-900">{c.nombre}</span>
+                          </td>
+                          <td className="px-5 py-3">
+                            <span className="text-sm text-gray-500 flex items-center gap-1">
+                              <Phone size={12} /> {c.telefono}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3">
+                            <span className="text-sm text-gray-500 flex items-center gap-1">
+                              <MapPin size={12} /> {c.zona || '—'}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3">
+                            <span className="text-sm text-gray-500">{getVehiculoLabel(c.vehiculo)}</span>
+                          </td>
+                          <td className="px-5 py-3">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                              <TrendingUp size={10} /> {c.cobrosCompletados}/{c.cobrosAsignados}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3">
+                            <span className="text-sm text-gray-500 flex items-center gap-1">
+                              <Calendar size={12} /> {formatDate(c.created)}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3">
+                            <button
+                              onClick={() => toggleActivo(c)}
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition ${
+                                c.activo !== false
+                                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                  : 'bg-red-100 text-red-700 hover:bg-red-200'
+                              }`}
+                            >
+                              {c.activo !== false ? <CheckCircle size={10} /> : <XCircle size={10} />}
+                              {c.activo !== false ? 'Activo' : 'Inactivo'}
+                            </button>
+                          </td>
+                          <td className="px-5 py-3">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => openEditModal(c)}
+                                className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-100 transition flex items-center gap-1"
+                              >
+                                <Edit size={12} /> Editar
+                              </button>
+                              <button
+                                onClick={() => { setSelectedCobrador(c); setShowDeleteConfirm(true); }}
+                                className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-medium hover:bg-red-100 transition flex items-center gap-1"
+                              >
+                                <Trash2 size={12} /> Eliminar
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+
+              {/* ─── Paginación ────────────────────────────────────────── */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-100">
+                  <span className="text-sm text-gray-500">
+                    Mostrando {cobradores.length} de {totalItems} cobradores
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-1 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
+                    >
+                      <ChevronLeft size={14} /> Anterior
+                    </button>
+                    <span className="px-4 py-2 text-sm text-gray-500">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-1 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
+                    >
+                      Siguiente <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
-          {/* Información adicional */}
+          {/* ─── Información adicional ────────────────────────────────── */}
           <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
@@ -500,6 +587,8 @@ export default function AdminCobradoresPage() {
             </div>
           </div>
         </div>
+
+        {/* ─── Modales (sin cambios estructurales, solo mejoras de feedback) ──── */}
 
         {/* Modal de creación/edición */}
         {showModal && (
@@ -518,6 +607,7 @@ export default function AdminCobradoresPage() {
               </div>
 
               <form onSubmit={handleSave} className="p-6 space-y-4">
+                {/* Campos del formulario (sin cambios) */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo *</label>
                   <input

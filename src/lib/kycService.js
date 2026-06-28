@@ -389,3 +389,120 @@ export async function getAllKYC() {
     return [];
   }
 }
+// src/lib/kycService.js
+// ... (todo tu código existente) ...
+
+// ============================================================
+// NUEVAS FUNCIONES PARA ADMIN (paginación, estadísticas)
+// ============================================================
+
+const ITEMS_PER_PAGE = 10;
+
+/**
+ * Obtiene solicitudes KYC con paginación, búsqueda y filtros.
+ * @param {Object} params
+ * @param {number} params.page - Número de página (default: 1)
+ * @param {number} params.perPage - Elementos por página (default: 10)
+ * @param {string} params.search - Búsqueda por nombre o teléfono
+ * @param {string} params.estado - 'pendientes' | 'aprobados' | 'rechazados' | 'todos'
+ * @param {string} params.sort - Campo de ordenamiento (ej: '-created')
+ * @returns {Promise<Object>} { items, totalItems, totalPages, page, perPage }
+ */
+export async function getKYCRequests({ page = 1, perPage = ITEMS_PER_PAGE, search = '', estado = 'pendientes', sort = '-created' }) {
+    try {
+        let filter = '';
+
+        // Mapear estado a valor de PocketBase
+        const estadoMap = {
+            'pendientes': 'pendiente',
+            'aprobados': 'aprobado',
+            'rechazados': 'rechazado'
+        };
+        const estadoValue = estadoMap[estado];
+        if (estadoValue) {
+            filter += `estado = "${estadoValue}"`;
+        } else if (estado === 'todos') {
+            // Sin filtro de estado
+        } else {
+            // Si no coincide, usar 'pendiente' por defecto
+            filter += `estado = "pendiente"`;
+        }
+
+        if (search.trim()) {
+            const term = search.trim();
+            // Buscar en nombre o teléfono del usuario expandido
+            // Nota: PocketBase no soporta búsqueda en campos expandidos directamente en el filtro,
+            // así que haremos la búsqueda en el cliente después de obtener los datos.
+            // O podemos obtener los usuarios primero y luego filtrar.
+            // Para simplificar, aplicamos filtro de búsqueda después de obtener los datos.
+        }
+
+        // Obtener registros con expand de userId
+        const result = await pb.collection('kyc_verifications').getList(page, perPage, {
+            filter: filter || undefined,
+            sort: sort,
+            expand: 'userId',
+            // fields: 'id,userId,estado,idFront,idBack,foto,fechaEnvio,created,submittedAt,motivoRechazo,fechaActualizacion,fechaRevision,revisadoPor,expand.userId.nombre,expand.userId.telefono'
+        });
+
+        // Aplicar búsqueda en cliente (por nombre o teléfono)
+        let items = result.items;
+        if (search.trim()) {
+            const term = search.trim().toLowerCase();
+            items = items.filter(item => {
+                const nombre = item.expand?.userId?.nombre?.toLowerCase() || '';
+                const telefono = item.expand?.userId?.telefono?.toLowerCase() || '';
+                return nombre.includes(term) || telefono.includes(term);
+            });
+        }
+
+        return {
+            items,
+            totalItems: result.totalItems,
+            totalPages: result.totalPages,
+            page: result.page,
+            perPage: result.perPage
+        };
+    } catch (error) {
+        console.error('Error obteniendo KYC:', error);
+        throw error;
+    }
+}
+
+/**
+ * Obtiene estadísticas rápidas para el dashboard de KYC.
+ * @returns {Promise<Object>} { pendientes, aprobadosHoy, rechazados, total }
+ */
+export async function getKYCStats() {
+    try {
+        const pendientesResult = await pb.collection('kyc_verifications').getList(1, 1, {
+            filter: 'estado = "pendiente"',
+            fields: 'id'
+        });
+
+        const hoy = new Date();
+        const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+        const finHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1);
+        const aprobadosHoyResult = await pb.collection('kyc_verifications').getList(1, 1, {
+            filter: `estado = "aprobado" && fechaActualizacion >= "${inicioHoy.toISOString()}" && fechaActualizacion < "${finHoy.toISOString()}"`,
+            fields: 'id'
+        });
+
+        const rechazadosResult = await pb.collection('kyc_verifications').getList(1, 1, {
+            filter: 'estado = "rechazado"',
+            fields: 'id'
+        });
+
+        const total = pendientesResult.totalItems + aprobadosHoyResult.totalItems + rechazadosResult.totalItems;
+
+        return {
+            pendientes: pendientesResult.totalItems,
+            aprobadosHoy: aprobadosHoyResult.totalItems,
+            rechazados: rechazadosResult.totalItems,
+            total
+        };
+    } catch (error) {
+        console.error('Error obteniendo estadísticas KYC:', error);
+        return { pendientes: 0, aprobadosHoy: 0, rechazados: 0, total: 0 };
+    }
+}

@@ -1,5 +1,5 @@
 // src/pages/tandas/unirse/[id].js
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
@@ -25,7 +25,8 @@ import {
   TrendingUp,
   Zap,
   Gift,
-  HeartHandshake
+  HeartHandshake,
+  RefreshCw
 } from 'lucide-react';
 import StoreLayout from '../../../layouts/StoreLayout';
 import {
@@ -37,10 +38,32 @@ import {
   selectPosition,
   getMemberByClientAndTanda,
   canJoinTandaProgresivo,
-  getNivelTandaPermitido
+  getNivelTandaPermitido,
+  getTandaWithDetails
 } from '../../../lib/tandasService';
 import { getClientKYC } from '../../../lib/kycService';
 import pb from '../../../lib/pocketbase';
+
+// ─── Toast simple ──────────────────────────────────────────────────────────
+function Toast({ message, type, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const colors = {
+    success: 'bg-green-50 border-green-200 text-green-800',
+    error: 'bg-red-50 border-red-200 text-red-800',
+    warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+    info: 'bg-blue-50 border-blue-200 text-blue-800'
+  };
+
+  return (
+    <div className={`fixed bottom-4 right-4 z-50 p-4 rounded-xl border shadow-lg max-w-sm ${colors[type] || colors.info}`}>
+      <p className="text-sm">{message}</p>
+    </div>
+  );
+}
 
 export default function UnirseTandaPage() {
   const router = useRouter();
@@ -63,7 +86,21 @@ export default function UnirseTandaPage() {
   const [contratoAceptado, setContratoAceptado] = useState(false);
   const [nivelPermitido, setNivelPermitido] = useState(null);
   const [nivelMaximoParticipado, setNivelMaximoParticipado] = useState(0);
+  const [haParticipado, setHaParticipado] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [cargandoVerificacion, setCargandoVerificacion] = useState(false);
 
+  // ─── Persistencia del paso en localStorage ─────────────────────────────
+  useEffect(() => {
+    if (id && paso > 1 && paso < 5) {
+      localStorage.setItem(`tanda_unirse_paso_${id}`, paso.toString());
+    }
+    if (paso === 5) {
+      localStorage.removeItem(`tanda_unirse_paso_${id}`);
+    }
+  }, [paso, id]);
+
+  // ─── Autenticación y carga inicial ─────────────────────────────────────
   useEffect(() => {
     if (!pb.authStore.isValid) {
       router.push('/solicitar?redirect=' + encodeURIComponent(router.asPath));
@@ -81,32 +118,24 @@ export default function UnirseTandaPage() {
   const cargarDatos = async (clientId) => {
     try {
       setLoading(true);
+      setError('');
 
+      // 1. Obtener datos de la tanda y miembros en paralelo
       const [tandaData, miembrosData] = await Promise.all([
         getTandaById(id),
         getMiembrosTanda(id)
       ]);
 
+      if (!tandaData) {
+        setError('La tanda no existe o no está disponible');
+        setLoading(false);
+        return;
+      }
+
       setTanda(tandaData);
-
-      // Dentro de cargarDatos, después de setTanda(tandaData)
-      const { nivelPermitido, nivelMaximoParticipado, haParticipado } = await getNivelTandaPermitido(clientId);
-      setNivelPermitido(nivelPermitido);
-      setNivelMaximoParticipado(nivelMaximoParticipado);
-
-      // Validar si puede unirse a esta tanda por nivel progresivo
-      if (!haParticipado && tandaData.nivelRequerido > 1) {
-        setError(`Debes comenzar desde el nivel básico de tandas. Esta tanda requiere nivel ${tandaData.nivelRequerido}.`);
-        return;
-      }
-
-      if (haParticipado && tandaData.nivelRequerido > nivelPermitido) {
-        setError(`Completa primero las tandas de nivel ${nivelPermitido - 1} antes de unirte a esta.`);
-        return;
-      }
-
       setMiembros(miembrosData);
 
+      // 2. Verificar KYC
       const kyc = await getClientKYC(clientId);
       if (kyc?.estado !== 'aprobado') {
         setError('Debes completar la verificación KYC para unirte a una tanda');
@@ -114,32 +143,80 @@ export default function UnirseTandaPage() {
         return;
       }
 
+      // 3. Verificar nivel progresivo usando el servicio centralizado
+      const verificacion = await canJoinTandaProgresivo(clientId, id);
+
+      if (!verificacion.allowed) {
+        setError(verificacion.mensajeUsuario || 'No puedes unirte a esta tanda');
+        setNivelPermitido(verificacion.nivelPermitido || 1);
+        setNivelMaximoParticipado(verificacion.nivelActual || 0);
+        setHaParticipado(verificacion.nivelActual > 0);
+        setLoading(false);
+        return;
+      }
+
+      // Si permite, guardar información de niveles
+      setNivelPermitido(verificacion.siguienteNivel || 1);
+      setNivelMaximoParticipado(verificacion.nivelActual || 0);
+      setHaParticipado(verificacion.nivelActual > 0);
+
+      // 4. Verificar si ya es miembro
       const miembroExistente = miembrosData.find(m => m.userId === clientId);
       if (miembroExistente) {
         setMemberId(miembroExistente.id);
 
-        if (miembroExistente.gasFeePaid && miembroExistente.posicion > 1) {
-          setPosicionFinal(miembroExistente.posicion);
-          setPaso(5);
+        // Recuperar paso guardado si existe
+        const savedPaso = localStorage.getItem(`tanda_unirse_paso_${id}`);
+        if (savedPaso && parseInt(savedPaso) > 1) {
+          const savedPasoNum = parseInt(savedPaso);
+          // Validar que el paso guardado sea coherente con el estado actual
+          if (savedPasoNum === 5 && miembroExistente.posicion > 1) {
+            setPosicionFinal(miembroExistente.posicion);
+            setPaso(5);
+          } else if (savedPasoNum === 4 && miembroExistente.gasFeePaid) {
+            const disponibles = await getAvailablePositions(id);
+            setPosicionesDisponibles(disponibles);
+            setPaso(4);
+          } else if (savedPasoNum === 3 && !miembroExistente.gasFeePaid) {
+            setPaso(3);
+          } else if (savedPasoNum === 2) {
+            setPaso(2);
+          } else {
+            // Si no coincide, determinar paso lógicamente
+            determinarPaso(miembroExistente, miembrosData);
+          }
+        } else {
+          determinarPaso(miembroExistente, miembrosData);
         }
-        else if (miembroExistente.gasFeePaid && miembroExistente.posicion === (miembrosData.length)) {
-          const disponibles = await getAvailablePositions(id);
-          setPosicionesDisponibles(disponibles);
-          setPaso(4);
-        }
-        else if (!miembroExistente.gasFeePaid) {
-          setPaso(3);
-        }
+      } else {
+        // No es miembro, comenzar en paso 1
+        setPaso(1);
       }
 
     } catch (error) {
       console.error('Error cargando datos:', error);
-      setError('Error al cargar la información de la tanda');
+      setError('Error al cargar la información de la tanda. Intenta de nuevo.');
     } finally {
       setLoading(false);
     }
   };
 
+  const determinarPaso = (miembro, miembrosData) => {
+    if (miembro.gasFeePaid && miembro.posicion > 1) {
+      setPosicionFinal(miembro.posicion);
+      setPaso(5);
+    } else if (miembro.gasFeePaid) {
+      // Tiene gasolina pagada pero aún no ha elegido posición
+      getAvailablePositions(id).then(disponibles => {
+        setPosicionesDisponibles(disponibles);
+        setPaso(4);
+      });
+    } else {
+      setPaso(3);
+    }
+  };
+
+  // ─── Funciones de acción ──────────────────────────────────────────────
   const handleUnirse = async () => {
     try {
       setProcesando(true);
@@ -148,9 +225,10 @@ export default function UnirseTandaPage() {
       const miembro = await joinTanda(clienteId, id);
       setMemberId(miembro.id);
       setPaso(2);
+      setToast({ message: '✅ Registro exitoso, ahora revisa los términos', type: 'success' });
 
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error al unirse:', error);
       setError(error.message || 'Error al unirse a la tanda');
     } finally {
       setProcesando(false);
@@ -162,26 +240,28 @@ export default function UnirseTandaPage() {
       setProcesando(true);
       setError('');
 
-      if (!memberId) {
+      let currentMemberId = memberId;
+      if (!currentMemberId) {
+        // Buscar el miembro nuevamente
         const miembrosActualizados = await getMiembrosTanda(id);
         const miMiembro = miembrosActualizados.find(m => m.userId === clienteId);
-
         if (!miMiembro) {
           throw new Error('No se encontró tu membresía');
         }
-        setMemberId(miMiembro.id);
-        await pagarGasolina(miMiembro.id);
-      } else {
-        await pagarGasolina(memberId);
+        currentMemberId = miMiembro.id;
+        setMemberId(currentMemberId);
       }
+
+      await pagarGasolina(currentMemberId);
 
       const disponibles = await getAvailablePositions(id);
       setPosicionesDisponibles(disponibles);
       setPaso(4);
+      setToast({ message: '✅ Pago de gasolina registrado, elige tu posición', type: 'success' });
 
     } catch (error) {
-      console.error('Error:', error);
-      setError(error.message || 'Error al procesar el pago');
+      console.error('Error pagando gasolina:', error);
+      setError(error.message || 'Error al procesar el pago de gasolina');
     } finally {
       setProcesando(false);
     }
@@ -200,9 +280,12 @@ export default function UnirseTandaPage() {
       await selectPosition(memberId, posicionSeleccionada);
       setPosicionFinal(posicionSeleccionada);
       setPaso(5);
+      // Limpiar paso guardado
+      localStorage.removeItem(`tanda_unirse_paso_${id}`);
+      setToast({ message: `✅ Posición #${posicionSeleccionada} confirmada!`, type: 'success' });
 
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error seleccionando posición:', error);
       setError(error.message || 'Error al seleccionar tu posición');
     } finally {
       setProcesando(false);
@@ -213,8 +296,19 @@ export default function UnirseTandaPage() {
     setContratoAceptado(true);
     setMostrarContrato(false);
     setPaso(3);
+    setToast({ message: '✅ Contrato aceptado, ahora paga la gasolina', type: 'success' });
   };
 
+  // ─── Reintentar carga ──────────────────────────────────────────────────
+  const handleReintentar = () => {
+    if (clienteId) {
+      cargarDatos(clienteId);
+    } else {
+      router.push('/tandas');
+    }
+  };
+
+  // ─── Formateadores ──────────────────────────────────────────────────────
   const formatMoney = (amount) => {
     if (!amount) return '$0';
     return new Intl.NumberFormat('es-MX', {
@@ -266,14 +360,18 @@ export default function UnirseTandaPage() {
     return Hash;
   };
 
-  const steps = [
+  const PosicionIcono = useMemo(() => getPosicionIcono(), [posicionFinal]);
+
+  // ─── Steps ─────────────────────────────────────────────────────────────
+  const steps = useMemo(() => [
     { num: 1, label: 'Información', icon: Target },
     { num: 2, label: 'Términos', icon: FileText },
     { num: 3, label: 'Gasolina', icon: Fuel },
     { num: 4, label: 'Elegir #', icon: Hash },
     { num: 5, label: 'Confirmar', icon: CheckCircle }
-  ];
+  ], []);
 
+  // ─── Estados de carga y error ──────────────────────────────────────────
   if (loading) {
     return (
       <StoreLayout>
@@ -294,21 +392,28 @@ export default function UnirseTandaPage() {
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">Error</h2>
             <p className="text-gray-500 text-sm mb-6">{error}</p>
-            <Link href="/tandas" className="inline-flex items-center gap-2 bg-[#6C3BFF] text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#5a2ee6] transition">
-              <ArrowLeft size={16} /> Volver a tandas
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={handleReintentar}
+                className="inline-flex items-center gap-2 bg-[#6C3BFF] text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#5a2ee6] transition"
+              >
+                <RefreshCw size={16} /> Reintentar
+              </button>
+              <Link href="/tandas" className="inline-flex items-center gap-2 border border-gray-200 text-gray-700 px-5 py-2.5 rounded-xl text-sm font-medium hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition">
+                <ArrowLeft size={16} /> Volver a tandas
+              </Link>
+            </div>
           </div>
         </div>
       </StoreLayout>
     );
   }
 
-  const PosicionIcono = getPosicionIcono();
-
   return (
     <>
       <Head>
-        <title>Unirse a {tanda?.nombre || 'Tanda'} | MarketDesliz</title>
+        <title>{tanda ? `Unirse a ${tanda.nombre}` : 'Unirse a Tanda'} | MarketDesliz</title>
+        <meta name="description" content={`Únete a la tanda "${tanda?.nombre}" y comienza a ahorrar con MarketDesliz.`} />
       </Head>
 
       <StoreLayout>
@@ -322,8 +427,8 @@ export default function UnirseTandaPage() {
                   <Target size={20} />
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold">{tanda?.nombre}</h1>
-                  {tanda?.descripcion && <p className="text-white/80 text-sm">{tanda?.descripcion}</p>}
+                  <h1 className="text-xl font-bold">{tanda?.nombre || 'Tanda'}</h1>
+                  {tanda?.descripcion && <p className="text-white/80 text-sm">{tanda.descripcion}</p>}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 mt-3">
@@ -341,7 +446,7 @@ export default function UnirseTandaPage() {
             </div>
 
             <div className="p-6">
-              {/* Steps */}
+              {/* ── Steps ────────────────────────────────────────────────── */}
               <div className="flex justify-between mb-8">
                 {steps.map((step, idx) => {
                   const StepIcon = step.icon;
@@ -365,18 +470,19 @@ export default function UnirseTandaPage() {
                 })}
               </div>
 
+              {/* ── Errores ──────────────────────────────────────────────── */}
               {error && (
                 <div className="mb-4 p-3 bg-red-50 rounded-xl border border-red-200 flex items-center gap-2">
-                  <AlertCircle size={16} className="text-red-500" />
+                  <AlertCircle size={16} className="text-red-500 shrink-0" />
                   <p className="text-sm text-red-600">{error}</p>
                 </div>
               )}
 
-              {/* Advertencia de nivel progresivo */}
+              {/* ── Advertencia de nivel progresivo ────────────────────── */}
               {nivelPermitido && tanda?.nivelRequerido > nivelPermitido && (
-                <div className="m-4 p-3 bg-yellow-50 rounded-xl border border-yellow-200">
+                <div className="mb-4 p-3 bg-yellow-50 rounded-xl border border-yellow-200">
                   <div className="flex items-start gap-2">
-                    <AlertCircle size={16} className="text-yellow-600 mt-0.5" />
+                    <AlertCircle size={16} className="text-yellow-600 mt-0.5 shrink-0" />
                     <div>
                       <p className="text-sm font-medium text-yellow-800">⚠️ Nivel no disponible</p>
                       <p className="text-xs text-yellow-700">
@@ -388,51 +494,9 @@ export default function UnirseTandaPage() {
                 </div>
               )}
 
-              {/* Modal de Contrato Digital */}
-              {mostrarContrato && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setMostrarContrato(false)}>
-                  <div className="bg-white rounded-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
-                    <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4">
-                      <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                        <FileText size={18} className="text-[#6C3BFF]" /> Contrato de Participación
-                      </h2>
-                    </div>
-                    <div className="p-6 space-y-4 text-sm">
-                      <div>
-                        <p className="font-semibold text-gray-900 mb-2">Responsabilidades del participante:</p>
-                        <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                          <li>Realizar los pagos semanales de forma puntual en la fecha acordada.</li>
-                          <li>Mantener comunicación con el administrador ante cualquier eventualidad.</li>
-                          <li>Los pagos atrasados afectan a todo el grupo y pueden resultar en la pérdida de tu turno.</li>
-                          <li>Aceptar que la posición #1 es del administrador (MarketDesliz).</li>
-                          <li>El pago de gasolina de $25 es único y no reembolsable.</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-900 mb-2">Condiciones generales:</p>
-                        <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                          <li>El orden de turnos se define por antigüedad y selección del participante.</li>
-                          <li>Cualquier incumplimiento puede resultar en la exclusión de futuras tandas.</li>
-                          <li>La información de los participantes es visible solo para miembros de la tanda.</li>
-                          <li>MarketDesliz actúa como administrador y facilitador del grupo.</li>
-                        </ul>
-                      </div>
-                      <p className="text-xs text-gray-400 pt-2">
-                        Al aceptar, confirmas que has leído y comprendes todos los términos y condiciones.
-                      </p>
-                    </div>
-                    <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 flex gap-3">
-                      <button onClick={() => setMostrarContrato(false)} className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">Cancelar</button>
-                      <button onClick={handleAceptarContrato} className="flex-1 px-4 py-2.5 bg-[#6C3BFF] text-white rounded-xl font-medium hover:bg-[#5a2ee6] transition">Aceptar y continuar</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* PASO 1: Información */}
+              {/* ─── PASO 1: Información ────────────────────────────────── */}
               {paso === 1 && (
                 <>
-                  {/* Progreso de niveles de tandas */}
                   <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-4 mb-6">
                     <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                       <TrendingUp size={14} className="text-purple-600" /> Tu progreso en tandas
@@ -520,7 +584,7 @@ export default function UnirseTandaPage() {
                 </>
               )}
 
-              {/* PASO 2: Términos */}
+              {/* ─── PASO 2: Términos ───────────────────────────────────── */}
               {paso === 2 && (
                 <>
                   <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><FileText size={18} className="text-[#6C3BFF]" /> Términos y responsabilidades</h2>
@@ -563,7 +627,7 @@ export default function UnirseTandaPage() {
                 </>
               )}
 
-              {/* PASO 3: Gasolina */}
+              {/* ─── PASO 3: Gasolina ───────────────────────────────────── */}
               {paso === 3 && (
                 <>
                   <div className="text-center mb-6">
@@ -597,7 +661,7 @@ export default function UnirseTandaPage() {
                 </>
               )}
 
-              {/* PASO 4: Seleccionar número */}
+              {/* ─── PASO 4: Seleccionar número ─────────────────────────── */}
               {paso === 4 && (
                 <>
                   <h2 className="text-lg font-bold text-gray-900 text-center mb-2">🎯 Elige tu número</h2>
@@ -661,7 +725,7 @@ export default function UnirseTandaPage() {
                 </>
               )}
 
-              {/* PASO 5: Confirmación final */}
+              {/* ─── PASO 5: Confirmación final ─────────────────────────── */}
               {paso === 5 && (
                 <>
                   <div className="text-center mb-6">
@@ -707,7 +771,7 @@ export default function UnirseTandaPage() {
                 </>
               )}
 
-              {/* Información de pago en dos partes */}
+              {/* ─── Información de pago en dos partes ──────────────────── */}
               {tanda?.pagoEnDosPartes && (
                 <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
                   <h4 className="font-semibold text-blue-700 mb-2 flex items-center gap-2">
@@ -720,11 +784,60 @@ export default function UnirseTandaPage() {
                   </ul>
                 </div>
               )}
-              
             </div>
           </div>
         </div>
       </StoreLayout>
+
+      {/* ─── Modal de contrato ───────────────────────────────────────────── */}
+      {mostrarContrato && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setMostrarContrato(false)}>
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <FileText size={18} className="text-[#6C3BFF]" /> Contrato de Participación
+              </h2>
+            </div>
+            <div className="p-6 space-y-4 text-sm">
+              <div>
+                <p className="font-semibold text-gray-900 mb-2">Responsabilidades del participante:</p>
+                <ul className="list-disc pl-5 space-y-1 text-gray-600">
+                  <li>Realizar los pagos semanales de forma puntual en la fecha acordada.</li>
+                  <li>Mantener comunicación con el administrador ante cualquier eventualidad.</li>
+                  <li>Los pagos atrasados afectan a todo el grupo y pueden resultar en la pérdida de tu turno.</li>
+                  <li>Aceptar que la posición #1 es del administrador (MarketDesliz).</li>
+                  <li>El pago de gasolina de $25 es único y no reembolsable.</li>
+                </ul>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900 mb-2">Condiciones generales:</p>
+                <ul className="list-disc pl-5 space-y-1 text-gray-600">
+                  <li>El orden de turnos se define por antigüedad y selección del participante.</li>
+                  <li>Cualquier incumplimiento puede resultar en la exclusión de futuras tandas.</li>
+                  <li>La información de los participantes es visible solo para miembros de la tanda.</li>
+                  <li>MarketDesliz actúa como administrador y facilitador del grupo.</li>
+                </ul>
+              </div>
+              <p className="text-xs text-gray-400 pt-2">
+                Al aceptar, confirmas que has leído y comprendes todos los términos y condiciones.
+              </p>
+            </div>
+            <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 flex gap-3">
+              <button onClick={() => setMostrarContrato(false)} className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">Cancelar</button>
+              <button onClick={handleAceptarContrato} className="flex-1 px-4 py-2.5 bg-[#6C3BFF] text-white rounded-xl font-medium hover:bg-[#5a2ee6] transition">Aceptar y continuar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Toast ────────────────────────────────────────────────────────── */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </>
   );
 }

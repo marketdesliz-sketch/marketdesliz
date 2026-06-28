@@ -54,7 +54,7 @@ export default function BlogPage() {
       </Head>
 
       <StoreLayout>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-36 pb-10">
 
           {/* Header */}
           <div className="text-center mb-10">

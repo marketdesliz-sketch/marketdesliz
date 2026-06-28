@@ -309,6 +309,35 @@ export default function SolicitarPage() {
     }
   };
 
+  const handleSkipGooglePhone = async () => {
+    setGoogleLoading(true);
+    try {
+      if (!pendingGoogleUser || !pendingGoogleUser.userId) {
+        throw new Error('Error: No se pudo identificar al usuario');
+      }
+
+      const result = await completeGoogleRegistration(
+        pendingGoogleUser.userId,
+        null, // sin teléfono
+        pendingGoogleUser.nombre,
+        pendingGoogleUser.tempPassword,
+        true // skipPhone = true
+      );
+
+      if (result.success) {
+        setPendingGoogleUser(null);
+        setShowGooglePhoneModal(false);
+        router.push('/');
+      } else {
+        setError(result.message || 'Error al completar registro');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   const handleConfirmLink = async () => {
     setShowConfirmModal(false);
 
@@ -641,11 +670,40 @@ export default function SolicitarPage() {
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-2xl w-full max-w-md p-6">
                 <h3 className="text-lg font-bold text-center mb-2">Completa tu registro</h3>
-                <p className="text-sm text-gray-500 text-center mb-4">{pendingGoogleUser?.nombre}, ingresa tu número de teléfono</p>
-                <input type="tel" value={googlePhone} onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="55 1234 5678" className="w-full border border-gray-300 rounded-lg px-4 py-3 text-center text-lg mb-4" autoFocus />
+                <p className="text-sm text-gray-500 text-center mb-4">
+                  {pendingGoogleUser?.nombre}, ingresa tu número de teléfono
+                </p>
+                <input
+                  type="tel"
+                  value={googlePhone}
+                  onChange={(e) => setGooglePhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  placeholder="55 1234 5678"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 text-center text-lg mb-4 focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
+                  autoFocus
+                />
                 {error && <p className="text-red-500 text-sm text-center mb-4">{error}</p>}
-                <button onClick={handleCompleteGooglePhone} disabled={googleLoading} className="w-full bg-[#6C3BFF] text-white py-3 rounded-lg font-semibold disabled:opacity-50">{googleLoading ? 'Procesando...' : 'Continuar'}</button>
-                <button onClick={() => setShowGooglePhoneModal(false)} className="w-full mt-2 text-gray-500 text-sm py-2">Cancelar</button>
+
+                {/* ✅ Botón Continuar (uno solo) */}
+                <button
+                  onClick={handleCompleteGooglePhone}
+                  disabled={googleLoading}
+                  className="w-full bg-[#6C3BFF] text-white py-3 rounded-lg font-semibold disabled:opacity-50"
+                >
+                  {googleLoading ? 'Procesando...' : 'Continuar'}
+                </button>
+                <button
+                  onClick={handleSkipGooglePhone}
+                  disabled={googleLoading}
+                  className="w-full mt-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  Omitir por ahora
+                </button>
+                <button
+                  onClick={() => setShowGooglePhoneModal(false)}
+                  className="w-full mt-2 text-gray-500 text-sm py-2 hover:text-gray-700 transition-colors"
+                >
+                  Cancelar
+                </button>
               </div>
             </div>
           )}

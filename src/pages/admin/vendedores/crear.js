@@ -1,4 +1,4 @@
-// src/pages/admin/vendedores/crear.js
+// src/pages/admin/vendedores/crear.js - OPTIMIZADO
 import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
@@ -29,6 +29,7 @@ export default function CrearVendedorPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [vendedorCreado, setVendedorCreado] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -56,7 +57,8 @@ export default function CrearVendedorPage() {
       `🔗 Inicio de sesión: /vendedor/login`;
 
     navigator.clipboard.writeText(credenciales);
-    alert('✅ Credenciales copiadas al portapapeles');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 3000);
   };
 
   const handleSubmit = async (e) => {
@@ -108,7 +110,9 @@ export default function CrearVendedorPage() {
       if (resultado.success) {
         setVendedorCreado(resultado.data);
         setSuccess(true);
+        setCopied(false);
 
+        // Limpiar formulario (opcional, pero ya lo hacemos)
         setFormData({
           nombre: '',
           email: '',
@@ -121,11 +125,10 @@ export default function CrearVendedorPage() {
 
         setTimeout(() => {
           router.push('/admin/vendedores');
-        }, 4000);
+        }, 3000);
       } else {
         setError(resultado.error);
         setLoading(false);
-        return;
       }
     } catch (error) {
       console.error('Error inesperado:', error);
@@ -133,6 +136,22 @@ export default function CrearVendedorPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const resetForm = () => {
+    setSuccess(false);
+    setVendedorCreado(null);
+    setCopied(false);
+    setError('');
+    setFormData({
+      nombre: '',
+      email: '',
+      telefono: '',
+      zona: '',
+      comisionPorcentaje: 50,
+      password: '',
+      confirmPassword: ''
+    });
   };
 
   return (
@@ -179,9 +198,21 @@ export default function CrearVendedorPage() {
               <div className="flex flex-wrap gap-3 mb-4">
                 <button
                   onClick={copiarCredenciales}
-                  className="flex items-center gap-2 bg-purple-100 text-purple-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-purple-200 transition"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${
+                    copied
+                      ? 'bg-green-200 text-green-800'
+                      : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                  }`}
                 >
-                  <Copy size={14} /> Copiar credenciales
+                  {copied ? (
+                    <>
+                      <CheckCircle size={14} /> ¡Copiado!
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={14} /> Copiar credenciales
+                    </>
+                  )}
                 </button>
                 <Link
                   href="/admin/vendedores"
@@ -189,12 +220,18 @@ export default function CrearVendedorPage() {
                 >
                   <Users size={14} /> Ver lista de vendedores
                 </Link>
+                <button
+                  onClick={resetForm}
+                  className="flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-200 transition"
+                >
+                  <UserPlus size={14} /> Crear otro vendedor
+                </button>
               </div>
 
               <div className="text-sm text-green-700 bg-green-100/50 rounded-lg p-3">
                 <p>📋 Las credenciales son únicas. El vendedor puede iniciar sesión en: <strong className="font-mono">/vendedor/login</strong></p>
               </div>
-              <p className="text-xs text-green-600 mt-2">🔄 Serás redirigido automáticamente en unos segundos...</p>
+              <p className="text-xs text-green-600 mt-2">🔄 Serás redirigido automáticamente en 3 segundos...</p>
             </div>
           )}
 
@@ -215,12 +252,13 @@ export default function CrearVendedorPage() {
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
               {/* Nombre completo */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="nombre" className="block text-sm font-medium text-gray-700 mb-1">
                   Nombre completo *
                 </label>
                 <div className="relative">
                   <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
+                    id="nombre"
                     type="text"
                     name="nombre"
                     value={formData.nombre}
@@ -234,12 +272,13 @@ export default function CrearVendedorPage() {
 
               {/* Correo electrónico */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                   Correo electrónico *
                 </label>
                 <div className="relative">
                   <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
+                    id="email"
                     type="email"
                     name="email"
                     value={formData.email}
@@ -254,12 +293,13 @@ export default function CrearVendedorPage() {
 
               {/* Teléfono */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="telefono" className="block text-sm font-medium text-gray-700 mb-1">
                   Teléfono *
                 </label>
                 <div className="relative">
                   <Smartphone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
+                    id="telefono"
                     type="tel"
                     name="telefono"
                     value={formData.telefono}
@@ -274,12 +314,13 @@ export default function CrearVendedorPage() {
 
               {/* Zona de trabajo */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="zona" className="block text-sm font-medium text-gray-700 mb-1">
                   Zona de trabajo
                 </label>
                 <div className="relative">
                   <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
+                    id="zona"
                     type="text"
                     name="zona"
                     value={formData.zona}
@@ -292,12 +333,13 @@ export default function CrearVendedorPage() {
 
               {/* Comisión */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="comisionPorcentaje" className="block text-sm font-medium text-gray-700 mb-1">
                   Porcentaje de comisión (%)
                 </label>
                 <div className="relative">
                   <Percent size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <select
+                    id="comisionPorcentaje"
                     name="comisionPorcentaje"
                     value={formData.comisionPorcentaje}
                     onChange={handleChange}
@@ -315,12 +357,13 @@ export default function CrearVendedorPage() {
               {/* Contraseñas */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                     Contraseña *
                   </label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
+                      id="password"
                       type={showPassword ? "text" : "password"}
                       name="password"
                       value={formData.password}
@@ -339,12 +382,13 @@ export default function CrearVendedorPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
                     Confirmar contraseña *
                   </label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
+                      id="confirmPassword"
                       type={showConfirmPassword ? "text" : "password"}
                       name="confirmPassword"
                       value={formData.confirmPassword}
@@ -375,7 +419,7 @@ export default function CrearVendedorPage() {
               {/* Submit button */}
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || success}
                 className="w-full bg-[#6C3BFF] text-white py-3 rounded-xl font-semibold hover:bg-[#5a2ee6] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (

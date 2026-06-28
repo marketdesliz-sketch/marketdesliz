@@ -1,12 +1,14 @@
 // src/pages/productos/[id].js
 import { useRouter } from 'next/router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import {
   ChevronLeft, ChevronRight, Heart, Home,
   Package, Calendar, CreditCard, ShoppingCart,
-  Zap, Info, CheckCircle, Sparkles
+  Zap, Info, CheckCircle, Sparkles, Share2,
+  Clock, Star, Truck, Eye, AlertCircle,
+  Users, MessageCircle, ThumbsUp, ThumbsDown
 } from 'lucide-react';
 import StoreLayout from '../../layouts/StoreLayout';
 import pb from '../../lib/pocketbase';
@@ -16,78 +18,309 @@ import CheckoutForm from '../../components/checkout/CheckoutForm';
 import ConfirmationModal from '../../components/checkout/ConfirmationModal';
 import ToastNotification from '../../components/ToastNotification';
 import FavoriteButton from '../../components/FavoriteButton';
+import { CATEGORIAS, generarSlug } from '../../config/categorias';
 
+// ─── Formateador de moneda ─────────────────────────────────────
 const formatMoney = (amount) =>
   new Intl.NumberFormat('es-MX', {
     style: 'currency', currency: 'MXN',
     minimumFractionDigits: 0, maximumFractionDigits: 0
   }).format(amount);
 
+// ─── Función para obtener categoría desde estática ────────────
+function getCategoriaInfoFromStatic(categoriaTexto) {
+  if (!categoriaTexto) return null;
+  
+  for (const [key, categoria] of Object.entries(CATEGORIAS)) {
+    if (categoria.nombre?.toLowerCase() === categoriaTexto.toLowerCase() ||
+        categoria.slug?.toLowerCase() === categoriaTexto.toLowerCase()) {
+      return { nombre: categoria.nombre, slug: categoria.slug };
+    }
+    if (categoria.sections) {
+      for (const section of categoria.sections) {
+        for (const cat of section.categories) {
+          if (cat.name?.toLowerCase() === categoriaTexto.toLowerCase() ||
+              cat.name?.toLowerCase().replace(/\s+/g, '-') === categoriaTexto.toLowerCase()) {
+            return { nombre: cat.name, slug: cat.name.toLowerCase().replace(/\s+/g, '-') };
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function getSubcategoriaInfoFromStatic(categoriaTexto, subcategoriaTexto) {
+  if (!subcategoriaTexto) return null;
+  
+  for (const [key, categoria] of Object.entries(CATEGORIAS)) {
+    if (categoria.sections) {
+      for (const section of categoria.sections) {
+        for (const cat of section.categories) {
+          if (cat.name?.toLowerCase() === categoriaTexto?.toLowerCase() ||
+              cat.name?.toLowerCase().replace(/\s+/g, '-') === categoriaTexto?.toLowerCase()) {
+            return { nombre: cat.name, slug: cat.name.toLowerCase().replace(/\s+/g, '-') };
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// ─── Componente principal ──────────────────────────────────────
 export default function ProductoDetalle() {
   const router = useRouter();
   const { id } = router.query;
 
+  // ─── Estados principales ─────────────────────────────────────
   const [producto, setProducto] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageUrls, setImageUrls] = useState([]);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
 
+  // ─── Estados de autenticación ───────────────────────────────
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  const [userPhone, setUserPhone] = useState('');
+
+  // ─── Estados de UI ──────────────────────────────────────────
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [showServiceSelector, setShowServiceSelector] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [userPhone, setUserPhone] = useState('');
   const [selectedService, setSelectedService] = useState(null);
   const [orderId, setOrderId] = useState(null);
   const [confirmationType, setConfirmationType] = useState(null);
 
+  // ─── Estados de plan de pago ────────────────────────────────
   const [enganchePorcentaje, setEnganchePorcentaje] = useState(25);
   const [pagoSemanal, setPagoSemanal] = useState(100);
   const [planCalculado, setPlanCalculado] = useState(null);
+  const [frecuenciaPago, setFrecuenciaPago] = useState('semanal');
 
+  // ─── Estados de toast ────────────────────────────────────────
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success');
   const [showGoToCart, setShowGoToCart] = useState(false);
 
-  const [frecuenciaPago, setFrecuenciaPago] = useState('semanal');
+  // ─── Estados de categoría y relacionados ────────────────────
   const [categoriaInfo, setCategoriaInfo] = useState(null);
-
-  // ✅ NUEVO: Estados para productos relacionados
+  const [subcategoriaInfo, setSubcategoriaInfo] = useState(null);
   const [productosRelacionados, setProductosRelacionados] = useState([]);
   const [loadingRelacionados, setLoadingRelacionados] = useState(false);
-  const [subcategoriaInfo, setSubcategoriaInfo] = useState(null);
 
-  const getOpcionesPago = (precioTotal) =>
-    precioTotal < 1000
+  // ─── Estados de reviews (mock) ──────────────────────────────
+  const [reviews, setReviews] = useState([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [averageRating, setAverageRating] = useState(0);
+  const [totalReviews, setTotalReviews] = useState(0);
+
+  // ─── Estados de stock y disponibilidad ──────────────────────
+  const [stockLevel, setStockLevel] = useState('disponible'); // 'disponible', 'pocas', 'agotado'
+
+  // ─── Estados de "Vistos recientemente" ──────────────────────
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
+
+  // ─── Estados de notificaciones ──────────────────────────────
+  const [showNotifyStock, setShowNotifyStock] = useState(false);
+
+  // ─── Memoización de opciones de pago ────────────────────────
+  const getOpcionesPago = useMemo(() => {
+    if (!producto) return [50, 100, 150, 200, 250, 300, 400, 500];
+    return producto.precioTotal < 1000
       ? [50, 100, 150, 200, 250, 300, 400, 500]
       : [100, 150, 200, 250, 300, 400, 500];
+  }, [producto]);
 
+  // ─── Efectos ─────────────────────────────────────────────────
+
+  // 1. Autenticación
   useEffect(() => {
     const checkAuth = () => {
-      const user = pb.authStore.model;
-      setIsAuthenticated(!!user);
-      if (user) setUserPhone(user.telefono || '');
+      const currentUser = pb.authStore.model;
+      setIsAuthenticated(!!currentUser);
+      setUser(currentUser);
+      if (currentUser) setUserPhone(currentUser.telefono || '');
     };
     checkAuth();
     const unsubscribe = pb.authStore.onChange(() => checkAuth());
     return () => unsubscribe();
   }, []);
 
+  // 2. Cargar producto cuando cambie ID
   useEffect(() => {
     if (id) {
       cargarProducto();
       if (isAuthenticated) verificarFavorito();
+      // Registrar vista en historial
+      registrarVista(id);
     }
   }, [id, isAuthenticated]);
 
-  // ✅ NUEVO: Función para cargar productos relacionados
+  // 3. Cargar reviews (mock)
+  useEffect(() => {
+    if (producto) {
+      cargarReviewsMock(producto.id);
+    }
+  }, [producto]);
+
+  // ─── Funciones principales ──────────────────────────────────
+
+  const cargarProducto = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // ✅ 1. Verificar caché en sessionStorage
+      const cacheKey = `producto_${id}`;
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Si el caché tiene menos de 5 minutos, usarlo
+        if (Date.now() - parsed.timestamp < 300000) {
+          setProducto(parsed.data);
+          setImageUrls(parsed.data.imagenes || ['/images/placeholder.png']);
+          calcularPlan(25, 100);
+          procesarCategoria(parsed.data);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // ✅ 2. Cargar desde PocketBase
+      const record = await pb.collection('products').getOne(id);
+
+      // ✅ 3. Validar que el producto esté activo
+      if (!record.activo) {
+        setError('Este producto no está disponible actualmente.');
+        setLoading(false);
+        return;
+      }
+
+      // ✅ 4. Procesar datos del producto
+      const productoData = {
+        id: record.id,
+        nombre: record.nombre || 'Producto sin nombre',
+        descripcion: record.descripcion || 'Sin descripción',
+        precioTotal: record.precio || 0,
+        enganche: record.enganche || 0,
+        pagoSemanal: record.pagoSemanal || 0,
+        semanas: record.semanas || 12,
+        categoria: record.categoria || 'General',
+        stock: record.stock || 0,
+        agotado: record.stock === 0,
+        nuevo: record.nuevo || false,
+        sku: record.sku || record.id.substring(0, 6).toUpperCase(),
+        diasEntrega: record.diasEntrega || 1,
+        visitas: (record.visitas || 0) + 1,
+        destacado: record.destacado || false,
+        creado: record.created,
+        actualizado: record.updated
+      };
+
+      // ✅ 5. Procesar imágenes
+      if (record.imagen && Array.isArray(record.imagen) && record.imagen.length > 0) {
+        const urls = record.imagen.map(img => pb.files.getURL(record, img));
+        productoData.imagenes = urls;
+        productoData.imagen = urls[0];
+      } else if (record.imagen) {
+        const url = pb.files.getURL(record, record.imagen);
+        productoData.imagenes = [url];
+        productoData.imagen = url;
+      } else {
+        productoData.imagenes = ['/images/placeholder.png'];
+        productoData.imagen = '/images/placeholder.png';
+      }
+
+      productoData.precioContado = Math.round(productoData.precioTotal * 2 / 3);
+
+      // ✅ 6. Determinar nivel de stock
+      if (productoData.stock === 0) {
+        setStockLevel('agotado');
+      } else if (productoData.stock <= 5) {
+        setStockLevel('pocas');
+      } else {
+        setStockLevel('disponible');
+      }
+
+      setProducto(productoData);
+      setImageUrls(productoData.imagenes);
+      calcularPlan(25, 100);
+
+      // ✅ 7. Procesar categoría
+      await procesarCategoria(productoData);
+
+      // ✅ 8. Cargar productos relacionados
+      if (productoData.categoria) {
+        cargarProductosRelacionados(productoData.categoria, id);
+      }
+
+      // ✅ 9. Actualizar contador de visitas (en segundo plano)
+      try {
+        await pb.collection('products').update(id, { visitas: productoData.visitas });
+      } catch (e) { /* silencioso */ }
+
+      // ✅ 10. Guardar en caché
+      sessionStorage.setItem(cacheKey, JSON.stringify({
+        data: productoData,
+        timestamp: Date.now()
+      }));
+
+    } catch (error) {
+      console.error('Error cargando producto:', error);
+      setError('No se pudo cargar el producto. Intenta de nuevo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const procesarCategoria = async (productoData) => {
+    // ✅ 1. OBTENER CATEGORÍA (desde PocketBase o estática)
+    let catInfo = null;
+    if (productoData.categoriaId) {
+      try {
+        const cat = await pb.collection('categorias').getOne(productoData.categoriaId);
+        catInfo = { id: cat.id, nombre: cat.nombre, slug: cat.slug };
+      } catch (e) {}
+    }
+
+    if (!catInfo && productoData.categoria) {
+      const staticInfo = getCategoriaInfoFromStatic(productoData.categoria);
+      if (staticInfo) {
+        catInfo = { nombre: staticInfo.nombre, slug: staticInfo.slug };
+      } else {
+        catInfo = {
+          nombre: productoData.categoria,
+          slug: productoData.categoria.toLowerCase().replace(/\s+/g, '-')
+        };
+      }
+    }
+    setCategoriaInfo(catInfo);
+
+    // ✅ 2. OBTENER SUBCATEGORÍA
+    let subInfo = null;
+    if (productoData.subcategoriaId) {
+      try {
+        const subcat = await pb.collection('subcategorias').getOne(productoData.subcategoriaId);
+        subInfo = { id: subcat.id, nombre: subcat.nombre, slug: subcat.slug };
+      } catch (e) {}
+    }
+
+    if (!subInfo && productoData.categoria) {
+      const staticSubInfo = getSubcategoriaInfoFromStatic(productoData.categoria, productoData.categoria);
+      if (staticSubInfo) subInfo = staticSubInfo;
+    }
+    setSubcategoriaInfo(subInfo);
+  };
+
+  // ─── Productos relacionados ──────────────────────────────────
   const cargarProductosRelacionados = async (categoria, productoId) => {
     if (!categoria) return;
-
     try {
       setLoadingRelacionados(true);
       const relacionados = await pb.collection('products').getFullList({
@@ -104,7 +337,8 @@ export default function ProductoDetalle() {
         pagoSemanal: prod.pagoSemanal || Math.round(prod.precio * 0.05),
         imagen: prod.imagen ? pb.files.getURL(prod, prod.imagen) : '/images/placeholder.png',
         categoria: prod.categoria,
-        stock: prod.stock
+        stock: prod.stock,
+        agotado: prod.stock === 0
       }));
 
       setProductosRelacionados(relacionadosFormateados);
@@ -115,92 +349,36 @@ export default function ProductoDetalle() {
     }
   };
 
-  const cargarProducto = async () => {
-    try {
-      setLoading(true);
-      const record = await pb.collection('products').getOne(id);
-
-      const productoData = {
-        id: record.id,
-        nombre: record.nombre || 'Producto sin nombre',
-        descripcion: record.descripcion || 'Sin descripción',
-        precioTotal: record.precio || 0,
-        enganche: record.enganche || 0,
-        pagoSemanal: record.pagoSemanal || 0,
-        semanas: record.semanas || 12,
-        categoria: record.categoria || 'General',
-        stock: record.stock || 0,
-        agotado: record.stock === 0,
-        nuevo: record.nuevo || false,
-        sku: record.sku || record.id.substring(0, 6).toUpperCase()
-      };
-
-      if (record.imagen && Array.isArray(record.imagen) && record.imagen.length > 0) {
-        const urls = record.imagen.map(img => pb.files.getURL(record, img));
-        productoData.imagenes = urls;
-        productoData.imagen = urls[0];
-      } else if (record.imagen) {
-        productoData.imagen = pb.files.getURL(record, record.imagen);
-        productoData.imagenes = [productoData.imagen];
-      } else {
-        productoData.imagenes = ['/images/placeholder.png'];
-        productoData.imagen = '/images/placeholder.png';
-      }
-
-      productoData.precioContado = Math.round(productoData.precioTotal * 2 / 3);
-
-      if (record.categoriaId) {
-        try {
-          const cat = await pb.collection('categorias').getOne(record.categoriaId);
-          setCategoriaInfo({ id: cat.id, nombre: cat.nombre, slug: cat.slug });
-        } catch (e) { }
-      }
-
-      // Cargar subcategoría desde subcategoriaId
-      if (record.subcategoriaId) {
-        try {
-          const subcat = await pb.collection('subcategorias').getOne(record.subcategoriaId);
-          setSubcategoriaInfo({
-            id: subcat.id,
-            nombre: subcat.nombre,
-            slug: subcat.slug
-          });
-        } catch (e) {
-          console.error('Error cargando subcategoría:', e);
-        }
-      }
-
-      // Si no hay categoriaId pero sí hay categoria texto, intentar buscar la categoría por nombre
-      if (!record.categoriaId && record.categoria) {
-        try {
-          const catPorNombre = await pb.collection('categorias').getFirstListItem(
-            `nombre ~ "${record.categoria}" || slug = "${record.categoria.toLowerCase().replace(/\s+/g, '-')}"`
-          );
-          if (catPorNombre) {
-            setCategoriaInfo({ id: catPorNombre.id, nombre: catPorNombre.nombre, slug: catPorNombre.slug });
-          }
-        } catch (e) {
-          // No se encontró categoría, usar el texto plano
-          console.log('Categoría no encontrada en BD:', record.categoria);
-        }
-      }
-
-      setProducto(productoData);
-      setImageUrls(productoData.imagenes || [productoData.imagen || '/images/placeholder.png']);
-      calcularPlan(25, 100);
-
-      // ✅ NUEVO: Cargar productos relacionados de la misma categoría
-      if (productoData.categoria) {
-        cargarProductosRelacionados(productoData.categoria, id);
-      }
-
-    } catch (error) {
-      console.error('Error cargando producto:', error);
-    } finally {
-      setLoading(false);
-    }
+  // ─── Reviews (mock) ──────────────────────────────────────────
+  const cargarReviewsMock = async (productId) => {
+    setLoadingReviews(true);
+    // Simular carga de reviews
+    const mockReviews = [
+      { id: 1, usuario: 'María G.', calificacion: 5, comentario: 'Excelente producto, llegó en perfectas condiciones.', fecha: '2024-12-15' },
+      { id: 2, usuario: 'Juan P.', calificacion: 4, comentario: 'Buen producto, relación calidad-precio excelente.', fecha: '2024-12-10' },
+      { id: 3, usuario: 'Ana R.', calificacion: 5, comentario: 'Muy satisfecha con mi compra. Recomendado.', fecha: '2024-12-05' },
+      { id: 4, usuario: 'Carlos L.', calificacion: 3, comentario: 'Producto cumple, aunque el empaque llegó un poco dañado.', fecha: '2024-11-28' },
+    ];
+    setReviews(mockReviews);
+    const total = mockReviews.length;
+    const avg = mockReviews.reduce((acc, r) => acc + r.calificacion, 0) / total;
+    setAverageRating(avg);
+    setTotalReviews(total);
+    setLoadingReviews(false);
   };
 
+  // ─── Vistos recientemente ────────────────────────────────────
+  const registrarVista = (productId) => {
+    if (!productId) return;
+    const viewed = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
+    const filtered = viewed.filter(id => id !== productId);
+    filtered.unshift(productId);
+    if (filtered.length > 10) filtered.pop();
+    localStorage.setItem('recentlyViewed', JSON.stringify(filtered));
+    setRecentlyViewed(filtered);
+  };
+
+  // ─── Favoritos ───────────────────────────────────────────────
   const verificarFavorito = async () => {
     if (!isAuthenticated || !id) return;
     try {
@@ -241,10 +419,47 @@ export default function ProductoDetalle() {
     } finally { setFavoriteLoading(false); }
   };
 
+  // ─── Compartir ───────────────────────────────────────────────
+  const handleShare = async () => {
+    const url = window.location.href;
+    const text = `Mira este producto: ${producto.nombre} en MarketDesliz`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: producto.nombre, text, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        setToastMessage('Enlace copiado al portapapeles');
+        setToastType('success');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.error('Error al compartir:', error);
+      }
+    }
+  };
+
+  // ─── Notificar cuando vuelva a stock ─────────────────────────
+  const handleNotifyStock = async () => {
+    if (!isAuthenticated) {
+      setShowPhoneModal(true);
+      return;
+    }
+    // Simular suscripción a notificación
+    setToastMessage('Te notificaremos cuando este producto vuelva a estar disponible');
+    setToastType('success');
+    setShowToast(true);
+    setShowNotifyStock(false);
+    setTimeout(() => setShowToast(false), 3000);
+  };
+
+  // ─── Navegación de imágenes ──────────────────────────────────
   const nextImage = () => setCurrentImageIndex((prev) => (prev + 1) % imageUrls.length);
   const prevImage = () => setCurrentImageIndex((prev) => (prev - 1 + imageUrls.length) % imageUrls.length);
 
-  const calcularPlan = (porcentajeEnganche, pagoMonto, frecuencia = 'semanal') => {
+  // ─── Cálculo de plan de pagos ───────────────────────────────
+  const calcularPlan = useCallback((porcentajeEnganche, pagoMonto, frecuencia = 'semanal') => {
     if (!producto) return null;
     const enganche = Math.round(producto.precioTotal * porcentajeEnganche / 100);
     const saldoRestante = producto.precioTotal - enganche;
@@ -269,11 +484,11 @@ export default function ProductoDetalle() {
     };
     setPlanCalculado(plan);
     return plan;
-  };
+  }, [producto]);
 
   const handleCambiarEnganche = (porcentaje) => {
     setEnganchePorcentaje(porcentaje);
-    calcularPlan(porcentaje, pagoSemanal);
+    calcularPlan(porcentaje, pagoSemanal, frecuenciaPago);
   };
 
   const handleCambiarPago = (monto) => {
@@ -281,6 +496,7 @@ export default function ProductoDetalle() {
     calcularPlan(enganchePorcentaje, monto, frecuenciaPago);
   };
 
+  // ─── Acciones de compra ──────────────────────────────────────
   const agregarAlCarrito = () => {
     if (producto.agotado) {
       setToastMessage('Producto agotado');
@@ -323,6 +539,7 @@ export default function ProductoDetalle() {
     isAuthenticated ? setShowServiceSelector(true) : setShowPhoneModal(true);
   };
 
+  // ─── Callbacks de modales ────────────────────────────────────
   const handlePhoneSuccess = (phone) => {
     setUserPhone(phone);
     setShowPhoneModal(false);
@@ -348,23 +565,29 @@ export default function ProductoDetalle() {
     router.push('/perfil');
   };
 
-  // ── Loading ──────────────────────────────────────────────────────────────
+  // ─── Renderizado de estados ──────────────────────────────────
+
+  // Estado de carga
   if (loading) {
     return (
       <StoreLayout>
-        <div className="flex justify-center items-center min-h-[60vh]">
-          <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col items-center justify-center min-h-[60vh]">
+          <div className="w-12 h-12 border-3 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
+          <p className="mt-4 text-gray-500 text-sm">Cargando producto...</p>
         </div>
       </StoreLayout>
     );
   }
 
-  if (!producto) {
+  // Estado de error
+  if (error || !producto) {
     return (
       <StoreLayout>
         <div className="max-w-7xl mx-auto px-4 py-20 text-center">
           <Package size={48} className="text-gray-300 mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-gray-800 mb-3">Producto no encontrado</h1>
+          <h1 className="text-xl font-bold text-gray-800 mb-3">
+            {error || 'Producto no encontrado'}
+          </h1>
           <Link href="/productos" className="text-[#6C3BFF] hover:underline text-sm">
             ← Volver a productos
           </Link>
@@ -373,48 +596,49 @@ export default function ProductoDetalle() {
     );
   }
 
+  // ─── Renderizado principal ───────────────────────────────────
   return (
     <>
       <Head>
         <title>{producto.nombre} | MarketDesliz</title>
+        <meta name="description" content={producto.descripcion.slice(0, 160)} />
+        <meta property="og:title" content={`${producto.nombre} | MarketDesliz`} />
+        <meta property="og:description" content={producto.descripcion.slice(0, 160)} />
+        <meta property="og:image" content={producto.imagen} />
+        <meta property="og:url" content={typeof window !== 'undefined' ? window.location.href : ''} />
+        <meta property="og:type" content="product" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <link rel="canonical" href={typeof window !== 'undefined' ? window.location.href : ''} />
       </Head>
 
       <StoreLayout noPadding>
-        {/* ── Breadcrumb dinámico ──────────────────────────────────── */}
+        {/* ── Breadcrumb dinámico ────────────────────────────────── */}
         <div className="bg-gray-50 pt-[140px]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6">
-            <nav className="flex items-center gap-1.5 text-sm text-gray-600 flex-wrap font-medium py-0">
+            <nav className="flex items-center gap-1.5 text-sm text-gray-600 flex-wrap font-medium py-0" aria-label="Breadcrumb">
               <Link href="/" className="flex items-center gap-1 hover:text-[#6C3BFF] transition-colors">
                 <Home size={13} /> Inicio
               </Link>
               <ChevronRight size={13} className="text-gray-300" />
               <Link href="/productos" className="hover:text-[#6C3BFF] transition-colors">Productos</Link>
 
-              {/* Categoría - con fallback a producto.categoria texto */}
-              {(categoriaInfo || producto?.categoria) && (
+              {categoriaInfo && (
                 <>
                   <ChevronRight size={13} className="text-gray-300" />
-                  {categoriaInfo ? (
-                    <Link
-                      href={`/productos/categoria/${categoriaInfo.slug}`}
-                      className="hover:text-[#6C3BFF] transition-colors capitalize"
-                    >
-                      {categoriaInfo.nombre}
-                    </Link>
-                  ) : (
-                    <span className="capitalize text-gray-500">
-                      {producto.categoria}
-                    </span>
-                  )}
+                  <Link
+                    href={`/productos/categoria/${categoriaInfo.slug}`}
+                    className="hover:text-[#6C3BFF] transition-colors capitalize"
+                  >
+                    {categoriaInfo.nombre}
+                  </Link>
                 </>
               )}
 
-              {/* Subcategoría - solo si existe subcategoriaInfo */}
               {subcategoriaInfo && (
                 <>
                   <ChevronRight size={13} className="text-gray-300" />
                   <Link
-                    href={`/productos/categoria/${categoriaInfo?.slug || producto?.categoria?.toLowerCase().replace(/\s+/g, '-')}/${subcategoriaInfo.slug}`}
+                    href={`/productos/categoria/${categoriaInfo?.slug || producto.categoria?.toLowerCase().replace(/\s+/g, '-')}/${subcategoriaInfo.slug}`}
                     className="hover:text-[#6C3BFF] transition-colors capitalize"
                   >
                     {subcategoriaInfo.nombre}
@@ -422,37 +646,38 @@ export default function ProductoDetalle() {
                 </>
               )}
 
-              {/* Producto actual */}
               <ChevronRight size={13} className="text-gray-300" />
               <span className="text-gray-600 font-medium truncate max-w-[200px]">{producto.nombre}</span>
             </nav>
           </div>
         </div>
 
-        {/* ── Contenido principal ───────────────────────────────── */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-8">
+        {/* ── Contenido principal ────────────────────────────────── */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 pb-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
 
-            {/* ── Galería ───────────────────────────────────────── */}
+            {/* ── Galería ─────────────────────────────────────────── */}
             <div className="space-y-3">
-              {/* Imagen principal */}
               <div className="relative bg-gray-50 rounded-2xl overflow-hidden aspect-square group border border-gray-100">
                 <img
-                  src={imageUrls[currentImageIndex]}
+                  src={imageUrls[currentImageIndex] || '/images/placeholder.png'}
                   alt={`${producto.nombre} - Imagen ${currentImageIndex + 1}`}
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  loading="lazy"
                 />
                 {imageUrls.length > 1 && (
                   <>
                     <button
                       onClick={prevImage}
                       className="absolute left-3 top-1/2 -translate-y-1/2 bg-white rounded-full p-2 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-50"
+                      aria-label="Imagen anterior"
                     >
                       <ChevronLeft size={18} className="text-gray-700" />
                     </button>
                     <button
                       onClick={nextImage}
                       className="absolute right-3 top-1/2 -translate-y-1/2 bg-white rounded-full p-2 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-50"
+                      aria-label="Siguiente imagen"
                     >
                       <ChevronRight size={18} className="text-gray-700" />
                     </button>
@@ -460,6 +685,23 @@ export default function ProductoDetalle() {
                       {currentImageIndex + 1}/{imageUrls.length}
                     </div>
                   </>
+                )}
+
+                {/* Badge de stock */}
+                {stockLevel === 'agotado' && (
+                  <div className="absolute top-3 left-3 bg-red-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                    Agotado
+                  </div>
+                )}
+                {stockLevel === 'pocas' && (
+                  <div className="absolute top-3 left-3 bg-orange-500 text-white text-xs font-bold px-2.5 py-1 rounded-full animate-pulse">
+                    ¡Últimas unidades!
+                  </div>
+                )}
+                {producto.nuevo && (
+                  <div className="absolute top-3 right-3 bg-blue-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                    Nuevo
+                  </div>
                 )}
               </div>
 
@@ -470,10 +712,12 @@ export default function ProductoDetalle() {
                     <button
                       key={index}
                       onClick={() => setCurrentImageIndex(index)}
-                      className={`shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${currentImageIndex === index
-                        ? 'border-[#6C3BFF] shadow-sm'
-                        : 'border-gray-100 opacity-60 hover:opacity-100'
-                        }`}
+                      className={`shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${
+                        currentImageIndex === index
+                          ? 'border-[#6C3BFF] shadow-sm'
+                          : 'border-gray-100 opacity-60 hover:opacity-100'
+                      }`}
+                      aria-label={`Ver imagen ${index + 1}`}
                     >
                       <img src={url} alt={`Vista ${index + 1}`} className="w-full h-full object-cover" loading="lazy" />
                     </button>
@@ -482,29 +726,73 @@ export default function ProductoDetalle() {
               )}
             </div>
 
-            {/* ── Info del producto ─────────────────────────────── */}
+            {/* ── Info del producto ────────────────────────────────── */}
             <div className="space-y-5">
-
-              {/* Badges + favorito */}
+              {/* Badges + favorito + compartir */}
               <div className="flex items-center justify-between">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <span className="text-xs font-semibold text-[#6C3BFF] bg-[#6C3BFF]/8 px-2.5 py-1 rounded-full uppercase tracking-wide">
                     {producto.categoria}
                   </span>
                   {producto.nuevo && (
-                    <span className="text-xs font-semibold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full">Nuevo</span>
+                    <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">Nuevo</span>
                   )}
                   {producto.agotado && (
                     <span className="text-xs font-semibold text-red-600 bg-red-50 px-2.5 py-1 rounded-full">Agotado</span>
                   )}
+                  {stockLevel === 'pocas' && (
+                    <span className="text-xs font-semibold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full animate-pulse">
+                      ⚡ ¡Últimas!
+                    </span>
+                  )}
+                  {producto.destacado && (
+                    <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">⭐ Destacado</span>
+                  )}
                 </div>
-                <FavoriteButton productId={producto.id} productName={producto.nombre} onToggle={verificarFavorito} />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleShare}
+                    className="p-2 text-gray-400 hover:text-[#6C3BFF] transition-colors rounded-full hover:bg-[#6C3BFF]/5"
+                    aria-label="Compartir"
+                  >
+                    <Share2 size={20} />
+                  </button>
+                  <FavoriteButton
+                    productId={producto.id}
+                    productName={producto.nombre}
+                    onToggle={verificarFavorito}
+                  />
+                </div>
               </div>
 
-              {/* Nombre */}
+              {/* Nombre y descripción */}
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 leading-tight">{producto.nombre}</h1>
-                <p className="text-gray-500 text-sm mt-2 leading-relaxed">{producto.descripcion}</p>
+                <div className="flex items-center gap-4 mt-2">
+                  {/* Calificación */}
+                  <div className="flex items-center gap-1">
+                    <div className="flex items-center">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          size={16}
+                          className={`${star <= Math.round(averageRating) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm text-gray-600 font-medium">
+                      {averageRating.toFixed(1)}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      ({totalReviews} opiniones)
+                    </span>
+                  </div>
+                  {/* SKU */}
+                  <span className="text-xs text-gray-400">
+                    SKU: {producto.sku}
+                  </span>
+                </div>
+                <p className="text-gray-500 text-sm mt-3 leading-relaxed">{producto.descripcion}</p>
               </div>
 
               {/* Precios */}
@@ -517,9 +805,18 @@ export default function ProductoDetalle() {
                   <span className="text-sm text-gray-500">Precio total a crédito</span>
                   <span className="text-lg font-bold text-gray-900">{formatMoney(producto.precioTotal)}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-500 font-medium">Ahorro pagando de contado</span>
+                <div className="flex justify-between items-center pb-3 border-b border-gray-100">
+                  <span className="text-sm text-gray-500">Ahorro pagando de contado</span>
                   <span className="text-base font-bold text-[#10b981]">{formatMoney(producto.precioTotal - producto.precioContado)}</span>
+                </div>
+                {/* Tiempo de entrega */}
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-500 flex items-center gap-1">
+                    <Truck size={14} /> Tiempo de entrega
+                  </span>
+                  <span className="text-sm font-semibold text-gray-800">
+                    {producto.diasEntrega || 1} día{producto.diasEntrega > 1 ? 's' : ''}
+                  </span>
                 </div>
               </div>
 
@@ -533,10 +830,12 @@ export default function ProductoDetalle() {
                     <button
                       key={porcentaje}
                       onClick={() => handleCambiarEnganche(porcentaje)}
-                      className={`py-2.5 rounded-xl text-sm font-semibold transition-all ${enganchePorcentaje === porcentaje
-                        ? 'bg-[#6C3BFF] text-white shadow-sm'
-                        : 'bg-white border border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
-                        }`}
+                      className={`py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                        enganchePorcentaje === porcentaje
+                          ? 'bg-[#6C3BFF] text-white shadow-sm'
+                          : 'bg-white border border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
+                      }`}
+                      aria-pressed={enganchePorcentaje === porcentaje}
                     >
                       {porcentaje}% · {formatMoney(Math.round(producto.precioTotal * porcentaje / 100))}
                     </button>
@@ -557,10 +856,12 @@ export default function ProductoDetalle() {
                         setFrecuenciaPago(val);
                         calcularPlan(enganchePorcentaje, pagoSemanal, val);
                       }}
-                      className={`py-2.5 rounded-xl text-sm font-semibold transition-all ${frecuenciaPago === val
-                        ? 'bg-[#6C3BFF] text-white shadow-sm'
-                        : 'bg-white border border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
-                        }`}
+                      className={`py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                        frecuenciaPago === val
+                          ? 'bg-[#6C3BFF] text-white shadow-sm'
+                          : 'bg-white border border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
+                      }`}
+                      aria-pressed={frecuenciaPago === val}
                     >
                       {label}
                     </button>
@@ -574,14 +875,16 @@ export default function ProductoDetalle() {
                   ¿Cuánto quieres pagar cada {frecuenciaPago === 'semanal' ? 'semana' : 'quincena'}?
                 </p>
                 <div className="grid grid-cols-4 gap-2">
-                  {producto && getOpcionesPago(producto.precioTotal).map(monto => (
+                  {producto && getOpcionesPago.map(monto => (
                     <button
                       key={monto}
                       onClick={() => handleCambiarPago(monto)}
-                      className={`py-2 rounded-xl text-sm font-semibold transition-all ${pagoSemanal === monto
-                        ? 'bg-[#6C3BFF] text-white shadow-sm'
-                        : 'bg-white border border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
-                        }`}
+                      className={`py-2 rounded-xl text-sm font-semibold transition-all ${
+                        pagoSemanal === monto
+                          ? 'bg-[#6C3BFF] text-white shadow-sm'
+                          : 'bg-white border border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
+                      }`}
+                      aria-pressed={pagoSemanal === monto}
                     >
                       ${monto}
                     </button>
@@ -628,10 +931,12 @@ export default function ProductoDetalle() {
                 <button
                   onClick={agregarAlCarrito}
                   disabled={producto.agotado}
-                  className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-all border ${producto.agotado
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-100'
-                    : 'bg-white border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
-                    }`}
+                  className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-all border ${
+                    producto.agotado
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-100'
+                      : 'bg-white border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
+                  }`}
+                  aria-label="Agregar al carrito"
                 >
                   <ShoppingCart size={17} />
                   Agregar al carrito
@@ -639,15 +944,28 @@ export default function ProductoDetalle() {
                 <button
                   onClick={handleApartarProducto}
                   disabled={producto.agotado}
-                  className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-all ${producto.agotado
-                    ? 'bg-gray-300 text-gray-400 cursor-not-allowed'
-                    : 'bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white shadow-sm'
-                    }`}
+                  className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-all ${
+                    producto.agotado
+                      ? 'bg-gray-300 text-gray-400 cursor-not-allowed'
+                      : 'bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white shadow-sm'
+                  }`}
+                  aria-label="Apartar producto"
                 >
                   <Zap size={17} />
                   Apartar producto
                 </button>
               </div>
+
+              {/* Notificación de stock */}
+              {producto.agotado && isAuthenticated && (
+                <button
+                  onClick={handleNotifyStock}
+                  className="w-full py-2 text-sm text-[#6C3BFF] border border-[#6C3BFF]/30 rounded-xl hover:bg-[#6C3BFF]/5 transition-colors"
+                >
+                  <AlertCircle size={14} className="inline mr-2" />
+                  Avísame cuando vuelva a estar disponible
+                </button>
+              )}
 
               {/* Info flexibilidad */}
               <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
@@ -661,11 +979,60 @@ export default function ProductoDetalle() {
               </div>
             </div>
           </div>
+
+          {/* ── Sección de opiniones ────────────────────────────────── */}
+          <div className="mt-16 pt-8 border-t border-gray-200">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Opiniones de clientes</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {totalReviews} opiniones · {averageRating.toFixed(1)} de 5 estrellas
+                </p>
+              </div>
+              {isAuthenticated && (
+                <button className="text-sm text-[#6C3BFF] hover:underline transition">
+                  Escribir una opinión
+                </button>
+              )}
+            </div>
+
+            {loadingReviews ? (
+              <div className="flex justify-center py-8">
+                <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {reviews.map((review) => (
+                  <div key={review.id} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-[#6C3BFF]/10 flex items-center justify-center">
+                          <Users size={14} className="text-[#6C3BFF]" />
+                        </div>
+                        <span className="font-medium text-gray-800 text-sm">{review.usuario}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Star
+                            key={star}
+                            size={14}
+                            className={`${star <= review.calificacion ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-2">{review.comentario}</p>
+                    <p className="text-xs text-gray-400 mt-1">{new Date(review.fecha).toLocaleDateString('es-MX')}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* ── Productos relacionados (NUEVO) ────────────────────────────── */}
+        {/* ── Productos relacionados ────────────────────────────────── */}
         {(productosRelacionados.length > 0 || loadingRelacionados) && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-16 mb-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-16 pb-8">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Productos relacionados</h2>
@@ -693,7 +1060,27 @@ export default function ProductoDetalle() {
           </div>
         )}
 
-        {/* ── Modales ───────────────────────────────────────────── */}
+        {/* ── Vistos recientemente ──────────────────────────────────── */}
+        {recentlyViewed.length > 1 && (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-8 pb-8">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Vistos recientemente</h2>
+            <div className="flex gap-4 overflow-x-auto pb-2">
+              {recentlyViewed.slice(0, 6).map((viewId) => (
+                <Link
+                  key={viewId}
+                  href={`/productos/${viewId}`}
+                  className="shrink-0 w-24 h-24 bg-gray-100 rounded-xl overflow-hidden hover:shadow-md transition"
+                >
+                  <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+                    <Eye size={24} />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Modales ────────────────────────────────────────────────── */}
         {showPhoneModal && (
           <PhoneModal product={producto} onClose={() => setShowPhoneModal(false)} onSuccess={handlePhoneSuccess} />
         )}
@@ -706,7 +1093,11 @@ export default function ProductoDetalle() {
                 <button onClick={() => setShowServiceSelector(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 text-xl transition-colors">×</button>
               </div>
               <div className="p-6">
-                <ServiceSelector product={producto} planCalculado={planCalculado} onSelect={handleServiceSelect} />
+                <ServiceSelector
+                  product={producto}
+                  planCalculado={planCalculado}
+                  onSelect={handleServiceSelect}
+                />
               </div>
             </div>
           </div>
@@ -726,7 +1117,9 @@ export default function ProductoDetalle() {
               </div>
               <div className="p-6">
                 <CheckoutForm
-                  product={producto} phone={userPhone} tipoSolicitud={selectedService}
+                  product={producto}
+                  phone={userPhone}
+                  tipoSolicitud={selectedService}
                   planCalculado={selectedService === 'credito' ? planCalculado : null}
                   onConfirm={handleCheckoutConfirm}
                   onBack={() => { setShowCheckout(false); setShowServiceSelector(true); }}
@@ -737,18 +1130,28 @@ export default function ProductoDetalle() {
         )}
 
         {showConfirmation && (
-          <ConfirmationModal orderId={orderId} type={confirmationType} productName={producto.nombre} onClose={handleConfirmationClose} />
+          <ConfirmationModal
+            orderId={orderId}
+            type={confirmationType}
+            productName={producto.nombre}
+            onClose={handleConfirmationClose}
+          />
         )}
 
         {showToast && (
-          <ToastNotification message={toastMessage} type={toastType} showGoToCart={showGoToCart} onClose={() => setShowToast(false)} />
+          <ToastNotification
+            message={toastMessage}
+            type={toastType}
+            showGoToCart={showGoToCart}
+            onClose={() => setShowToast(false)}
+          />
         )}
       </StoreLayout>
     </>
   );
 }
 
-// ── Componente para tarjeta de producto relacionado ─────────────────────
+// ─── Componente de tarjeta de producto relacionado ──────────────
 function ProductoRelacionadoCard({ producto }) {
   const router = useRouter();
 
@@ -757,7 +1160,6 @@ function ProductoRelacionadoCard({ producto }) {
       onClick={() => router.push(`/productos/${producto.id}`)}
       className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-md hover:-translate-y-1 transition-all duration-200 cursor-pointer"
     >
-      {/* Imagen */}
       <div className="relative h-36 sm:h-44 bg-gray-50 overflow-hidden">
         <img
           src={producto.imagen}
@@ -765,14 +1167,18 @@ function ProductoRelacionadoCard({ producto }) {
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           loading="lazy"
         />
-        {producto.stock === 0 && (
+        {producto.agotado && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
             <span className="text-white text-xs font-medium px-2 py-1 bg-red-500 rounded-full">Agotado</span>
           </div>
         )}
+        {!producto.agotado && producto.stock <= 5 && (
+          <div className="absolute top-2 right-2 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+            ¡Últimas!
+          </div>
+        )}
       </div>
 
-      {/* Info */}
       <div className="p-3">
         <h3 className="font-semibold text-gray-800 text-sm line-clamp-2 group-hover:text-[#6C3BFF] transition">
           {producto.nombre}
@@ -793,7 +1199,6 @@ function ProductoRelacionadoCard({ producto }) {
           </div>
         </div>
 
-        {/* Botón rápido */}
         <button
           onClick={(e) => {
             e.stopPropagation();

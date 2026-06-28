@@ -1,5 +1,5 @@
 // src/pages/negocios/index.js
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -11,23 +11,43 @@ import {
   MessageCircle,
   MapPin,
   Clock,
-  ChevronRight,
   Building2,
   Map,
   Users
 } from 'lucide-react';
 import StoreLayout from '../../layouts/StoreLayout';
 import pb from '../../lib/pocketbase';
+import {
+  getNegocios,
+  getMunicipios,
+  getLocalidades,
+  getEstados
+} from '../../lib/negociosService';
 
 export default function NegociosPage() {
   const router = useRouter();
+
+  // ─── Parámetros de URL ────────────────────────────────────────────────
+  const {
+    search = '',
+    categoria = 'todos',
+    municipio = '',
+    localidad = ''
+  } = router.query;
+
   const [negocios, setNegocios] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategoria, setSelectedCategoria] = useState('todos');
+  const [searchTerm, setSearchTerm] = useState(search || '');
+  const [selectedCategoria, setSelectedCategoria] = useState(categoria || 'todos');
+  const [selectedMunicipio, setSelectedMunicipio] = useState(municipio || '');
+  const [selectedLocalidad, setSelectedLocalidad] = useState(localidad || '');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Categorías disponibles
+  // Datos geográficos
+  const [municipios, setMunicipios] = useState([]);
+  const [localidades, setLocalidades] = useState([]);
+
+  // Categorías disponibles (EXACTAMENTE las tuyas)
   const categorias = [
     'todos',
     'Abarrotes', 'Accesorios', 'Agencia de viajes', 'Antojitos',
@@ -41,45 +61,101 @@ export default function NegociosPage() {
     'Tortillería', 'Veterinaria', 'Zapatería'
   ];
 
+  // ─── Cargar municipios al iniciar (asumiendo Veracruz) ──────────────
   useEffect(() => {
-    cargarNegocios();
+    const cargarDatosIniciales = async () => {
+      try {
+        const estados = await getEstados();
+        const veracruz = estados.find(e => e.nombre === 'Veracruz');
+        if (veracruz) {
+          const municipiosData = await getMunicipios(veracruz.id);
+          setMunicipios(municipiosData);
+        }
+      } catch (err) {
+        console.error('Error cargando datos geográficos:', err);
+      }
+    };
+    cargarDatosIniciales();
   }, []);
 
-  const cargarNegocios = async () => {
+  // ─── Cargar localidades cuando cambia el municipio ───────────────────
+  useEffect(() => {
+    if (selectedMunicipio) {
+      getLocalidades(selectedMunicipio)
+        .then(setLocalidades)
+        .catch(() => setLocalidades([]));
+    } else {
+      setLocalidades([]);
+    }
+  }, [selectedMunicipio]);
+
+  // ─── Cargar negocios usando el servicio actualizado ─────────────────
+  const cargarNegocios = useCallback(async () => {
     try {
       setLoading(true);
 
-      // ✅ Mostrar solo negocios ACTIVOS (estadoActivacion = "activo")
-      const negociosData = await pb.collection('negocios').getFullList({
-        filter: 'activo = true && estadoActivacion = "activo"',
+      const result = await getNegocios({
+        page: 1,
+        perPage: 100,
+        search: searchTerm,
+        categoria: selectedCategoria,
+        municipioId: selectedMunicipio,
+        localidadId: selectedLocalidad,
         sort: 'orden, nombre'
       });
 
-      setNegocios(negociosData);
-
+      setNegocios(result.items);
     } catch (error) {
       console.error('Error cargando negocios:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchTerm, selectedCategoria, selectedMunicipio, selectedLocalidad]);
 
-  const getFilteredNegocios = () => {
-    return negocios.filter(negocio => {
-      const matchSearch = searchTerm === '' ||
-        negocio.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        negocio.direccion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        negocio.categoria?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        negocio.descripcion?.toLowerCase().includes(searchTerm.toLowerCase());
+  useEffect(() => {
+    cargarNegocios();
+  }, [cargarNegocios]);
 
-      const matchCategoria = selectedCategoria === 'todos' ||
-        negocio.categoria === selectedCategoria;
-
-      return matchSearch && matchCategoria;
+  // ─── Sincronizar filtros con la URL ─────────────────────────────────
+  const actualizarURL = () => {
+    const query = {
+      search: searchTerm || undefined,
+      categoria: selectedCategoria !== 'todos' ? selectedCategoria : undefined,
+      municipio: selectedMunicipio || undefined,
+      localidad: selectedLocalidad || undefined
+    };
+    Object.keys(query).forEach(key => {
+      if (query[key] === undefined || query[key] === '') delete query[key];
     });
+    router.push({ pathname: '/negocios', query }, undefined, { shallow: true });
   };
 
-  const negociosFiltrados = getFilteredNegocios();
+  const handleSearchChange = (e) => setSearchTerm(e.target.value);
+
+  const handleCategoriaChange = (value) => {
+    setSelectedCategoria(value);
+    actualizarURL();
+  };
+
+  const handleMunicipioChange = (e) => {
+    const value = e.target.value;
+    setSelectedMunicipio(value);
+    setSelectedLocalidad('');
+    actualizarURL();
+  };
+
+  const handleLocalidadChange = (e) => {
+    const value = e.target.value;
+    setSelectedLocalidad(value);
+    actualizarURL();
+  };
+
+  // ─── Estadísticas (como las tenías originalmente) ──────────────────
+  const stats = {
+    total: negocios.length,
+    verificados: negocios.filter(n => n.estadoActivacion === 'activo').length,
+    categorias: categorias.filter(c => c !== 'todos').length
+  };
 
   if (loading) {
     return (
@@ -119,15 +195,15 @@ export default function NegociosPage() {
           {/* ── Estadísticas de negocios activos ─────────── */}
           <div className="flex justify-center gap-8 mb-10">
             <div className="text-center">
-              <div className="text-2xl font-bold text-[#6C3BFF]">{negocios.length}</div>
+              <div className="text-2xl font-bold text-[#6C3BFF]">{stats.total}</div>
               <div className="text-xs text-gray-500">Negocios activos</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{negocios.filter(n => n.estadoActivacion === 'activo').length}</div>
+              <div className="text-2xl font-bold text-green-600">{stats.verificados}</div>
               <div className="text-xs text-gray-500">Verificados</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-orange-600">{categorias.filter(c => c !== 'todos').length}</div>
+              <div className="text-2xl font-bold text-orange-600">{stats.categorias}</div>
               <div className="text-xs text-gray-500">Categorías</div>
             </div>
           </div>
@@ -143,25 +219,46 @@ export default function NegociosPage() {
                     type="text"
                     placeholder="Buscar por nombre, categoría o ubicación..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={handleSearchChange}
                     className="w-full px-4 py-2.5 pl-10 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
                   />
                 </div>
               </div>
 
-              {/* Filtro por categoría - Desktop */}
-              <div className="relative hidden md:block">
-                <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10" />
+              {/* Filtros escritorio */}
+              <div className="hidden md:flex gap-2 flex-wrap items-center">
+                <div className="relative">
+                  <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 z-10" />
+                  <select
+                    value={selectedCategoria}
+                    onChange={(e) => handleCategoriaChange(e.target.value)}
+                    className="px-4 py-2.5 pl-10 border border-gray-200 rounded-xl bg-white appearance-none cursor-pointer min-w-[200px]"
+                  >
+                    {categorias.map(cat => (
+                      <option key={cat} value={cat}>
+                        {cat === 'todos' ? '📋 Todas las categorías' : cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <select
-                  value={selectedCategoria}
-                  onChange={(e) => setSelectedCategoria(e.target.value)}
-                  className="px-4 py-2.5 pl-10 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#6C3BFF] bg-white appearance-none cursor-pointer min-w-[200px]"
+                  value={selectedMunicipio}
+                  onChange={handleMunicipioChange}
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm"
                 >
-                  {categorias.map(cat => (
-                    <option key={cat} value={cat}>
-                      {cat === 'todos' ? '📋 Todas las categorías' : cat}
-                    </option>
-                  ))}
+                  <option value="">Todos los municipios</option>
+                  {municipios.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                </select>
+
+                <select
+                  value={selectedLocalidad}
+                  onChange={handleLocalidadChange}
+                  disabled={!selectedMunicipio}
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm"
+                >
+                  <option value="">Todas las localidades</option>
+                  {localidades.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
                 </select>
               </div>
 
@@ -176,39 +273,45 @@ export default function NegociosPage() {
 
             {/* Filtros mobile desplegables */}
             {showFilters && (
-              <div className="md:hidden mt-4 p-4 bg-gray-50 rounded-xl">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="font-medium text-gray-700">Categorías</span>
-                  <button onClick={() => setSelectedCategoria('todos')} className="text-xs text-[#6C3BFF]">
-                    Limpiar
-                  </button>
+              <div className="md:hidden mt-4 p-4 bg-gray-50 rounded-xl space-y-3">
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Categoría</span>
+                  <select
+                    value={selectedCategoria}
+                    onChange={(e) => handleCategoriaChange(e.target.value)}
+                    className="w-full mt-1 px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm"
+                  >
+                    {categorias.map(cat => <option key={cat} value={cat}>{cat === 'todos' ? '📋 Todas las categorías' : cat}</option>)}
+                  </select>
                 </div>
-                <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
-                  {categorias.map(cat => (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCategoria(cat)}
-                      className={`px-3 py-1.5 rounded-full text-xs transition ${selectedCategoria === cat
-                        ? 'bg-[#6C3BFF] text-white'
-                        : 'bg-white text-gray-600 border border-gray-200'
-                        }`}
-                    >
-                      {cat === 'todos' ? '📋 Todos' : cat}
-                    </button>
-                  ))}
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Municipio</span>
+                  <select value={selectedMunicipio} onChange={handleMunicipioChange} className="w-full mt-1 px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm">
+                    <option value="">Todos los municipios</option>
+                    {municipios.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                  </select>
                 </div>
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Localidad</span>
+                  <select value={selectedLocalidad} onChange={handleLocalidadChange} disabled={!selectedMunicipio} className="w-full mt-1 px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm">
+                    <option value="">Todas las localidades</option>
+                    {localidades.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+                  </select>
+                </div>
+                <button onClick={() => setShowFilters(false)} className="w-full mt-2 bg-gray-200 text-gray-700 py-2 rounded-lg text-sm">
+                  Aplicar filtros
+                </button>
               </div>
             )}
 
-            {/* Resultados encontrados */}
             <div className="mt-3 text-sm text-gray-500 flex items-center gap-2">
               <Store size={14} />
-              {negociosFiltrados.length} {negociosFiltrados.length === 1 ? 'negocio encontrado' : 'negocios encontrados'}
+              {negocios.length} {negocios.length === 1 ? 'negocio encontrado' : 'negocios encontrados'}
             </div>
           </div>
 
           {/* ── Lista de negocios ────────────────────────────────── */}
-          {negociosFiltrados.length === 0 ? (
+          {negocios.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center">
               <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Search size={32} className="text-gray-300" />
@@ -225,7 +328,7 @@ export default function NegociosPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {negociosFiltrados.map((negocio) => (
+              {negocios.map((negocio) => (
                 <NegocioCard key={negocio.id} negocio={negocio} />
               ))}
             </div>
@@ -258,7 +361,6 @@ export default function NegociosPage() {
                   <MessageCircle size={16} /> Contactar por WhatsApp
                 </a>
               </div>
-              {/* Mensaje adicional de activación */}
               <div className="mt-4 pt-3 border-t border-purple-200 text-center">
                 <p className="text-xs text-purple-600">
                   ⚡ Los negocios se activan automáticamente después de tu primera compra en MarketDesliz
@@ -272,7 +374,7 @@ export default function NegociosPage() {
   );
 }
 
-// ── Componente Tarjeta de Negocio (FUERA del componente principal) ──────
+// ── Componente Tarjeta de Negocio (SIN CAMBIOS) ──────────────────────
 function NegocioCard({ negocio }) {
   const router = useRouter();
 

@@ -443,91 +443,147 @@ export async function getEstadisticasVendedor(vendedorId) {
 // ============================================================
 export async function registrarVentaVendedor(vendedorId, clienteId, productoId, ordenId, enganche, porcentajeEnganche) {
   try {
-    const comisionVendedor = Math.round(enganche * 0.5);
-
-    // ✅ Actualizar estadísticas del vendedor directamente
+    // Obtener el vendedor con su porcentaje de comisión
     const vendedor = await pb.collection(COLLECTIONS.VENDEDORES).getOne(vendedorId);
+    const comisionPorcentaje = vendedor.comisionPorcentaje || 50; // fallback a 50%
 
+    // Calcular comisión usando el porcentaje real
+    const comisionVendedor = Math.round(enganche * (comisionPorcentaje / 100));
+
+    // Actualizar estadísticas del vendedor
     await pb.collection(COLLECTIONS.VENDEDORES).update(vendedorId, {
       totalVentas: (vendedor.totalVentas || 0) + 1,
       totalComisiones: (vendedor.totalComisiones || 0) + comisionVendedor,
       comisionesPendientes: (vendedor.comisionesPendientes || 0) + comisionVendedor
     });
 
-    console.log(`💰 Venta registrada: Comisión $${comisionVendedor} para vendedor ${vendedorId}`);
+    console.log(`💰 Venta registrada: Comisión $${comisionVendedor} (${comisionPorcentaje}%) para vendedor ${vendedorId}`);
 
     return {
-      vendedorId,
-      clienteId,
-      productoId,
-      ordenId,
-      montoEnganche: enganche,
-      comisionVendedor,
-      porcentajeEnganche,
-      pagada: false
+      success: true,
+      data: {
+        vendedorId,
+        clienteId,
+        productoId,
+        ordenId,
+        montoEnganche: enganche,
+        comisionVendedor,
+        porcentajeEnganche,
+        comisionPorcentaje,
+        pagada: false
+      }
     };
   } catch (error) {
     console.error('Error registrando venta:', error);
-    return null;
+    return {
+      success: false,
+      data: null,
+      error: error.message || 'Error al registrar la venta'
+    };
   }
 }
 
 // ============================================================
-// OBTENER VENTAS DE VENDEDOR (DESDE SOLICITUDES Y ÓRDENES)
+// OBTENER VENTAS DEL VENDEDOR CON PAGINACIÓN (ADMIN)
 // ============================================================
-export async function getVentasVendedor(vendedorId) {
+export async function getVentasVendedorPaginated({
+  vendedorId,
+  page = 1,
+  perPage = 10,
+  search = '',
+  estado = 'todos',
+  sort = '-created'
+}) {
   try {
-    // Obtener solicitudes completadas del vendedor
-    const solicitudes = await pb.collection(COLLECTIONS.SOLICITUDES).getFullList({
-      filter: `vendedorId = "${vendedorId}"`,
-      expand: 'clienteId,productoId',
-      sort: '-fechaSolicitud'
+    let filter = `vendedorId = "${vendedorId}"`;
+
+    if (estado === 'completadas') {
+      filter += ` && estado = "completada"`;
+    } else if (estado === 'pendientes') {
+      filter += ` && estado != "completada"`;
+    }
+
+    if (search.trim()) {
+      const term = search.trim();
+      // Búsqueda por productoNombre o por nombre del cliente (usando expand en dos pasos)
+      // Simplificamos: buscar por productoNombre
+      filter += ` && (productoNombre ~ "${term}" || clienteId ~ "${term}")`;
+    }
+
+    const result = await pb.collection(COLLECTIONS.SOLICITUDES).getList(page, perPage, {
+      filter,
+      sort,
+      expand: 'clienteId,productoId'
     });
 
-    // Transformar a formato de ventas
-    return solicitudes.map(s => ({
+    const items = result.items.map(s => ({
       id: s.id,
-      vendedorId: s.vendedorId,
-      clienteId: s.clienteId,
-      productoId: s.productoId,
-      productoNombre: s.productoNombre,
-      productoPrecio: s.productoPrecio,
-      montoEnganche: s.enganche || 0,
-      comisionVendedor: Math.round((s.enganche || 0) * 0.5),
-      porcentajeEnganche: s.enganche ? Math.round((s.enganche / s.totalPagar) * 100) : 0,
-      fechaVenta: s.fechaSolicitud,
+      cliente: s.expand?.clienteId?.nombre || 'Cliente',
+      clienteTelefono: s.expand?.clienteId?.telefono || 'Sin teléfono',
+      producto: s.productoNombre || s.expand?.productoId?.nombre || 'Producto',
+      montoTotal: s.totalPagar || 0,
+      enganche: s.enganche || 0,
       estado: s.estado,
-      pagada: s.estado === 'completada',
-      expand: s.expand
+      fecha: s.created || s.fechaSolicitud,
+      enganchePagado: s.enganchePagado || false
     }));
+
+    return {
+      items,
+      totalItems: result.totalItems,
+      totalPages: result.totalPages,
+      page: result.page,
+      perPage: result.perPage
+    };
   } catch (error) {
-    console.error('Error obteniendo ventas:', error);
-    return [];
+    console.error('Error obteniendo ventas paginadas:', error);
+    throw error;
   }
 }
 
 // ============================================================
-// OBTENER ESTADÍSTICAS DE VENTAS DEL VENDEDOR
+// OBTENER ESTADÍSTICAS DE VENTAS DEL VENDEDOR (EFICIENTE)
 // ============================================================
 export async function getEstadisticasVentasVendedor(vendedorId) {
   try {
     const vendedor = await pb.collection(COLLECTIONS.VENDEDORES).getOne(vendedorId);
+    const comisionPorcentaje = vendedor.comisionPorcentaje || 50;
+
+    // Totales y completadas usando getList con fields para eficiencia
+    const totalResult = await pb.collection(COLLECTIONS.SOLICITUDES).getList(1, 1, {
+      filter: `vendedorId = "${vendedorId}"`,
+      fields: 'id'
+    });
+    const completadasResult = await pb.collection(COLLECTIONS.SOLICITUDES).getList(1, 1, {
+      filter: `vendedorId = "${vendedorId}" && estado = "completada"`,
+      fields: 'id'
+    });
+
+    // Suma de enganches de completadas (usando getFullList con solo fields)
+    const enganches = await pb.collection(COLLECTIONS.SOLICITUDES).getFullList({
+      filter: `vendedorId = "${vendedorId}" && estado = "completada"`,
+      fields: 'enganche'
+    });
+    const totalEnganches = enganches.reduce((sum, s) => sum + (s.enganche || 0), 0);
+    const comisionTotal = Math.round(totalEnganches * (comisionPorcentaje / 100));
 
     return {
-      totalVentas: vendedor.totalVentas || 0,
-      totalComision: vendedor.totalComisiones || 0,
-      comisionPagada: (vendedor.totalComisiones || 0) - (vendedor.comisionesPendientes || 0),
-      comisionPendiente: vendedor.comisionesPendientes || 0,
-      ventas: await getVentasVendedor(vendedorId)
+      totalVentas: totalResult.totalItems,
+      completadas: completadasResult.totalItems,
+      pendientes: totalResult.totalItems - completadasResult.totalItems,
+      totalEnganches,
+      comisionTotal,
+      comisionPorcentaje
     };
   } catch (error) {
-    console.error('Error obteniendo estadísticas:', error);
+    console.error('Error obteniendo estadísticas de ventas:', error);
     return {
       totalVentas: 0,
-      totalComision: 0,
-      comisionPagada: 0,
-      comisionPendiente: 0,
-      ventas: []
+      completadas: 0,
+      pendientes: 0,
+      totalEnganches: 0,
+      comisionTotal: 0,
+      comisionPorcentaje: 0
     };
   }
 }
@@ -600,24 +656,35 @@ export async function pagarComisiones(vendedorId, monto) {
       comisionesPendientes: Math.max(0, (vendedor.comisionesPendientes || 0) - monto)
     });
 
-    // Notificar al vendedor
     await pb.collection(COLLECTIONS.NOTIFICACIONES).create({
       usuarioId: vendedor.userId,
       tipoUsuario: 'vendedor',
       tipo: 'sistema',
       titulo: '💰 Comisión pagada',
       mensaje: `Se ha realizado un pago de comisiones por $${monto.toLocaleString()}.`,
-      datos: {
-        monto,
-        fecha: new Date().toISOString()
-      }
+      datos: { monto, fecha: new Date().toISOString() }
     });
 
-    console.log(`✅ Comisiones pagadas: $${monto} al vendedor ${vendedorId}`);
-    return true;
+    return { success: true, data: null, error: null };
   } catch (error) {
     console.error('Error pagando comisiones:', error);
-    throw error;
+    return { success: false, data: null, error: error.message };
+  }
+}
+
+export async function desactivarVendedor(vendedorId) {
+  try {
+    await pb.collection(COLLECTIONS.VENDEDORES).update(vendedorId, { activo: false });
+
+    const vendedor = await pb.collection(COLLECTIONS.VENDEDORES).getOne(vendedorId);
+    if (vendedor.userId) {
+      await pb.collection(COLLECTIONS.USERS).update(vendedor.userId, { activo: false });
+    }
+
+    return { success: true, data: null, error: null };
+  } catch (error) {
+    console.error('Error desactivando vendedor:', error);
+    return { success: false, data: null, error: error.message };
   }
 }
 
@@ -655,7 +722,7 @@ export async function getVendedorCompleto(vendedorId) {
     });
 
     const user = vendedor.expand?.userId;
-    
+
     let fotoUrl = null;
     if (user?.foto) {
       fotoUrl = pb.files.getURL(user, user.foto);
@@ -677,5 +744,108 @@ export async function getVendedorCompleto(vendedorId) {
   } catch (error) {
     console.error('Error obteniendo vendedor completo:', error);
     return null;
+  }
+}
+
+// ============================================================
+// OBTENER VENDEDORES CON PAGINACIÓN (ADMIN)
+// ============================================================
+// src/lib/vendedorService.js (fragmento mejorado)
+
+export async function getVendedoresPaginated({
+  page = 1,
+  perPage = 10,
+  search = '',
+  estado = 'todos',
+  sort = '-created'
+} = {}) {
+  try {
+    let filter = '';
+
+    if (estado === 'activos') {
+      filter = 'activo = true';
+    } else if (estado === 'inactivos') {
+      filter = 'activo = false';
+    }
+
+    // ─── BÚSQUEDA MEJORADA ──────────────────────────────────────────────
+    if (search.trim()) {
+      const term = search.trim();
+
+      // 1. Buscar usuarios que coincidan por nombre, email o teléfono
+      const usuariosCoincidentes = await pb.collection(COLLECTIONS.USERS).getFullList({
+        filter: `nombre ~ "${term}" || email ~ "${term}" || telefono ~ "${term}"`,
+        fields: 'id'
+      });
+      const userIds = usuariosCoincidentes.map(u => u.id);
+
+      // 2. Construir filtro: código ~ term O userId en (lista de ids)
+      let searchFilter = `codigo ~ "${term}"`;
+      if (userIds.length > 0) {
+        const userIdFilter = userIds.map(id => `userId = "${id}"`).join(' || ');
+        searchFilter = `(${searchFilter} || ${userIdFilter})`;
+      }
+
+      filter = filter ? `${filter} && ${searchFilter}` : searchFilter;
+    }
+
+    const result = await pb.collection(COLLECTIONS.VENDEDORES).getList(page, perPage, {
+      filter: filter || undefined,
+      sort: sort,
+      expand: 'userId'
+    });
+
+    const items = result.items.map(v => ({
+      ...v,
+      nombre: v.expand?.userId?.nombre || 'Sin nombre',
+      email: v.expand?.userId?.email || 'Sin email',
+      telefono: v.expand?.userId?.telefono || 'Sin teléfono'
+    }));
+
+    return {
+      items,
+      totalItems: result.totalItems,
+      totalPages: result.totalPages,
+      page: result.page,
+      perPage: result.perPage
+    };
+  } catch (error) {
+    console.error('Error obteniendo vendedores paginados:', error);
+    throw error;
+  }
+}
+
+// ============================================================
+// OBTENER ESTADÍSTICAS DE VENDEDORES (ADMIN)
+// ============================================================
+export async function getVendedoresStats() {
+  try {
+    const totalResult = await pb.collection(COLLECTIONS.VENDEDORES).getList(1, 1, { fields: 'id' });
+    const activosResult = await pb.collection(COLLECTIONS.VENDEDORES).getList(1, 1, {
+      filter: 'activo = true',
+      fields: 'id'
+    });
+    const inactivosResult = await pb.collection(COLLECTIONS.VENDEDORES).getList(1, 1, {
+      filter: 'activo = false',
+      fields: 'id'
+    });
+
+    // Comisión promedio (necesita todos los registros)
+    const comisiones = await pb.collection(COLLECTIONS.VENDEDORES).getFullList({
+      fields: 'comisionPorcentaje'
+    });
+    const comisionPromedio = comisiones.length > 0
+      ? Math.round(comisiones.reduce((sum, v) => sum + (v.comisionPorcentaje || 0), 0) / comisiones.length)
+      : 0;
+
+    return {
+      total: totalResult.totalItems,
+      activos: activosResult.totalItems,
+      inactivos: inactivosResult.totalItems,
+      comisionPromedio
+    };
+  } catch (error) {
+    console.error('Error obteniendo estadísticas de vendedores:', error);
+    return { total: 0, activos: 0, inactivos: 0, comisionPromedio: 0 };
   }
 }

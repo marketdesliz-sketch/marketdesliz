@@ -1,5 +1,6 @@
 // src/pages/admin/tandas.js
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/router'; // ✅ NUEVO
 import Head from 'next/head';
 import Link from 'next/link';
 import {
@@ -29,20 +30,52 @@ import {
   X,
   MoreVertical,
   Info,
-  Key
+  Key,
+  RefreshCw,      // ✅ NUEVO
+  ChevronLeft,   // ✅ NUEVO
+  Search,        // ✅ NUEVO
+  Filter         // ✅ NUEVO
 } from 'lucide-react';
 import AdminLayout from '../../layouts/AdminLayout';
-import { getTandas, createTanda, updateTanda, deleteTanda } from '../../lib/tandasService';
+import { 
+  getTandasPaginated,   // ✅ NUEVO
+  getTandasStats,       // ✅ NUEVO
+  getTandaById,
+  getMiembrosTanda,
+  deleteTanda,
+  updateTanda,
+  createTanda
+} from '../../lib/tandasService';
 import pb from '../../lib/pocketbase';
+import { formatMoney, formatDate as formatFecha } from '../../lib/utils';
+
+const ITEMS_PER_PAGE = 10; // ✅ NUEVO
 
 export default function AdminTandasPage() {
+  const router = useRouter(); // ✅ NUEVO
+
+  // ─── Parámetros de URL ────────────────────────────────────────────────
+  const { page = 1, search = '', estado = 'todas', sort = '-created' } = router.query; // ✅ NUEVO
+  const currentPage = parseInt(page) || 1; // ✅ NUEVO
+
+  // ─── Estados ──────────────────────────────────────────────────────────
   const [tandas, setTandas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false); // ✅ NUEVO
+  const [error, setError] = useState(null); // ✅ NUEVO
+  const [success, setSuccess] = useState(''); // ✅ NUEVO
+  const [totalItems, setTotalItems] = useState(0); // ✅ NUEVO
+  const [totalPages, setTotalPages] = useState(1); // ✅ NUEVO
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedTanda, setSelectedTanda] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+
+  // ─── Filtros sincronizados con URL ────────────────────────────────────
+  const [filtroEstado, setFiltroEstado] = useState(estado); // ✅ NUEVO
+  const [searchTerm, setSearchTerm] = useState(search); // ✅ NUEVO
+  const [sortBy, setSortBy] = useState(sort); // ✅ NUEVO
 
   const [formData, setFormData] = useState({
     nombre: '',
@@ -56,54 +89,106 @@ export default function AdminTandasPage() {
     codigoInvitacion: ''
   });
 
-  useEffect(() => {
-    cargarTandas();
-  }, []);
+  // ─── Estadísticas ──────────────────────────────────────────────────────
+  const [estadisticas, setEstadisticas] = useState({ // ✅ NUEVO (reemplaza el cálculo local)
+    total: 0,
+    enCurso: 0,
+    abiertas: 0,
+    completadas: 0,
+    canceladas: 0,
+    totalParticipantes: 0,
+    totalRecaudado: 0,
+    promedio: 0
+  });
 
-  const cargarTandas = async () => {
+  // ─── Cargar datos (con paginación y filtros) ──────────────────────────
+  const cargarTandas = useCallback(async (showRefreshing = false) => {
     try {
-      setLoading(true);
-      const data = await getTandas();
+      if (showRefreshing) setRefreshing(true);
+      else setLoading(true);
+      setError(null);
+      setSuccess('');
 
-      const tandasConDatos = await Promise.all(
-        data.map(async (tanda) => {
-          let miembrosActivos = 0;
-          let miembrosData = [];
-          try {
-            miembrosData = await pb.collection('tanda_members').getFullList({
-              filter: `tandaId = "${tanda.id}"`,
-              expand: 'userId'
-            });
-            miembrosActivos = miembrosData.length;
-          } catch (e) {
-            console.log(`Error cargando miembros para tanda ${tanda.id}`);
-          }
+      // Estadísticas (solo en carga inicial)
+      if (!showRefreshing) {
+        const stats = await getTandasStats();
+        setEstadisticas(stats);
+      }
 
-          return {
-            ...tanda,
-            miembrosActivos,
-            miembros: miembrosData
-          };
-        })
-      );
+      // Tandas paginadas
+      const result = await getTandasPaginated({
+        page: currentPage,
+        perPage: ITEMS_PER_PAGE,
+        search: searchTerm,
+        estado: filtroEstado,
+        sort: sortBy
+      });
 
-      setTandas(tandasConDatos);
-    } catch (error) {
-      console.error('Error:', error);
+      setTandas(result.items);
+      setTotalItems(result.totalItems);
+      setTotalPages(result.totalPages);
+
+    } catch (err) {
+      console.error('Error cargando tandas:', err);
+      setError('No se pudieron cargar las tandas. Intenta de nuevo.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  }, [currentPage, searchTerm, filtroEstado, sortBy]);
+
+  // ─── Efecto de carga ──────────────────────────────────────────────────
+  useEffect(() => {
+    cargarTandas();
+  }, [cargarTandas]);
+
+  // ─── Actualizar URL con filtros ──────────────────────────────────────
+  const actualizarURL = useCallback((params) => {
+    const query = {
+      page: currentPage > 1 ? currentPage : undefined,
+      search: searchTerm || undefined,
+      estado: filtroEstado !== 'todas' ? filtroEstado : undefined,
+      sort: sortBy !== '-created' ? sortBy : undefined,
+      ...params
+    };
+    Object.keys(query).forEach(key => {
+      if (query[key] === undefined || query[key] === '') delete query[key];
+    });
+    router.push({ pathname: '/admin/tandas', query }, undefined, { shallow: true });
+  }, [currentPage, searchTerm, filtroEstado, sortBy, router]);
+
+  // ─── Manejadores de filtros ──────────────────────────────────────────
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    const term = new FormData(e.target).get('search') || '';
+    setSearchTerm(term);
+    actualizarURL({ search: term, page: 1 });
   };
 
+  const handleEstadoChange = (value) => {
+    setFiltroEstado(value);
+    actualizarURL({ estado: value, page: 1 });
+  };
+
+  const handleSortChange = (value) => {
+    setSortBy(value);
+    actualizarURL({ sort: value, page: 1 });
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    actualizarURL({ page: newPage });
+  };
+
+  // ─── Funciones de negocio (crear, editar, eliminar) ─────────────────
   const handleCreateTanda = async () => {
     if (!formData.nombre || !formData.montoTotal || !formData.cupoMaximo) {
-      alert('Por favor completa todos los campos requeridos');
+      setError('Por favor completa todos los campos requeridos');
       return;
     }
 
     try {
       setLoading(true);
-
       await createTanda({
         nombre: formData.nombre,
         descripcion: formData.descripcion,
@@ -116,13 +201,14 @@ export default function AdminTandasPage() {
         codigoInvitacion: formData.codigoInvitacion || null
       }, pb.authStore.model?.id);
 
+      setSuccess('✅ Tanda creada correctamente');
       setShowCreateModal(false);
       resetForm();
-      cargarTandas();
+      cargarTandas(true);
 
     } catch (error) {
       console.error('Error:', error);
-      alert('Error al crear la tanda');
+      setError(error.message || 'Error al crear la tanda');
     } finally {
       setLoading(false);
     }
@@ -131,13 +217,12 @@ export default function AdminTandasPage() {
   const handleUpdateTanda = async () => {
     if (!selectedTanda) return;
     if (!formData.nombre || !formData.montoTotal || !formData.cupoMaximo) {
-      alert('Por favor completa todos los campos requeridos');
+      setError('Por favor completa todos los campos requeridos');
       return;
     }
 
     try {
       setLoading(true);
-
       await updateTanda(selectedTanda.id, {
         nombre: formData.nombre,
         descripcion: formData.descripcion,
@@ -150,14 +235,15 @@ export default function AdminTandasPage() {
         codigoInvitacion: formData.codigoInvitacion || null
       });
 
+      setSuccess('✅ Tanda actualizada correctamente');
       setShowEditModal(false);
       setSelectedTanda(null);
       resetForm();
-      cargarTandas();
+      cargarTandas(true);
 
     } catch (error) {
       console.error('Error:', error);
-      alert('Error al actualizar la tanda');
+      setError(error.message || 'Error al actualizar la tanda');
     } finally {
       setLoading(false);
     }
@@ -168,25 +254,15 @@ export default function AdminTandasPage() {
 
     try {
       setLoading(true);
-
-      if (selectedTanda.miembrosActivos > 0) {
-        if (!confirm(`La tanda tiene ${selectedTanda.miembrosActivos} participantes. ¿Estás seguro de que deseas eliminarla? Esta acción no se puede deshacer.`)) {
-          setShowDeleteConfirm(false);
-          setSelectedTanda(null);
-          setLoading(false);
-          return;
-        }
-      }
-
       await deleteTanda(selectedTanda.id);
-
+      setSuccess('✅ Tanda eliminada correctamente');
       setShowDeleteConfirm(false);
       setSelectedTanda(null);
-      cargarTandas();
+      cargarTandas(true);
 
     } catch (error) {
       console.error('Error:', error);
-      alert('Error al eliminar la tanda');
+      setError(error.message || 'Error al eliminar la tanda');
     } finally {
       setLoading(false);
     }
@@ -205,16 +281,17 @@ export default function AdminTandasPage() {
         codigoInvitacion: codigo
       });
 
-      alert(`✅ Código generado: ${codigo}`);
-      cargarTandas();
+      setSuccess(`✅ Código generado: ${codigo}`);
+      cargarTandas(true);
     } catch (error) {
       console.error('Error generando código:', error);
-      alert('Error al generar el código');
+      setError('Error al generar el código');
     } finally {
       setLoading(false);
     }
   };
 
+  // ─── Handlers para modales ────────────────────────────────────────────
   const openEditModal = (tanda) => {
     setSelectedTanda(tanda);
     setFormData({
@@ -231,14 +308,21 @@ export default function AdminTandasPage() {
     setShowEditModal(true);
   };
 
+  const openDetailModal = async (tanda) => {
+    try {
+      // Cargar miembros solo cuando se abre el modal (optimización)
+      const miembrosData = await getMiembrosTanda(tanda.id);
+      setSelectedTanda({ ...tanda, miembros: miembrosData });
+      setShowDetailModal(true);
+    } catch (error) {
+      console.error('Error cargando miembros:', error);
+      setError('No se pudieron cargar los participantes');
+    }
+  };
+
   const openDeleteConfirm = (tanda) => {
     setSelectedTanda(tanda);
     setShowDeleteConfirm(true);
-  };
-
-  const openDetailModal = (tanda) => {
-    setSelectedTanda(tanda);
-    setShowDetailModal(true);
   };
 
   const resetForm = () => {
@@ -262,45 +346,8 @@ export default function AdminTandasPage() {
     });
   };
 
-  const getEstadoConfig = (estado) => {
-    const config = {
-      abierta: { icono: CheckCircle, bg: 'bg-green-100', text: 'text-green-700', label: 'Abierta' },
-      en_curso: { icono: TrendingUp, bg: 'bg-blue-100', text: 'text-blue-700', label: 'En curso' },
-      completada: { icono: CheckCircle, bg: 'bg-gray-100', text: 'text-gray-600', label: 'Completada' },
-      cancelada: { icono: XCircle, bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelada' }
-    };
-    return config[estado] || config.abierta;
-  };
-
-  const formatMoney = (amount) => {
-    if (!amount) return '$0';
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const formatFecha = (fecha) => {
-    if (!fecha) return 'N/A';
-    return new Date(fecha).toLocaleDateString('es-MX', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
-
-  const estadisticas = {
-    total: tandas.length,
-    enCurso: tandas.filter(t => t.estado === 'en_curso').length,
-    abiertas: tandas.filter(t => t.estado === 'abierta').length,
-    completadas: tandas.filter(t => t.estado === 'completada').length,
-    canceladas: tandas.filter(t => t.estado === 'cancelada').length,
-    totalRecaudado: tandas.reduce((sum, t) => sum + (t.montoTotal || 0), 0),
-    totalParticipantes: tandas.reduce((sum, t) => sum + (t.miembrosActivos || 0), 0)
-  };
-
-  if (loading && tandas.length === 0) {
+  // ─── Renderizado ──────────────────────────────────────────────────────
+  if (loading && tandas.length === 0 && !refreshing) {
     return (
       <AdminLayout>
         <div className="flex justify-center items-center h-64">
@@ -319,7 +366,7 @@ export default function AdminTandasPage() {
       <AdminLayout>
         <div className="max-w-7xl mx-auto">
 
-          {/* Header */}
+          {/* ─── Header ─────────────────────────────────────────────────── */}
           <div className="mb-8">
             <div className="flex justify-between items-center flex-wrap gap-4">
               <div className="flex items-center gap-3">
@@ -331,19 +378,29 @@ export default function AdminTandasPage() {
                   <p className="text-sm text-gray-500">Administra las tandas y sus participantes</p>
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  resetForm();
-                  setShowCreateModal(true);
-                }}
-                className="flex items-center gap-2 bg-[#6C3BFF] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[#5a2ee6] transition shadow-sm"
-              >
-                <Plus size={16} /> Crear nueva tanda
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => cargarTandas(true)}
+                  disabled={refreshing}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-[#6C3BFF] transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+                  {refreshing ? 'Actualizando...' : 'Actualizar'}
+                </button>
+                <button
+                  onClick={() => {
+                    resetForm();
+                    setShowCreateModal(true);
+                  }}
+                  className="flex items-center gap-2 bg-[#6C3BFF] text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-[#5a2ee6] transition shadow-sm"
+                >
+                  <Plus size={16} /> Crear nueva tanda
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Stats Cards */}
+          {/* ─── Stats Cards ───────────────────────────────────────────── */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 mb-6">
             <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
               <div className="flex items-center justify-between mb-1">
@@ -396,166 +453,259 @@ export default function AdminTandasPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
               <div className="flex items-center justify-between mb-1">
                 <Wallet size={18} className="text-orange-500" />
-                <span className="text-lg font-bold text-gray-900">
-                  {estadisticas.total > 0 ? Math.round(estadisticas.totalRecaudado / estadisticas.total) : 0}
-                </span>
+                <span className="text-lg font-bold text-gray-900">{estadisticas.promedio}</span>
               </div>
               <p className="text-xs text-gray-500">Promedio por tanda</p>
             </div>
           </div>
 
-          {/* Lista de tandas */}
-          {tandas.length === 0 ? (
+          {/* ─── Mensajes de éxito/error ────────────────────────────────── */}
+          {success && (
+            <div className="mb-4 p-4 bg-green-50 rounded-xl border border-green-200 flex items-center gap-2 text-green-700">
+              <CheckCircle size={18} className="shrink-0" />
+              <span className="text-sm">{success}</span>
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 rounded-xl border border-red-200 flex items-center gap-2 text-red-700">
+              <AlertCircle size={18} className="shrink-0" />
+              <span className="text-sm">{error}</span>
+              <button
+                onClick={() => setError(null)}
+                className="ml-auto text-sm font-medium hover:underline"
+              >
+                Descartar
+              </button>
+            </div>
+          )}
+
+          {/* ─── Barra de búsqueda y filtros ───────────────────────────── */}
+          <div className="bg-white rounded-xl border border-gray-100 p-4 mb-6 shadow-sm">
+            <div className="flex flex-col md:flex-row gap-4">
+              <form onSubmit={handleSearchSubmit} className="flex-1 relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  name="search"
+                  defaultValue={searchTerm}
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#6C3BFF] text-sm"
+                  placeholder="Buscar por nombre o descripción..."
+                />
+              </form>
+              <div className="relative">
+                <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <select
+                  className="pl-10 pr-8 py-2.5 border border-gray-200 rounded-xl bg-white text-sm"
+                  value={filtroEstado}
+                  onChange={(e) => handleEstadoChange(e.target.value)}
+                >
+                  <option value="todas">Todas</option>
+                  <option value="abierta">Abiertas</option>
+                  <option value="en_curso">En curso</option>
+                  <option value="completada">Completadas</option>
+                  <option value="cancelada">Canceladas</option>
+                </select>
+              </div>
+              <div className="relative">
+                <select
+                  className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm"
+                  value={sortBy}
+                  onChange={(e) => handleSortChange(e.target.value)}
+                >
+                  <option value="-created">Más recientes</option>
+                  <option value="created">Más antiguos</option>
+                  <option value="nombre">Por nombre</option>
+                  <option value="montoTotal">Por monto</option>
+                  <option value="miembrosActivos">Más participantes</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* ─── Lista de tandas ────────────────────────────────────────── */}
+          {tandas.length === 0 && !loading ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center">
               <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Target size={32} className="text-gray-300" />
               </div>
-              <h3 className="text-base font-semibold text-gray-700 mb-1">No hay tandas creadas</h3>
-              <p className="text-sm text-gray-400 mb-4">Comienza creando tu primera tanda</p>
-              <button
-                onClick={() => {
-                  resetForm();
-                  setShowCreateModal(true);
-                }}
-                className="inline-flex items-center gap-2 bg-[#6C3BFF] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#5a2ee6] transition"
-              >
-                <Plus size={14} /> Crear nueva tanda
-              </button>
+              <h3 className="text-base font-semibold text-gray-700 mb-1">
+                {searchTerm || filtroEstado !== 'todas' ? 'No se encontraron tandas' : 'No hay tandas creadas'}
+              </h3>
+              <p className="text-sm text-gray-400 mb-4">
+                {searchTerm || filtroEstado !== 'todas'
+                  ? 'Intenta con otros filtros de búsqueda'
+                  : 'Comienza creando tu primera tanda'}
+              </p>
+              {!searchTerm && filtroEstado === 'todas' && (
+                <button
+                  onClick={() => {
+                    resetForm();
+                    setShowCreateModal(true);
+                  }}
+                  className="inline-flex items-center gap-2 bg-[#6C3BFF] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#5a2ee6] transition"
+                >
+                  <Plus size={14} /> Crear nueva tanda
+                </button>
+              )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {tandas.map((tanda) => {
-                const estadoConfig = getEstadoConfig(tanda.estado);
-                const EstadoIcono = estadoConfig.icono;
-                const progreso = ((tanda.miembrosActivos || 0) / (tanda.cupoMaximo || 1)) * 100;
+            <>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {tandas.map((tanda) => {
+                  const estadoConfig = getEstadoConfig(tanda.estado);
+                  const EstadoIcono = estadoConfig.icono;
+                  const progreso = ((tanda.miembrosActivos || 0) / (tanda.cupoMaximo || 1)) * 100;
 
-                return (
-                  <div key={tanda.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-200">
-                    <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="flex-1">
-                          <h3 className="font-bold text-gray-900 text-lg">{tanda.nombre}</h3>
-                          {tanda.descripcion && (
-                            <p className="text-sm text-gray-500 mt-1 line-clamp-2">{tanda.descripcion}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${estadoConfig.bg} ${estadoConfig.text}`}>
-                            <EstadoIcono size={10} /> {estadoConfig.label}
-                          </span>
-                          {/* Menu de acciones */}
-                          <div className="relative group">
-                            <button className="p-1.5 hover:bg-gray-100 rounded-lg transition">
-                              <MoreVertical size={16} className="text-gray-400" />
-                            </button>
-                            <div className="absolute right-0 top-8 bg-white rounded-xl shadow-lg border border-gray-100 w-36 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
-                              <button
-                                onClick={() => openDetailModal(tanda)}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-xl flex items-center gap-2"
-                              >
-                                <Eye size={14} /> Ver detalles
+                  return (
+                    <div key={tanda.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-200">
+                      <div className="p-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="flex-1">
+                            <h3 className="font-bold text-gray-900 text-lg">{tanda.nombre}</h3>
+                            {tanda.descripcion && (
+                              <p className="text-sm text-gray-500 mt-1 line-clamp-2">{tanda.descripcion}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${estadoConfig.bg} ${estadoConfig.text}`}>
+                              <EstadoIcono size={10} /> {estadoConfig.label}
+                            </span>
+                            <div className="relative group">
+                              <button className="p-1.5 hover:bg-gray-100 rounded-lg transition">
+                                <MoreVertical size={16} className="text-gray-400" />
                               </button>
-                              <button
-                                onClick={() => generarCodigoInvitacion(tanda.id)}
-                                className="w-full text-left px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 flex items-center gap-2"
-                              >
-                                <Key size={14} /> Generar código
-                              </button>
-                              <button
-                                onClick={() => openEditModal(tanda)}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                              >
-                                <Edit size={14} /> Editar
-                              </button>
-                              <button
-                                onClick={() => openDeleteConfirm(tanda)}
-                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-xl flex items-center gap-2"
-                              >
-                                <Trash2 size={14} /> Eliminar
-                              </button>
+                              <div className="absolute right-0 top-8 bg-white rounded-xl shadow-lg border border-gray-100 w-36 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                                <button
+                                  onClick={() => openDetailModal(tanda)}
+                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-xl flex items-center gap-2"
+                                >
+                                  <Eye size={14} /> Ver detalles
+                                </button>
+                                <button
+                                  onClick={() => generarCodigoInvitacion(tanda.id)}
+                                  className="w-full text-left px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 flex items-center gap-2"
+                                >
+                                  <Key size={14} /> Generar código
+                                </button>
+                                <button
+                                  onClick={() => openEditModal(tanda)}
+                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
+                                  <Edit size={14} /> Editar
+                                </button>
+                                <button
+                                  onClick={() => openDeleteConfirm(tanda)}
+                                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-xl flex items-center gap-2"
+                                >
+                                  <Trash2 size={14} /> Eliminar
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="p-5 space-y-4">
-                      {/* Stats de la tanda */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="text-center p-2 bg-gray-50 rounded-xl">
-                          <DollarSign size={16} className="text-[#6C3BFF] mx-auto mb-1" />
-                          <p className="text-lg font-bold text-gray-900">{formatMoney(tanda.montoTotal)}</p>
-                          <p className="text-xs text-gray-500">Monto por turno</p>
-                        </div>
-                        <div className="text-center p-2 bg-gray-50 rounded-xl">
-                          <Users size={16} className="text-[#6C3BFF] mx-auto mb-1" />
-                          <p className="text-lg font-bold text-gray-900">{tanda.miembrosActivos || 0}/{tanda.cupoMaximo || 0}</p>
-                          <p className="text-xs text-gray-500">Participantes</p>
-                        </div>
-                        <div className="text-center p-2 bg-gray-50 rounded-xl">
-                          <Repeat size={16} className="text-[#6C3BFF] mx-auto mb-1" />
-                          <p className="text-sm font-bold text-gray-900 capitalize">{tanda.frequency || 'semanal'}</p>
-                          <p className="text-xs text-gray-500">Frecuencia</p>
-                        </div>
-                        <div className="text-center p-2 bg-gray-50 rounded-xl">
-                          <Calendar size={16} className="text-[#6C3BFF] mx-auto mb-1" />
-                          <p className="text-sm font-bold text-gray-900 capitalize">{tanda.diaPago || 'lunes'}</p>
-                          <p className="text-xs text-gray-500">Día de pago</p>
-                        </div>
-                      </div>
-
-                      {/* Progreso */}
-                      <div>
-                        <div className="flex justify-between text-xs text-gray-500 mb-1">
-                          <span>Progreso de llenado</span>
-                          <span>{Math.round(progreso)}%</span>
-                        </div>
-                        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-[#6C3BFF] rounded-full transition-all duration-300"
-                            style={{ width: `${progreso}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* ✅ Mostrar código de invitación si existe */}
-                      {tanda.codigoInvitacion && (
-                        <div className="mt-2 p-2 bg-purple-50 rounded-lg">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-purple-700 font-medium">Código de invitación</p>
-                            <button
-                              onClick={() => navigator.clipboard.writeText(tanda.codigoInvitacion)}
-                              className="text-xs text-purple-600 hover:underline"
-                            >
-                              Copiar
-                            </button>
+                      <div className="p-5 space-y-4">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="text-center p-2 bg-gray-50 rounded-xl">
+                            <DollarSign size={16} className="text-[#6C3BFF] mx-auto mb-1" />
+                            <p className="text-lg font-bold text-gray-900">{formatMoney(tanda.montoTotal)}</p>
+                            <p className="text-xs text-gray-500">Monto por turno</p>
                           </div>
-                          <code className="text-sm font-mono font-bold text-purple-800">{tanda.codigoInvitacion}</code>
+                          <div className="text-center p-2 bg-gray-50 rounded-xl">
+                            <Users size={16} className="text-[#6C3BFF] mx-auto mb-1" />
+                            <p className="text-lg font-bold text-gray-900">{tanda.miembrosActivos || 0}/{tanda.cupoMaximo || 0}</p>
+                            <p className="text-xs text-gray-500">Participantes</p>
+                          </div>
+                          <div className="text-center p-2 bg-gray-50 rounded-xl">
+                            <Repeat size={16} className="text-[#6C3BFF] mx-auto mb-1" />
+                            <p className="text-sm font-bold text-gray-900 capitalize">{tanda.frequency || 'semanal'}</p>
+                            <p className="text-xs text-gray-500">Frecuencia</p>
+                          </div>
+                          <div className="text-center p-2 bg-gray-50 rounded-xl">
+                            <Calendar size={16} className="text-[#6C3BFF] mx-auto mb-1" />
+                            <p className="text-sm font-bold text-gray-900 capitalize">{tanda.diaPago || 'lunes'}</p>
+                            <p className="text-xs text-gray-500">Día de pago</p>
+                          </div>
                         </div>
-                      )}
 
-                      {/* Fecha de inicio */}
-                      <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-100">
-                        <div className="flex items-center gap-2">
-                          <CalendarDays size={12} />
-                          <span>Inicio: {formatFecha(tanda.fechaInicio)}</span>
+                        <div>
+                          <div className="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>Progreso de llenado</span>
+                            <span>{Math.round(progreso)}%</span>
+                          </div>
+                          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-[#6C3BFF] rounded-full transition-all duration-300" style={{ width: `${progreso}%` }} />
+                          </div>
                         </div>
-                        <button
-                          onClick={() => openDetailModal(tanda)}
-                          className="flex items-center gap-1 text-[#6C3BFF] hover:underline text-xs"
-                        >
-                          Ver detalles <ChevronRight size={12} />
-                        </button>
+
+                        {tanda.codigoInvitacion && (
+                          <div className="mt-2 p-2 bg-purple-50 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs text-purple-700 font-medium">Código de invitación</p>
+                              <button
+                                onClick={() => navigator.clipboard.writeText(tanda.codigoInvitacion)}
+                                className="text-xs text-purple-600 hover:underline"
+                              >
+                                Copiar
+                              </button>
+                            </div>
+                            <code className="text-sm font-mono font-bold text-purple-800">{tanda.codigoInvitacion}</code>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-100">
+                          <div className="flex items-center gap-2">
+                            <CalendarDays size={12} />
+                            <span>Inicio: {formatFecha(tanda.fechaInicio)}</span>
+                          </div>
+                          <button
+                            onClick={() => openDetailModal(tanda)}
+                            className="flex items-center gap-1 text-[#6C3BFF] hover:underline text-xs"
+                          >
+                            Ver detalles <ChevronRight size={12} />
+                          </button>
+                        </div>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+
+              {/* ─── Paginación ────────────────────────────────────────── */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between gap-4 mt-6 pt-4 border-t border-gray-100">
+                  <span className="text-sm text-gray-500">
+                    Mostrando {tandas.length} de {totalItems} tandas
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-1 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
+                    >
+                      <ChevronLeft size={14} /> Anterior
+                    </button>
+                    <span className="px-4 py-2 text-sm text-gray-500">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-1 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
+                    >
+                      Siguiente <ChevronRight size={14} />
+                    </button>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Modal de detalles */}
+        {/* ─── Modales (sin cambios, solo se ajusta la carga de miembros) ──── */}
+        {/* Modal de detalles (ahora carga miembros al abrir) */}
         {showDetailModal && selectedTanda && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowDetailModal(false)}>
             <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
@@ -608,7 +758,7 @@ export default function AdminTandasPage() {
                   </div>
                 </div>
 
-                {/* Lista de participantes */}
+                {/* Lista de participantes (ahora cargada al abrir el modal) */}
                 {selectedTanda.miembros && selectedTanda.miembros.length > 0 && (
                   <div className="bg-gray-50 rounded-xl p-4">
                     <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Users size={16} /> Participantes ({selectedTanda.miembros.length})</h3>
@@ -650,7 +800,7 @@ export default function AdminTandasPage() {
           </div>
         )}
 
-        {/* Modal de creación */}
+        {/* ModalForm (sin cambios estructurales) */}
         {showCreateModal && (
           <ModalForm
             title="Crear nueva tanda"
@@ -663,7 +813,6 @@ export default function AdminTandasPage() {
           />
         )}
 
-        {/* Modal de edición */}
         {showEditModal && selectedTanda && (
           <ModalForm
             title="Editar tanda"
@@ -680,7 +829,6 @@ export default function AdminTandasPage() {
           />
         )}
 
-        {/* Modal de confirmación de eliminación */}
         {showDeleteConfirm && selectedTanda && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowDeleteConfirm(false)}>
             <div className="bg-white rounded-2xl max-w-md w-full shadow-xl" onClick={e => e.stopPropagation()}>
@@ -912,4 +1060,15 @@ function ModalForm({ title, formData, onChange, onSave, onCancel, loading, isEdi
       </div>
     </div>
   );
+}
+
+
+function getEstadoConfig(estado) {
+  const configs = {
+    abierta:    { icono: AlertCircle, label: 'Abierta',   bg: 'bg-blue-100',  text: 'text-blue-800' },
+    en_curso:   { icono: TrendingUp,  label: 'En curso',  bg: 'bg-green-100', text: 'text-green-800' },
+    completada: { icono: CheckCircle, label: 'Completada',bg: 'bg-gray-100',  text: 'text-gray-600' },
+    cancelada:  { icono: XCircle,    label: 'Cancelada',  bg: 'bg-red-100',   text: 'text-red-800' }
+  };
+  return configs[estado] || { icono: AlertCircle, label: estado, bg: 'bg-gray-50', text: 'text-gray-600' };
 }

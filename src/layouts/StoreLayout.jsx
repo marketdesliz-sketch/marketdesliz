@@ -1,9 +1,27 @@
 // src/layouts/StoreLayout.jsx
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import ModernHeader from '../components/layout/ModernHeader';
+import pb from '../lib/pocketbase';
 
 export default function StoreLayout({ children, noPadding = false }) {
   const [mounted, setMounted] = useState(false);
+  const router = useRouter();
+
+  // ============================================================
+  // 1. VERIFICACIÓN DE SESIÓN - SEGURIDAD
+  // ============================================================
+  useEffect(() => {
+    // Si hay sesión de admin en el layout de cliente → limpiar
+    if (pb.authStore.isValid && pb.authStore.role === 'admin') {
+      console.warn('🚨 Sesión de admin detectada en StoreLayout. Limpiando...');
+      pb.authStore.clear();
+      // Opcional: redirigir a home si no está ya
+      if (router.pathname !== '/') {
+        router.push('/');
+      }
+    }
+  }, [router.pathname]);
 
   useEffect(() => {
     setMounted(true);
@@ -67,4 +85,4 @@ export default function StoreLayout({ children, noPadding = false }) {
       </main>
     </div>
   );
-}"// Updated $(date)" 
+}

@@ -1,4 +1,4 @@
-// src/pages/admin/vendedores/editar/[id].js
+// src/pages/admin/vendedores/editar/[id].js - OPTIMIZADO
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
@@ -14,10 +14,10 @@ import {
   CheckCircle,
   AlertCircle,
   Smartphone,
-  UserCheck,
-  X
+  UserCheck
 } from 'lucide-react';
 import AdminLayout from '../../../../layouts/AdminLayout';
+import { getVendedorCompleto, updateVendedor } from '../../../../lib/vendedorService';
 import pb from '../../../../lib/pocketbase';
 
 export default function EditarVendedorPage() {
@@ -29,7 +29,6 @@ export default function EditarVendedorPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [vendedor, setVendedor] = useState(null);
-  const [usuario, setUsuario] = useState(null);
 
   const [formData, setFormData] = useState({
     nombre: '',
@@ -57,11 +56,8 @@ export default function EditarVendedorPage() {
         return;
       }
 
-      // Obtener vendedor con expand
-      const vendedorData = await pb.collection('vendedores').getOne(id, {
-        expand: 'userId'
-      });
-
+      // Usar servicio centralizado
+      const vendedorData = await getVendedorCompleto(id);
       if (!vendedorData) {
         setError('Vendedor no encontrado');
         setLoading(false);
@@ -70,13 +66,10 @@ export default function EditarVendedorPage() {
 
       setVendedor(vendedorData);
 
-      const userData = vendedorData.expand?.userId;
-      setUsuario(userData);
-
       setFormData({
-        nombre: userData?.nombre || '',
-        email: userData?.email || '',
-        telefono: userData?.telefono || '',
+        nombre: vendedorData.nombre || '',
+        email: vendedorData.email || '',
+        telefono: vendedorData.telefono || '',
         zona: vendedorData.zona || '',
         comisionPorcentaje: vendedorData.comisionPorcentaje || 50,
         activo: vendedorData.activo ?? true
@@ -125,20 +118,11 @@ export default function EditarVendedorPage() {
     }
 
     try {
-      // Actualizar usuario
-      if (usuario?.id) {
-        const userUpdate = {
-          nombre: formData.nombre,
-          email: formData.email
-        };
-        if (telefonoLimpio) {
-          userUpdate.telefono = telefonoLimpio;
-        }
-        await pb.collection('users').update(usuario.id, userUpdate);
-      }
-
-      // Actualizar vendedor
-      await pb.collection('vendedores').update(id, {
+      // Usar servicio centralizado para actualizar
+      await updateVendedor(id, {
+        nombre: formData.nombre,
+        email: formData.email,
+        telefono: telefonoLimpio || '',
         zona: formData.zona,
         comisionPorcentaje: parseFloat(formData.comisionPorcentaje),
         activo: formData.activo
@@ -204,8 +188,8 @@ export default function EditarVendedorPage() {
 
       <AdminLayout>
         <div className="max-w-3xl mx-auto">
-          
-          {/* Header */}
+
+          {/* ─── Header ─────────────────────────────────────────────────── */}
           <div className="mb-6">
             <Link
               href="/admin/vendedores"
@@ -213,7 +197,7 @@ export default function EditarVendedorPage() {
             >
               <ArrowLeft size={14} /> Volver a la lista
             </Link>
-            
+
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-[#6C3BFF]/10 rounded-xl flex items-center justify-center">
                 <UserCheck size={24} className="text-[#6C3BFF]" />
@@ -227,11 +211,11 @@ export default function EditarVendedorPage() {
             </div>
           </div>
 
-          {/* Form Card */}
+          {/* ─── Form Card ──────────────────────────────────────────────── */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
-              
-              {/* Éxito */}
+
+              {/* ─── Mensajes ────────────────────────────────────────────── */}
               {success && (
                 <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl border border-green-200">
                   <CheckCircle size={16} className="text-green-600" />
@@ -239,7 +223,6 @@ export default function EditarVendedorPage() {
                 </div>
               )}
 
-              {/* Error */}
               {error && !success && (
                 <div className="flex items-start gap-2 p-3 bg-red-50 rounded-xl border border-red-200">
                   <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
@@ -247,14 +230,15 @@ export default function EditarVendedorPage() {
                 </div>
               )}
 
-              {/* Nombre completo */}
+              {/* ─── Campos del formulario ────────────────────────────────── */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="nombre" className="block text-sm font-medium text-gray-700 mb-1">
                   Nombre completo *
                 </label>
                 <div className="relative">
                   <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
+                    id="nombre"
                     type="text"
                     name="nombre"
                     value={formData.nombre}
@@ -265,14 +249,14 @@ export default function EditarVendedorPage() {
                 </div>
               </div>
 
-              {/* Correo electrónico */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                   Correo electrónico *
                 </label>
                 <div className="relative">
                   <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
+                    id="email"
                     type="email"
                     name="email"
                     value={formData.email}
@@ -283,14 +267,14 @@ export default function EditarVendedorPage() {
                 </div>
               </div>
 
-              {/* Teléfono */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="telefono" className="block text-sm font-medium text-gray-700 mb-1">
                   Teléfono
                 </label>
                 <div className="relative">
                   <Smartphone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
+                    id="telefono"
                     type="tel"
                     name="telefono"
                     value={formData.telefono}
@@ -302,14 +286,14 @@ export default function EditarVendedorPage() {
                 <p className="text-xs text-gray-400 mt-1">10 dígitos, ejemplo: 5512345678</p>
               </div>
 
-              {/* Zona de trabajo */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="zona" className="block text-sm font-medium text-gray-700 mb-1">
                   Zona de trabajo
                 </label>
                 <div className="relative">
                   <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
+                    id="zona"
                     type="text"
                     name="zona"
                     value={formData.zona}
@@ -320,14 +304,14 @@ export default function EditarVendedorPage() {
                 </div>
               </div>
 
-              {/* Comisión */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="comisionPorcentaje" className="block text-sm font-medium text-gray-700 mb-1">
                   Porcentaje de comisión (%)
                 </label>
                 <div className="relative">
                   <Percent size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <select
+                    id="comisionPorcentaje"
                     name="comisionPorcentaje"
                     value={formData.comisionPorcentaje}
                     onChange={handleChange}
@@ -341,7 +325,7 @@ export default function EditarVendedorPage() {
                 </div>
               </div>
 
-              {/* Estado Activo */}
+              {/* ─── Estado Activo ──────────────────────────────────────── */}
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                 <div>
                   <p className="font-medium text-gray-700">Estado del vendedor</p>
@@ -362,7 +346,7 @@ export default function EditarVendedorPage() {
                 </label>
               </div>
 
-              {/* Botones */}
+              {/* ─── Botones ────────────────────────────────────────────── */}
               <div className="flex gap-3 pt-4">
                 <Link
                   href="/admin/vendedores"

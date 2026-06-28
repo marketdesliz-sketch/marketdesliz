@@ -5,49 +5,106 @@ import Link from 'next/link';
 import {
   LayoutDashboard, ClipboardList, History,
   QrCode, User, LogOut, Menu, X, Rocket, ChevronRight,
-  Smartphone
+  Smartphone, CreditCard, ShieldCheck, Home
 } from 'lucide-react';
-import pb from '../lib/pocketbase';
+import pb, { isAdmin, isVendedor, getCurrentUser, logout } from '../lib/pocketbase';
 
 export default function VendedorLayout({ children }) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [vendedor, setVendedor] = useState(null);
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const cargar = async () => {
-      if (!pb.authStore.isValid) { router.replace('/vendedor/login'); return; }
-      const u = pb.authStore.model;
-      if (u?.role !== 'vendedor') { pb.authStore.clear(); router.replace('/vendedor/login'); return; }
-      setUser(u);
       try {
-        const v = await pb.collection('vendedores').getFirstListItem(`userId = "${u.id}" && activo = true`);
-        setVendedor(v);
-      } catch { }
+        // ✅ Verificar sesión
+        if (!pb.authStore.isValid) {
+          router.replace('/vendedor/login');
+          return;
+        }
+
+        // ✅ Verificar rol usando función centralizada
+        const esVendedor = isVendedor();
+        const esAdmin = isAdmin();
+
+        if (!esVendedor && !esAdmin) {
+          console.warn('🚨 Acceso denegado: no es vendedor ni admin');
+          pb.authStore.clearAll();
+          router.replace('/vendedor/login');
+          return;
+        }
+
+        const u = getCurrentUser();
+        if (!u) {
+          pb.authStore.clearAll();
+          router.replace('/vendedor/login');
+          return;
+        }
+
+        setUser(u);
+
+        // Si es admin, permitir acceso pero mostrar que es admin
+        if (esAdmin) {
+          setVendedor(null);
+          setLoading(false);
+          return;
+        }
+
+        // Obtener datos del vendedor
+        try {
+          const v = await pb.collection('vendedores').getFirstListItem(
+            `userId = "${u.id}" && activo = true`
+          );
+          setVendedor(v);
+        } catch (error) {
+          console.warn('⚠️ Vendedor no encontrado o inactivo');
+          // Podría redirigir a registro de vendedor
+        }
+
+        setLoading(false);
+      } catch (error) {
+        console.error('❌ Error cargando vendedor:', error);
+        pb.authStore.clearAll();
+        router.replace('/vendedor/login');
+      } finally {
+        setLoading(false);
+      }
     };
+
     cargar();
   }, []);
 
   const handleLogout = () => {
-    pb.authStore.clear();
-    localStorage.removeItem('vendedorData');
+    logout();
     router.push('/vendedor/login');
   };
 
   const menuItems = [
-    { href: '/vendedor',             icon: LayoutDashboard, label: 'Dashboard' },
-    { href: '/vendedor/solicitudes', icon: ClipboardList,   label: 'Solicitudes' },
-    { href: '/vendedor/historial',   icon: History,         label: 'Historial' },
-    { href: '/vendedor/qr',          icon: QrCode,          label: 'Mi QR' },
-    { href: '/vendedor/tarjeta',     icon: Smartphone,      label: 'Mi Tarjeta' }, // ✅ NUEVO
-    { href: '/vendedor/perfil',      icon: User,            label: 'Mi Perfil' },
+    { href: '/vendedor', icon: LayoutDashboard, label: 'Dashboard' },
+    { href: '/vendedor/solicitudes', icon: ClipboardList, label: 'Solicitudes' },
+    { href: '/vendedor/historial', icon: History, label: 'Historial' },
+    { href: '/vendedor/qr', icon: QrCode, label: 'Mi QR' },
+    { href: '/vendedor/tarjeta', icon: Smartphone, label: 'Mi Tarjeta' },
+    { href: '/vendedor/perfil', icon: User, label: 'Mi Perfil' },
   ];
 
   const isActive = (href) =>
     href === '/vendedor'
       ? router.pathname === '/vendedor'
       : router.pathname.startsWith(href);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-[#6C3BFF] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-sm text-gray-500">Verificando acceso...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -56,7 +113,6 @@ export default function VendedorLayout({ children }) {
       <header className="bg-white border-b border-gray-100 sticky top-0 z-20 shadow-sm">
         <div className="flex items-center justify-between px-4 sm:px-6 h-14">
 
-          {/* Logo + hamburguesa */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -76,7 +132,6 @@ export default function VendedorLayout({ children }) {
             </Link>
           </div>
 
-          {/* Usuario + cerrar sesión */}
           <div className="flex items-center gap-3">
             {user && (
               <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full">
@@ -88,6 +143,11 @@ export default function VendedorLayout({ children }) {
                 </span>
                 {vendedor?.codigo && (
                   <span className="text-[10px] text-gray-400 font-mono">{vendedor.codigo}</span>
+                )}
+                {isAdmin() && (
+                  <span className="text-[10px] font-bold text-[#6C3BFF] bg-[#6C3BFF]/10 px-1.5 py-0.5 rounded-full">
+                    Admin
+                  </span>
                 )}
               </div>
             )}
@@ -132,12 +192,31 @@ export default function VendedorLayout({ children }) {
             })}
           </nav>
 
-          {/* Comisión info en sidebar */}
+          {/* Footer del sidebar */}
+          <div className="mx-3 mt-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+            <div className="flex items-center gap-2">
+              <Home size={14} className="text-gray-400" />
+              <Link href="/" className="text-xs text-gray-500 hover:text-[#6C3BFF] transition">
+                Ir a la tienda
+              </Link>
+            </div>
+          </div>
+
+          {/* Comisión info en sidebar (solo si es vendedor) */}
           {vendedor && (
             <div className="mx-3 mt-2 p-3 bg-[#6C3BFF]/5 border border-[#6C3BFF]/10 rounded-xl">
               <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1">Tu comisión</p>
               <p className="text-lg font-bold text-[#6C3BFF]">{vendedor.comisionPorcentaje}%</p>
               <p className="text-[10px] text-gray-400">del enganche del cliente</p>
+            </div>
+          )}
+
+          {/* Admin indicator */}
+          {isAdmin() && (
+            <div className="mx-3 mt-2 p-2 bg-amber-50 border border-amber-200 rounded-xl text-center">
+              <p className="text-xs font-medium text-amber-700 flex items-center justify-center gap-1">
+                <ShieldCheck size={12} /> Modo administrador
+              </p>
             </div>
           )}
         </aside>

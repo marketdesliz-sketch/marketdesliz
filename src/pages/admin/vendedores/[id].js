@@ -1,13 +1,13 @@
-// src/pages/admin/vendedores/[id].js
-import { useEffect, useState } from 'react';
+// src/pages/admin/vendedores/[id].js - OPTIMIZADO
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { 
-  Users, 
-  ArrowLeft, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Users,
+  ArrowLeft,
+  CheckCircle,
+  XCircle,
   Calendar,
   Phone,
   Mail,
@@ -28,6 +28,7 @@ import {
   Download
 } from 'lucide-react';
 import AdminLayout from '../../../layouts/AdminLayout';
+import { getVendedorCompleto } from '../../../lib/vendedorService';
 import pb from '../../../lib/pocketbase';
 
 export default function DetalleVendedorPage() {
@@ -35,19 +36,18 @@ export default function DetalleVendedorPage() {
   const { id } = router.query;
   const [vendedor, setVendedor] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [generandoQR, setGenerandoQR] = useState(false);
   const [qrUrl, setQrUrl] = useState(null);
+  const [copiedCodigo, setCopiedCodigo] = useState(false);
+  const [copiedURL, setCopiedURL] = useState(false);
 
-  useEffect(() => {
-    if (id) {
-      cargarVendedor();
-    }
-  }, [id]);
-
-  const cargarVendedor = async () => {
+  // ─── Cargar vendedor ──────────────────────────────────────────────────
+  const cargarVendedor = useCallback(async (showRefreshing = false) => {
     try {
-      setLoading(true);
+      if (showRefreshing) setRefreshing(true);
+      else setLoading(true);
       setError('');
 
       // Verificar autenticación
@@ -55,7 +55,6 @@ export default function DetalleVendedorPage() {
         router.push('/admin/login');
         return;
       }
-
       const user = pb.authStore.model;
       if (user?.role !== 'admin') {
         pb.authStore.clear();
@@ -63,22 +62,17 @@ export default function DetalleVendedorPage() {
         return;
       }
 
-      // Obtener datos del vendedor con expand
-      const vendedorData = await pb.collection('vendedores').getOne(id, {
-        expand: 'userId'
-      });
+      // Obtener vendedor usando el servicio centralizado
+      const vendedorData = await getVendedorCompleto(id);
+      if (!vendedorData) {
+        setError('Vendedor no encontrado');
+        return;
+      }
 
-      const vendedorConDatos = {
-        ...vendedorData,
-        nombre: vendedorData.expand?.userId?.nombre || 'Sin nombre',
-        email: vendedorData.expand?.userId?.email || 'Sin email',
-        telefono: vendedorData.expand?.userId?.telefono || 'Sin teléfono'
-      };
+      setVendedor(vendedorData);
 
-      setVendedor(vendedorConDatos);
-
-      // Generar URL para QR (la página de perfil del vendedor)
-      const qrBaseUrl = `${window.location.origin}/vendedor/perfil/${vendedorConDatos.codigo}`;
+      // Generar URL para QR (perfil del vendedor)
+      const qrBaseUrl = `${window.location.origin}/vendedor/perfil/${vendedorData.codigo}`;
       setQrUrl(qrBaseUrl);
 
     } catch (error) {
@@ -86,9 +80,17 @@ export default function DetalleVendedorPage() {
       setError('No se pudo cargar la información del vendedor');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [id, router]);
 
+  useEffect(() => {
+    if (id) {
+      cargarVendedor();
+    }
+  }, [id, cargarVendedor]);
+
+  // ─── Utilidades ──────────────────────────────────────────────────────
   const formatDate = (date) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('es-MX', {
@@ -100,28 +102,32 @@ export default function DetalleVendedorPage() {
     });
   };
 
+  // ─── Acciones con feedback visual ────────────────────────────────────
   const copiarCodigo = () => {
-    navigator.clipboard.writeText(vendedor?.codigo || '');
-    alert('✅ Código copiado al portapapeles');
+    if (!vendedor?.codigo) return;
+    navigator.clipboard.writeText(vendedor.codigo);
+    setCopiedCodigo(true);
+    setTimeout(() => setCopiedCodigo(false), 3000);
   };
 
   const copiarQRUrl = () => {
-    navigator.clipboard.writeText(qrUrl || '');
-    alert('✅ URL del QR copiada al portapapeles');
+    if (!qrUrl) return;
+    navigator.clipboard.writeText(qrUrl);
+    setCopiedURL(true);
+    setTimeout(() => setCopiedURL(false), 3000);
   };
 
   const descargarQR = async () => {
     if (!qrUrl) return;
-    
+
     setGenerandoQR(true);
     try {
-      // Usar una API de generación de QR (ejemplo con Google Charts API)
       const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`;
-      
       const response = await fetch(qrApiUrl);
+      if (!response.ok) throw new Error('Error al generar QR');
+
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
-      
       const a = document.createElement('a');
       a.href = url;
       a.download = `qr_vendedor_${vendedor.codigo}.png`;
@@ -131,13 +137,15 @@ export default function DetalleVendedorPage() {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error generando QR:', error);
-      alert('Error al generar el código QR');
+      setError('Error al generar el código QR');
+      setTimeout(() => setError(''), 4000);
     } finally {
       setGenerandoQR(false);
     }
   };
 
-  if (loading) {
+  // ─── Renderizado ──────────────────────────────────────────────────────
+  if (loading && !refreshing) {
     return (
       <AdminLayout>
         <div className="flex justify-center items-center h-64">
@@ -147,7 +155,7 @@ export default function DetalleVendedorPage() {
     );
   }
 
-  if (error || !vendedor) {
+  if (error && !vendedor) {
     return (
       <AdminLayout>
         <div className="max-w-4xl mx-auto">
@@ -172,21 +180,31 @@ export default function DetalleVendedorPage() {
   return (
     <>
       <Head>
-        <title>{vendedor.nombre} | MarketDesliz Admin</title>
+        <title>{vendedor?.nombre || 'Vendedor'} | MarketDesliz Admin</title>
       </Head>
 
       <AdminLayout>
         <div className="max-w-5xl mx-auto">
-          
-          {/* Header */}
+
+          {/* ─── Header ─────────────────────────────────────────────────── */}
           <div className="mb-6">
-            <Link
-              href="/admin/vendedores"
-              className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#6C3BFF] transition mb-4"
-            >
-              <ArrowLeft size={14} /> Volver a la lista
-            </Link>
-            
+            <div className="flex justify-between items-center flex-wrap gap-4">
+              <Link
+                href="/admin/vendedores"
+                className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#6C3BFF] transition mb-2"
+              >
+                <ArrowLeft size={14} /> Volver a la lista
+              </Link>
+              <button
+                onClick={() => cargarVendedor(true)}
+                disabled={refreshing}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500 hover:text-[#6C3BFF] transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+                {refreshing ? 'Actualizando...' : 'Actualizar'}
+              </button>
+            </div>
+
             <div className="flex justify-between items-start flex-wrap gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-[#6C3BFF]/10 rounded-xl flex items-center justify-center">
@@ -198,11 +216,15 @@ export default function DetalleVendedorPage() {
                     <code className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">{vendedor.codigo}</code>
                     <button
                       onClick={copiarCodigo}
-                      className="p-1 text-gray-400 hover:text-gray-600 transition"
+                      className={`p-1 transition ${copiedCodigo ? 'text-green-600' : 'text-gray-400 hover:text-gray-600'}`}
                       title="Copiar código"
+                      aria-label="Copiar código del vendedor"
                     >
-                      <Copy size={12} />
+                      {copiedCodigo ? <CheckCircle size={14} /> : <Copy size={14} />}
                     </button>
+                    {copiedCodigo && (
+                      <span className="text-xs text-green-600 font-medium">¡Copiado!</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -217,12 +239,12 @@ export default function DetalleVendedorPage() {
             </div>
           </div>
 
-          {/* Contenido principal */}
+          {/* ─── Contenido principal ────────────────────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
+
             {/* Columna izquierda - Información personal */}
             <div className="lg:col-span-2 space-y-6">
-              
+
               {/* Tarjeta de información */}
               <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
                 <div className="border-b border-gray-100 px-6 py-4 bg-gradient-to-r from-gray-50 to-white">
@@ -237,7 +259,7 @@ export default function DetalleVendedorPage() {
                       <p className="font-medium text-gray-900">{vendedor.nombre}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-5 !00">Correo electrónico</p>
+                      <p className="text-xs text-gray-500">Correo electrónico</p>
                       <p className="text-gray-700 flex items-center gap-1">
                         <Mail size={14} className="text-gray-400" /> {vendedor.email}
                       </p>
@@ -300,7 +322,7 @@ export default function DetalleVendedorPage() {
 
             {/* Columna derecha - QR y acciones */}
             <div className="space-y-6">
-              
+
               {/* Tarjeta QR */}
               <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm sticky top-6">
                 <div className="border-b border-gray-100 px-6 py-4 bg-gradient-to-r from-gray-50 to-white">
@@ -332,9 +354,14 @@ export default function DetalleVendedorPage() {
                     </button>
                     <button
                       onClick={copiarQRUrl}
-                      className="flex items-center justify-center gap-2 bg-gray-100 text-gray-700 py-2 rounded-xl text-sm font-medium hover:bg-gray-200 transition"
+                      className={`flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium transition ${
+                        copiedURL
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
                     >
-                      <Copy size={14} /> Copiar enlace
+                      {copiedURL ? <CheckCircle size={14} /> : <Copy size={14} />}
+                      {copiedURL ? '¡Copiado!' : 'Copiar enlace'}
                     </button>
                   </div>
                   <p className="text-xs text-gray-400 mt-3 break-all">
@@ -364,20 +391,18 @@ export default function DetalleVendedorPage() {
                     <DollarSign size={14} /> Ver historial de ventas
                   </Link>
                   <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(vendedor.codigo);
-                      alert('✅ Código copiado');
-                    }}
+                    onClick={copiarCodigo}
                     className="flex items-center gap-2 w-full p-3 bg-gray-50 rounded-xl text-sm text-gray-700 hover:bg-gray-100 transition text-left"
                   >
-                    <Copy size={14} /> Copiar código del vendedor
+                    {copiedCodigo ? <CheckCircle size={14} className="text-green-600" /> : <Copy size={14} />}
+                    {copiedCodigo ? '¡Código copiado!' : 'Copiar código del vendedor'}
                   </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Footer informativo */}
+          {/* ─── Footer informativo ────────────────────────────────────── */}
           <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
@@ -392,6 +417,15 @@ export default function DetalleVendedorPage() {
               </div>
             </div>
           </div>
+
+          {/* ─── Mensaje de error temporal ────────────────────────────── */}
+          {error && (
+            <div className="fixed bottom-4 right-4 bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded-xl shadow-lg z-50 flex items-center gap-2">
+              <AlertCircle size={16} />
+              <span className="text-sm">{error}</span>
+              <button onClick={() => setError('')} className="ml-2 text-red-500 hover:text-red-700">×</button>
+            </div>
+          )}
         </div>
       </AdminLayout>
     </>

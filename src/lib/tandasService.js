@@ -1161,3 +1161,118 @@ export async function generarCodigoInvitacionTanda(tandaId) {
     throw error;
   }
 }
+
+// ============================================================
+// FUNCIONES PARA ADMIN (PAGINACIÓN Y ESTADÍSTICAS)
+// ============================================================
+
+/**
+ * Obtener tandas con paginación, filtros y conteo de miembros
+ */
+export async function getTandasPaginated({ page = 1, perPage = 10, search = '', estado = 'todas', sort = '-created' } = {}) {
+  try {
+    let filter = '';
+    if (estado !== 'todas') {
+      filter = `estado = "${estado}"`;
+    }
+    if (search.trim()) {
+      const term = search.trim();
+      const searchFilter = `(nombre ~ "${term}" || descripcion ~ "${term}")`;
+      filter = filter ? `${filter} && ${searchFilter}` : searchFilter;
+    }
+
+    const result = await pb.collection('tandas').getList(page, perPage, {
+      filter: filter || undefined,
+      sort: sort,
+      // No expandimos para no cargar datos innecesarios
+    });
+
+    // Obtener conteo de miembros por tanda (optimizado)
+    const tandaIds = result.items.map(t => t.id);
+    let membersCount = {};
+    if (tandaIds.length > 0) {
+      const filterMembers = tandaIds.map(id => `tandaId = "${id}"`).join(' || ');
+      const members = await pb.collection('tanda_members').getFullList({
+        filter: filterMembers,
+        fields: 'tandaId'
+      });
+      membersCount = members.reduce((acc, m) => {
+        acc[m.tandaId] = (acc[m.tandaId] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    const items = result.items.map(tanda => ({
+      ...tanda,
+      miembrosActivos: membersCount[tanda.id] || 0,
+      // Miembros solo se cargarán cuando se abra el modal de detalles
+      miembros: []
+    }));
+
+    return {
+      items,
+      totalItems: result.totalItems,
+      totalPages: result.totalPages,
+      page: result.page,
+      perPage: result.perPage
+    };
+  } catch (error) {
+    console.error('Error obteniendo tandas paginadas:', error);
+    throw error;
+  }
+}
+
+/**
+ * Obtener estadísticas de tandas (totales, en curso, etc.)
+ */
+export async function getTandasStats() {
+  try {
+    const totalResult = await pb.collection('tandas').getList(1, 1, { fields: 'id' });
+    
+    const estados = ['abierta', 'en_curso', 'completada', 'cancelada'];
+    const counts = {};
+    for (const est of estados) {
+      const result = await pb.collection('tandas').getList(1, 1, {
+        filter: `estado = "${est}"`,
+        fields: 'id'
+      });
+      counts[est] = result.totalItems;
+    }
+
+    // Total participantes (suma de miembros de todas las tandas)
+    const members = await pb.collection('tanda_members').getFullList({
+      fields: 'tandaId'
+    });
+    const totalParticipantes = members.length;
+
+    // Total recaudado (suma de montoTotal de tandas abiertas/en_curso)
+    const tandas = await pb.collection('tandas').getFullList({
+      filter: 'estado = "abierta" || estado = "en_curso"',
+      fields: 'montoTotal'
+    });
+    const totalRecaudado = tandas.reduce((sum, t) => sum + (t.montoTotal || 0), 0);
+
+    return {
+      total: totalResult.totalItems,
+      enCurso: counts['en_curso'] || 0,
+      abiertas: counts['abierta'] || 0,
+      completadas: counts['completada'] || 0,
+      canceladas: counts['cancelada'] || 0,
+      totalParticipantes,
+      totalRecaudado,
+      promedio: totalResult.totalItems > 0 ? Math.round(totalRecaudado / totalResult.totalItems) : 0
+    };
+  } catch (error) {
+    console.error('Error obteniendo estadísticas de tandas:', error);
+    return {
+      total: 0,
+      enCurso: 0,
+      abiertas: 0,
+      completadas: 0,
+      canceladas: 0,
+      totalParticipantes: 0,
+      totalRecaudado: 0,
+      promedio: 0
+    };
+  }
+}

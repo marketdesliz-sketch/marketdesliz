@@ -6,28 +6,21 @@ import { getEstadisticasCliente } from './nivelClienteService';
 // GENERAR CÓDIGO DE COLONIA/LOCALIDAD
 // ============================
 export function generarCodigoColonia(colonia) {
+  // Si no hay dato, devolver fallback
   if (!colonia || colonia.trim() === '') {
     return 'GEN';
   }
 
-  const coloniaLimpia = colonia.trim().toUpperCase();
-  const palabrasIgnorar = ['DE', 'LA', 'LAS', 'LOS', 'DEL', 'EL', 'Y', 'E'];
-  const palabras = coloniaLimpia.split(/\s+/);
-  const palabrasImportantes = palabras.filter(p => !palabrasIgnorar.includes(p));
+  // Tomar solo letras (A-Z), convertir a mayúsculas y obtener las primeras 3
+  const letras = colonia.trim().toUpperCase().replace(/[^A-Z]/g, '');
 
-  if (palabrasImportantes.length === 0) {
-    return palabras[0].substring(0, 3);
+  // Si no quedó ninguna letra después del filtro, usar fallback
+  if (letras.length === 0) {
+    return 'GEN';
   }
 
-  if (palabrasImportantes.length === 1) {
-    return palabrasImportantes[0].substring(0, 3);
-  } else if (palabrasImportantes.length === 2) {
-    return palabrasImportantes[0].charAt(0) + palabrasImportantes[1].charAt(0);
-  } else {
-    return palabrasImportantes[0].charAt(0) +
-      palabrasImportantes[1].charAt(0) +
-      palabrasImportantes[2].charAt(0);
-  }
+  // Tomar las primeras 3 letras; si hay menos de 3, rellenar con 'X'
+  return letras.substring(0, 3).padEnd(3, 'X');
 }
 
 // ============================
@@ -72,7 +65,7 @@ export async function getOrCreateTarjeta(clienteId) {
   try {
     let clientData = await getClientData(clienteId);
 
-    // ✅ Si no existe en clients, crearlo automáticamente
+    // Si no existe en clients, crearlo automáticamente
     if (!clientData) {
       console.log('Cliente sin registro en clients, creando...');
       const cliente = await pb.collection('users').getOne(clienteId);
@@ -107,8 +100,23 @@ export async function getOrCreateTarjeta(clienteId) {
       console.log('✅ Registro en clients creado:', clientData.id);
     }
 
-    // Si ya tiene tarjetaId, retornar datos existentes
+    // Obtener los datos del usuario
+    const cliente = await pb.collection('users').getOne(clienteId);
+    const telefono = cliente.telefono || '00000000';
+
+    // ─── Si ya tiene tarjeta, verificar si necesita actualización por GEN ───
     if (clientData.tarjetaId) {
+      // Si el código contiene "GEN" y ahora hay una localidad, regenerar automáticamente
+      if (clientData.tarjetaId.includes('GEN') && clientData.direccionLocalidad) {
+        const nuevoCodigo = generarIdCliente(telefono, clientData.direccionLocalidad);
+        await pb.collection('clients').update(clientData.id, {
+          tarjetaId: nuevoCodigo,
+          codigoColonia: clientData.direccionLocalidad.substring(0, 3).toUpperCase()
+        });
+        console.log(`🔄 Tarjeta actualizada de ${clientData.tarjetaId} a ${nuevoCodigo}`);
+        clientData.tarjetaId = nuevoCodigo;
+      }
+
       return {
         id: clientData.id,
         userId: clienteId,
@@ -120,10 +128,9 @@ export async function getOrCreateTarjeta(clienteId) {
       };
     }
 
-    // Crear nueva tarjeta
-    const cliente = await pb.collection('users').getOne(clienteId);
-    const telefono = cliente.telefono || '00000000';
-    const colonia = clientData.direccionColonia || '';
+    // ─── No tiene tarjeta: crear una nueva ────────────────────────────────
+    // Usar direcciónColonia; si está vacía, usar direcciónLocalidad
+    const colonia = clientData.direccionColonia || clientData.direccionLocalidad || '';
     const idCliente = generarIdCliente(telefono, colonia);
 
     await pb.collection('clients').update(clientData.id, {
@@ -506,4 +513,172 @@ export async function reactivarTarjeta(clientId) {
     throw error;
   }
 }
-"// Updated $(date)" 
+"// Updated $(date)"
+
+
+const ITEMS_PER_PAGE = 10;
+
+/**
+ * Obtener tarjetas con paginación, búsqueda y filtros
+ */
+export async function getTarjetasPaginated({ page = 1, perPage = ITEMS_PER_PAGE, search = '', estado = 'todos', sort = '-created' } = {}) {
+  try {
+    // 1. Construir filtro base (tarjetaId no vacío)
+    let filter = 'tarjetaId != null && tarjetaId != ""';
+
+    // 2. Búsqueda por nombre, teléfono o ID
+    if (search.trim()) {
+      const term = search.trim();
+      // Nota: expand no funciona en filtros directamente, así que buscamos en clients y luego en users
+      // Primero obtenemos los clients que coinciden con la búsqueda (por userId expandido)
+      // Pero para simplificar, hacemos la búsqueda en cliente después
+    }
+
+    // 3. Filtro por estado (si existe campo tarjetaEstado en clients)
+    if (estado !== 'todos') {
+      filter += ` && tarjetaEstado = "${estado}"`;
+    }
+
+    // 4. Obtener tarjetas con paginación
+    const result = await pb.collection('clients').getList(page, perPage, {
+      filter: filter,
+      sort: sort,
+      expand: 'userId',
+      fields: 'id,userId,created,tarjetaId,numeroTarjeta,tarjetaEstado,expand.userId.nombre,expand.userId.telefono'
+    });
+
+    // 5. Procesar búsqueda en cliente (porque no se puede hacer en el filtro con expand)
+    let items = result.items;
+    if (search.trim()) {
+      const term = search.trim().toLowerCase();
+      items = items.filter(t => {
+        const nombre = t.expand?.userId?.nombre?.toLowerCase() || '';
+        const telefono = t.expand?.userId?.telefono || '';
+        const idCliente = t.tarjetaId?.toLowerCase() || '';
+        return nombre.includes(term) || telefono.includes(term) || idCliente.includes(term);
+      });
+    }
+
+    // 6. Formatear items
+    const formattedItems = items.map(t => ({
+      id: t.id,
+      userId: t.userId,
+      token: t.tarjetaId,
+      idCliente: t.tarjetaId,
+      numeroTarjeta: t.numeroTarjeta || 1,
+      estado: t.tarjetaEstado || 'activo', // Usar tarjetaEstado
+      created: t.created,
+      clienteNombre: t.expand?.userId?.nombre || 'Cliente',
+      clienteTelefono: t.expand?.userId?.telefono || '',
+    }));
+
+    // 7. Obtener datos completos de tarjeta para cada una (opcional, solo para vista previa)
+    // Mejor cargar bajo demanda en el modal de ver tarjeta
+
+    return {
+      items: formattedItems,
+      totalItems: result.totalItems,
+      totalPages: result.totalPages,
+      page: result.page,
+      perPage: result.perPage
+    };
+  } catch (error) {
+    console.error('Error obteniendo tarjetas paginadas:', error);
+    throw error;
+  }
+}
+
+/**
+ * Obtener estadísticas de tarjetas (totales, activas, inactivas, suspendidas, sin tarjeta)
+ */
+export async function getTarjetasStats() {
+  try {
+    // Total de tarjetas
+    const totalResult = await pb.collection('clients').getList(1, 1, {
+      filter: 'tarjetaId != null && tarjetaId != ""',
+      fields: 'id'
+    });
+
+    // Activas (tarjetaEstado = 'activo')
+    const activasResult = await pb.collection('clients').getList(1, 1, {
+      filter: 'tarjetaId != null && tarjetaId != "" && tarjetaEstado = "activo"',
+      fields: 'id'
+    });
+
+    // Inactivas
+    const inactivasResult = await pb.collection('clients').getList(1, 1, {
+      filter: 'tarjetaId != null && tarjetaId != "" && tarjetaEstado = "inactivo"',
+      fields: 'id'
+    });
+
+    // Suspendidas
+    const suspendidasResult = await pb.collection('clients').getList(1, 1, {
+      filter: 'tarjetaId != null && tarjetaId != "" && tarjetaEstado = "suspendido"',
+      fields: 'id'
+    });
+
+    // Clientes sin tarjeta (role=cliente y no tienen tarjetaId en clients)
+    // Usamos getList para contar rápidamente
+    const sinTarjetaResult = await pb.collection('users').getList(1, 1, {
+      filter: 'role = "cliente"',
+      fields: 'id'
+    });
+    // Necesitamos restar los que tienen tarjeta
+    const conTarjeta = await pb.collection('clients').getFullList({
+      filter: 'tarjetaId != null && tarjetaId != ""',
+      fields: 'userId'
+    });
+    const conTarjetaIds = new Set(conTarjeta.map(c => c.userId));
+    let sinTarjetaCount = 0;
+    // Para contar, necesitamos obtener todos los clientes y filtrar, pero es costoso.
+    // Alternativa: contar todos los clientes y restar los con tarjeta
+    const totalClientesResult = await pb.collection('users').getList(1, 1, {
+      filter: 'role = "cliente"',
+      fields: 'id'
+    });
+    sinTarjetaCount = totalClientesResult.totalItems - conTarjeta.length;
+
+    return {
+      total: totalResult.totalItems,
+      activas: activasResult.totalItems,
+      inactivas: inactivasResult.totalItems,
+      suspendidas: suspendidasResult.totalItems,
+      sinTarjeta: sinTarjetaCount
+    };
+  } catch (error) {
+    console.error('Error obteniendo estadísticas de tarjetas:', error);
+    return {
+      total: 0,
+      activas: 0,
+      inactivas: 0,
+      suspendidas: 0,
+      sinTarjeta: 0
+    };
+  }
+}
+
+/**
+ * Eliminar tarjeta (solo admin)
+ */
+export async function eliminarTarjeta(clienteId) {
+  try {
+    if (!pb.authStore.isValid || pb.authStore.model?.role !== 'admin') {
+      throw new Error('No autorizado');
+    }
+    // Verificar que el cliente existe
+    const client = await pb.collection('clients').getOne(clienteId);
+    if (!client.tarjetaId) {
+      throw new Error('Este cliente no tiene tarjeta');
+    }
+    // Actualizar clients eliminando tarjetaId y numeroTarjeta
+    await pb.collection('clients').update(clienteId, {
+      tarjetaId: null,
+      numeroTarjeta: null,
+      tarjetaEstado: null
+    });
+    return true;
+  } catch (error) {
+    console.error('Error eliminando tarjeta:', error);
+    throw error;
+  }
+}

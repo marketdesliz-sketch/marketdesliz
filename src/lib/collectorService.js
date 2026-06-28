@@ -10,6 +10,9 @@ const COLLECTIONS = {
   USERS: 'users'
 };
 
+const DEFAULT_PAGE = 1;
+const DEFAULT_PER_PAGE = 10;
+
 // ============================================================
 // FUNCIONES AUXILIARES
 // ============================================================
@@ -24,7 +27,7 @@ function formatScheduledDate(scheduledDate) {
       hora: '12:00'
     };
   }
-  
+
   if (scheduledDate.includes('T')) {
     const dateObj = new Date(scheduledDate);
     return {
@@ -32,7 +35,7 @@ function formatScheduledDate(scheduledDate) {
       hora: dateObj.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
     };
   }
-  
+
   return {
     fecha: scheduledDate,
     hora: '12:00'
@@ -47,7 +50,7 @@ async function notificarAdminTarea(tareaId, tipo, productoNombre, clienteNombre)
     const admins = await pb.collection(COLLECTIONS.USERS).getFullList({
       filter: 'role = "admin"'
     });
-    
+
     for (const admin of admins) {
       await pb.collection(COLLECTIONS.NOTIFICACIONES).create({
         usuarioId: admin.id,
@@ -71,8 +74,9 @@ async function notificarAdminTarea(tareaId, tipo, productoNombre, clienteNombre)
 }
 
 // ============================================================
-// CREAR TAREA DE VISITA
+// CREAR TAREAS (sin cambios)
 // ============================================================
+
 export async function createVisitTask(data) {
   try {
     if (!pb.authStore.isValid) {
@@ -82,35 +86,23 @@ export async function createVisitTask(data) {
     const { fecha, hora } = formatScheduledDate(data.scheduledDate);
 
     const task = await pb.collection(COLLECTIONS.COBROS).create({
-      // Relaciones
       userId: data.clientId,
       productId: data.productId,
-      
-      // Tipo y estado
       tipo: 'visita',
       estado: 'pendiente',
-      
-      // Fechas y horarios
       fecha: fecha,
       fechaProgramada: data.scheduledDate ? new Date(data.scheduledDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       hora: hora,
       horaEstimada: data.horaEstimada || hora,
-      
-      // Ubicación y detalles
       direccion: data.clientAddress,
       notas: data.notes || `Visita para mostrar producto: ${data.productName}`,
       detalles: `Cliente: ${data.clientName || 'Sin nombre'} - Tel: ${data.clientPhone || 'N/A'}`,
-      
-      // Método de pago (si aplica)
       metodoPago: data.paymentMethod || null,
-      
-      // Metadata
       created: new Date().toISOString()
     });
-    
-    // Notificar al admin
+
     await notificarAdminTarea(task.id, 'visita', data.productName, data.clientName || 'Cliente');
-    
+
     return task;
   } catch (error) {
     console.error('Error creando tarea de visita:', error);
@@ -118,9 +110,6 @@ export async function createVisitTask(data) {
   }
 }
 
-// ============================================================
-// CREAR TAREA DE ENTREGA
-// ============================================================
 export async function createDeliveryTask(data) {
   try {
     if (!pb.authStore.isValid) {
@@ -130,35 +119,23 @@ export async function createDeliveryTask(data) {
     const { fecha, hora } = formatScheduledDate(data.scheduledDate);
 
     const task = await pb.collection(COLLECTIONS.COBROS).create({
-      // Relaciones
       userId: data.clientId,
       productId: data.productId,
-      
-      // Tipo y estado
       tipo: 'entrega',
       estado: 'pendiente',
-      
-      // Fechas y horarios
       fecha: fecha,
       fechaProgramada: data.scheduledDate ? new Date(data.scheduledDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       hora: hora,
       horaEstimada: data.horaEstimada || hora,
-      
-      // Ubicación y detalles
       direccion: data.clientAddress,
       notas: data.notes || `Entrega de producto: ${data.productName}`,
       detalles: `Cliente: ${data.clientName || 'Sin nombre'} - Tel: ${data.clientPhone || 'N/A'} - Pago: ${data.paymentMethod || 'QR'}`,
-      
-      // Método de pago
       metodoPago: data.paymentMethod || 'qr',
-      
-      // Metadata
       created: new Date().toISOString()
     });
-    
-    // Notificar al admin
+
     await notificarAdminTarea(task.id, 'entrega', data.productName, data.clientName || 'Cliente');
-    
+
     return task;
   } catch (error) {
     console.error('Error creando tarea de entrega:', error);
@@ -166,9 +143,6 @@ export async function createDeliveryTask(data) {
   }
 }
 
-// ============================================================
-// CREAR TAREA DE COBRO
-// ============================================================
 export async function createCollectionTask(data) {
   try {
     if (!pb.authStore.isValid) {
@@ -178,40 +152,26 @@ export async function createCollectionTask(data) {
     const { fecha, hora } = formatScheduledDate(data.scheduledDate);
 
     const task = await pb.collection(COLLECTIONS.COBROS).create({
-      // Relaciones
       userId: data.clientId,
       orderId: data.orderId || null,
       paymentId: data.paymentId || null,
       cobradorId: data.cobradorId || null,
-      
-      // Tipo y estado
       tipo: 'cobro',
       estado: 'pendiente',
-      
-      // Fechas y horarios
       fecha: fecha,
       fechaProgramada: data.scheduledDate ? new Date(data.scheduledDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       hora: hora,
       horaEstimada: data.horaEstimada || data.scheduledTime || hora,
-      
-      // Ubicación y detalles
       direccion: data.clientAddress || '',
       notas: data.notes || `Cobro de pago semanal - Monto: $${data.amount || 0}`,
       detalles: `Cliente: ${data.clientName || 'Sin nombre'} - Monto: $${data.amount || 0}`,
-      
-      // Monto a cobrar
       montoCobrado: data.amount || 0,
-      
-      // Método de pago
       metodoPago: data.paymentMethod || 'qr',
-      
-      // Metadata
       created: new Date().toISOString()
     });
-    
-    // Notificar al admin
+
     await notificarAdminTarea(task.id, 'cobro', `Monto: $${data.amount || 0}`, data.clientName || 'Cliente');
-    
+
     return task;
   } catch (error) {
     console.error('Error creando tarea de cobro:', error);
@@ -220,15 +180,110 @@ export async function createCollectionTask(data) {
 }
 
 // ============================================================
-// OBTENER TAREAS POR CLIENTE
+// CONSULTAS CON PAGINACIÓN Y FILTROS (NUEVA FUNCIÓN PRINCIPAL)
 // ============================================================
-export async function getClientTasks(clientId) {
+
+/**
+ * Obtener tareas con paginación y filtros combinados (principal)
+ * @param {Object} params
+ * @param {number} params.page - Número de página (default: 1)
+ * @param {number} params.perPage - Elementos por página (default: 10)
+ * @param {string} params.search - Búsqueda en detalles, notas, etc.
+ * @param {string} params.estado - pendiente, completada, cancelada, no_encontrado
+ * @param {string} params.tipo - visita, entrega, cobro
+ * @param {string} params.fechaInicio - Fecha inicio (YYYY-MM-DD)
+ * @param {string} params.fechaFin - Fecha fin (YYYY-MM-DD)
+ * @param {string} params.cobradorId - ID del cobrador asignado
+ * @param {string} params.clienteId - ID del cliente
+ * @param {string} params.sort - Campo de ordenamiento (ej: '-created')
+ * @returns {Promise<Object>} { items, totalItems, totalPages, page, perPage }
+ */
+export async function getTasksPaginated({
+  page = DEFAULT_PAGE,
+  perPage = DEFAULT_PER_PAGE,
+  search = '',
+  estado = '',
+  tipo = '',
+  fechaInicio = '',
+  fechaFin = '',
+  cobradorId = '',
+  clienteId = '',
+  sort = '-created'
+} = {}) {
   try {
-    const tasks = await pb.collection(COLLECTIONS.COBROS).getFullList({
-      filter: `userId = "${clientId}"`,
-      expand: 'productId,orderId,paymentId,cobradorId',
-      sort: '-created'
+    let filter = '';
+
+    if (estado) {
+      filter = `estado = "${estado}"`;
+    }
+    if (tipo) {
+      filter = filter ? `${filter} && tipo = "${tipo}"` : `tipo = "${tipo}"`;
+    }
+    if (fechaInicio) {
+      const start = new Date(fechaInicio);
+      const end = fechaFin ? new Date(fechaFin) : start;
+      end.setHours(23, 59, 59, 999);
+      const dateFilter = `fechaProgramada >= "${start.toISOString().split('T')[0]}" && fechaProgramada <= "${end.toISOString().split('T')[0]}"`;
+      filter = filter ? `${filter} && ${dateFilter}` : dateFilter;
+    }
+    if (cobradorId) {
+      const cobFilter = `(asignadoA = "${cobradorId}" || cobradorId = "${cobradorId}")`;
+      filter = filter ? `${filter} && ${cobFilter}` : cobFilter;
+    }
+    if (clienteId) {
+      const cliFilter = `userId = "${clienteId}"`;
+      filter = filter ? `${filter} && ${cliFilter}` : cliFilter;
+    }
+    if (search.trim()) {
+      const term = search.trim();
+      const searchFilter = `(detalles ~ "${term}" || notas ~ "${term}")`;
+      filter = filter ? `${filter} && ${searchFilter}` : searchFilter;
+    }
+
+    const result = await pb.collection(COLLECTIONS.COBROS).getList(page, perPage, {
+      filter: filter || undefined,
+      sort: sort,
+      expand: 'userId,productId,orderId,paymentId,cobradorId'
     });
+
+    return {
+      items: result.items,
+      totalItems: result.totalItems,
+      totalPages: result.totalPages,
+      page: result.page,
+      perPage: result.perPage
+    };
+  } catch (error) {
+    console.error('Error obteniendo tareas paginadas:', error);
+    throw error;
+  }
+}
+
+// ============================================================
+// CONSULTAS EXISTENTES (MANTENIDAS CON PAGINACIÓN OPCIONAL)
+// ============================================================
+
+/**
+ * Obtener tareas por cliente (con paginación opcional)
+ */
+export async function getClientTasks(clientId, page = null, perPage = null) {
+  try {
+    const filter = `userId = "${clientId}"`;
+    let tasks;
+    if (page !== null && perPage !== null) {
+      const result = await pb.collection(COLLECTIONS.COBROS).getList(page, perPage, {
+        filter,
+        expand: 'productId,orderId,paymentId,cobradorId',
+        sort: '-created'
+      });
+      tasks = result.items;
+    } else {
+      tasks = await pb.collection(COLLECTIONS.COBROS).getFullList({
+        filter,
+        expand: 'productId,orderId,paymentId,cobradorId',
+        sort: '-created'
+      });
+    }
     return tasks;
   } catch (error) {
     console.error('Error obteniendo tareas del cliente:', error);
@@ -236,16 +291,27 @@ export async function getClientTasks(clientId) {
   }
 }
 
-// ============================================================
-// OBTENER TAREAS PENDIENTES (PARA ADMIN/COBRADOR)
-// ============================================================
-export async function getPendingTasks() {
+/**
+ * Obtener tareas pendientes (con paginación opcional)
+ */
+export async function getPendingTasks(page = null, perPage = null) {
   try {
-    const tasks = await pb.collection(COLLECTIONS.COBROS).getFullList({
-      filter: 'estado = "pendiente"',
-      expand: 'userId,productId,cobradorId',
-      sort: 'fechaProgramada,horaEstimada'
-    });
+    const filter = 'estado = "pendiente"';
+    let tasks;
+    if (page !== null && perPage !== null) {
+      const result = await pb.collection(COLLECTIONS.COBROS).getList(page, perPage, {
+        filter,
+        expand: 'userId,productId,cobradorId',
+        sort: 'fechaProgramada,horaEstimada'
+      });
+      tasks = result.items;
+    } else {
+      tasks = await pb.collection(COLLECTIONS.COBROS).getFullList({
+        filter,
+        expand: 'userId,productId,cobradorId',
+        sort: 'fechaProgramada,horaEstimada'
+      });
+    }
     return tasks;
   } catch (error) {
     console.error('Error obteniendo tareas pendientes:', error);
@@ -253,9 +319,9 @@ export async function getPendingTasks() {
   }
 }
 
-// ============================================================
-// OBTENER TAREA POR ID
-// ============================================================
+/**
+ * Obtener tarea por ID (sin cambios)
+ */
 export async function getTaskById(taskId) {
   try {
     const task = await pb.collection(COLLECTIONS.COBROS).getOne(taskId, {
@@ -268,34 +334,33 @@ export async function getTaskById(taskId) {
   }
 }
 
-// ============================================================
-// ACTUALIZAR ESTADO DE TAREA
-// ============================================================
+/**
+ * Actualizar estado de tarea (sin cambios)
+ */
 export async function updateTaskStatus(taskId, estado, opciones = {}) {
   try {
     const updateData = {
       estado: estado
     };
-    
+
     if (estado === 'completada') {
       updateData.fechaCompletado = opciones.fechaCompletado || new Date().toISOString();
     }
-    
+
     if (opciones.notas) {
       updateData.notas = opciones.notas;
     }
-    
+
     if (opciones.montoCobrado !== undefined) {
       updateData.montoCobrado = opciones.montoCobrado;
     }
-    
+
     if (opciones.metodoPago) {
       updateData.metodoPago = opciones.metodoPago;
     }
-    
+
     const updated = await pb.collection(COLLECTIONS.COBROS).update(taskId, updateData);
-    
-    // Si se completó, notificar
+
     if (estado === 'completada') {
       try {
         const task = await pb.collection(COLLECTIONS.COBROS).getOne(taskId);
@@ -312,7 +377,7 @@ export async function updateTaskStatus(taskId, estado, opciones = {}) {
         console.warn('No se pudo notificar al cliente:', err.message);
       }
     }
-    
+
     return updated;
   } catch (error) {
     console.error('Error actualizando tarea:', error);
@@ -320,22 +385,31 @@ export async function updateTaskStatus(taskId, estado, opciones = {}) {
   }
 }
 
-// ============================================================
-// OBTENER TAREAS POR FECHA
-// ============================================================
-export async function getTasksByDate(date) {
+/**
+ * Obtener tareas por fecha (con paginación opcional)
+ */
+export async function getTasksByDate(date, page = null, perPage = null) {
   try {
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
-    
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
-    
-    const tasks = await pb.collection(COLLECTIONS.COBROS).getFullList({
-      filter: `fechaProgramada >= "${startOfDay.toISOString().split('T')[0]}" && fechaProgramada <= "${endOfDay.toISOString().split('T')[0]}"`,
-      expand: 'userId,productId,cobradorId',
-      sort: 'horaEstimada'
-    });
+    const filter = `fechaProgramada >= "${startOfDay.toISOString().split('T')[0]}" && fechaProgramada <= "${endOfDay.toISOString().split('T')[0]}"`;
+    let tasks;
+    if (page !== null && perPage !== null) {
+      const result = await pb.collection(COLLECTIONS.COBROS).getList(page, perPage, {
+        filter,
+        expand: 'userId,productId,cobradorId',
+        sort: 'horaEstimada'
+      });
+      tasks = result.items;
+    } else {
+      tasks = await pb.collection(COLLECTIONS.COBROS).getFullList({
+        filter,
+        expand: 'userId,productId,cobradorId',
+        sort: 'horaEstimada'
+      });
+    }
     return tasks;
   } catch (error) {
     console.error('Error obteniendo tareas por fecha:', error);
@@ -343,16 +417,27 @@ export async function getTasksByDate(date) {
   }
 }
 
-// ============================================================
-// OBTENER TAREAS POR TIPO
-// ============================================================
-export async function getTasksByType(tipo) {
+/**
+ * Obtener tareas por tipo (con paginación opcional)
+ */
+export async function getTasksByType(tipo, page = null, perPage = null) {
   try {
-    const tasks = await pb.collection(COLLECTIONS.COBROS).getFullList({
-      filter: `tipo = "${tipo}"`,
-      expand: 'userId,productId',
-      sort: '-created'
-    });
+    const filter = `tipo = "${tipo}"`;
+    let tasks;
+    if (page !== null && perPage !== null) {
+      const result = await pb.collection(COLLECTIONS.COBROS).getList(page, perPage, {
+        filter,
+        expand: 'userId,productId',
+        sort: '-created'
+      });
+      tasks = result.items;
+    } else {
+      tasks = await pb.collection(COLLECTIONS.COBROS).getFullList({
+        filter,
+        expand: 'userId,productId',
+        sort: '-created'
+      });
+    }
     return tasks;
   } catch (error) {
     console.error('Error obteniendo tareas por tipo:', error);
@@ -360,16 +445,27 @@ export async function getTasksByType(tipo) {
   }
 }
 
-// ============================================================
-// OBTENER TAREAS POR COBRADOR ASIGNADO
-// ============================================================
-export async function getTasksByCollector(asignadoA) {
+/**
+ * Obtener tareas por cobrador asignado (con paginación opcional)
+ */
+export async function getTasksByCollector(asignadoA, page = null, perPage = null) {
   try {
-    const tasks = await pb.collection(COLLECTIONS.COBROS).getFullList({
-      filter: `asignadoA = "${asignadoA}" || cobradorId = "${asignadoA}"`,
-      expand: 'userId,productId',
-      sort: 'fechaProgramada,horaEstimada'
-    });
+    const filter = `asignadoA = "${asignadoA}" || cobradorId = "${asignadoA}"`;
+    let tasks;
+    if (page !== null && perPage !== null) {
+      const result = await pb.collection(COLLECTIONS.COBROS).getList(page, perPage, {
+        filter,
+        expand: 'userId,productId',
+        sort: 'fechaProgramada,horaEstimada'
+      });
+      tasks = result.items;
+    } else {
+      tasks = await pb.collection(COLLECTIONS.COBROS).getFullList({
+        filter,
+        expand: 'userId,productId',
+        sort: 'fechaProgramada,horaEstimada'
+      });
+    }
     return tasks;
   } catch (error) {
     console.error('Error obteniendo tareas por cobrador:', error);
@@ -377,9 +473,9 @@ export async function getTasksByCollector(asignadoA) {
   }
 }
 
-// ============================================================
-// ASIGNAR TAREA A COBRADOR
-// ============================================================
+/**
+ * Asignar tarea a cobrador (sin cambios)
+ */
 export async function assignTask(taskId, asignadoA) {
   try {
     const updated = await pb.collection(COLLECTIONS.COBROS).update(taskId, {
@@ -387,8 +483,7 @@ export async function assignTask(taskId, asignadoA) {
       cobradorId: asignadoA,
       fechaAsignacion: new Date().toISOString()
     });
-    
-    // Notificar al cobrador asignado
+
     try {
       await pb.collection(COLLECTIONS.NOTIFICACIONES).create({
         usuarioId: asignadoA,
@@ -402,7 +497,7 @@ export async function assignTask(taskId, asignadoA) {
     } catch (err) {
       console.warn('No se pudo notificar al cobrador:', err.message);
     }
-    
+
     return updated;
   } catch (error) {
     console.error('Error asignando tarea:', error);
@@ -410,38 +505,47 @@ export async function assignTask(taskId, asignadoA) {
   }
 }
 
-// ============================================================
-// OBTENER TAREAS DE HOY
-// ============================================================
-export async function getTodayTasks() {
+/**
+ * Obtener tareas de hoy (con paginación opcional)
+ */
+export async function getTodayTasks(page = null, perPage = null) {
   try {
     const today = new Date().toISOString().split('T')[0];
-    return getTasksByDate(today);
+    return getTasksByDate(today, page, perPage);
   } catch (error) {
     console.error('Error obteniendo tareas de hoy:', error);
     return [];
   }
 }
 
-// ============================================================
-// OBTENER TAREAS DE LA SEMANA
-// ============================================================
-export async function getWeekTasks() {
+/**
+ * Obtener tareas de la semana (con paginación opcional)
+ */
+export async function getWeekTasks(page = null, perPage = null) {
   try {
     const today = new Date();
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Lunes
     startOfWeek.setHours(0, 0, 0, 0);
-    
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6); // Domingo
     endOfWeek.setHours(23, 59, 59, 999);
-    
-    const tasks = await pb.collection(COLLECTIONS.COBROS).getFullList({
-      filter: `fechaProgramada >= "${startOfWeek.toISOString().split('T')[0]}" && fechaProgramada <= "${endOfWeek.toISOString().split('T')[0]}"`,
-      expand: 'userId,productId,cobradorId',
-      sort: 'fechaProgramada,horaEstimada'
-    });
+    const filter = `fechaProgramada >= "${startOfWeek.toISOString().split('T')[0]}" && fechaProgramada <= "${endOfWeek.toISOString().split('T')[0]}"`;
+    let tasks;
+    if (page !== null && perPage !== null) {
+      const result = await pb.collection(COLLECTIONS.COBROS).getList(page, perPage, {
+        filter,
+        expand: 'userId,productId,cobradorId',
+        sort: 'fechaProgramada,horaEstimada'
+      });
+      tasks = result.items;
+    } else {
+      tasks = await pb.collection(COLLECTIONS.COBROS).getFullList({
+        filter,
+        expand: 'userId,productId,cobradorId',
+        sort: 'fechaProgramada,horaEstimada'
+      });
+    }
     return tasks;
   } catch (error) {
     console.error('Error obteniendo tareas de la semana:', error);
@@ -450,26 +554,44 @@ export async function getWeekTasks() {
 }
 
 // ============================================================
-// OBTENER ESTADÍSTICAS DE TAREAS
+// ESTADÍSTICAS OPTIMIZADAS
 // ============================================================
+
 export async function getTaskStats() {
   try {
-    const allTasks = await pb.collection(COLLECTIONS.COBROS).getFullList();
-    
-    const stats = {
-      total: allTasks.length,
-      pendientes: allTasks.filter(t => t.estado === 'pendiente').length,
-      completadas: allTasks.filter(t => t.estado === 'completada').length,
-      canceladas: allTasks.filter(t => t.estado === 'cancelada').length,
-      noEncontrado: allTasks.filter(t => t.estado === 'no_encontrado').length,
-      porTipo: {
-        visita: allTasks.filter(t => t.tipo === 'visita').length,
-        entrega: allTasks.filter(t => t.tipo === 'entrega').length,
-        cobro: allTasks.filter(t => t.tipo === 'cobro').length
-      }
+    // Total de tareas
+    const totalResult = await pb.collection(COLLECTIONS.COBROS).getList(1, 1, { fields: 'id' });
+
+    // Conteo por estado usando getList con filtros
+    const estados = ['pendiente', 'completada', 'cancelada', 'no_encontrado'];
+    const counts = {};
+    for (const est of estados) {
+      const result = await pb.collection(COLLECTIONS.COBROS).getList(1, 1, {
+        filter: `estado = "${est}"`,
+        fields: 'id'
+      });
+      counts[est] = result.totalItems;
+    }
+
+    // Conteo por tipo
+    const tipos = ['visita', 'entrega', 'cobro'];
+    const tipoCounts = {};
+    for (const tipo of tipos) {
+      const result = await pb.collection(COLLECTIONS.COBROS).getList(1, 1, {
+        filter: `tipo = "${tipo}"`,
+        fields: 'id'
+      });
+      tipoCounts[tipo] = result.totalItems;
+    }
+
+    return {
+      total: totalResult.totalItems,
+      pendientes: counts.pendiente || 0,
+      completadas: counts.completada || 0,
+      canceladas: counts.cancelada || 0,
+      noEncontrado: counts.no_encontrado || 0,
+      porTipo: tipoCounts
     };
-    
-    return stats;
   } catch (error) {
     console.error('Error obteniendo estadísticas:', error);
     return {
@@ -483,30 +605,36 @@ export async function getTaskStats() {
   }
 }
 
-// src/lib/collectorService.js - Agregar al final del archivo
+// ============================================================
+// RUTA DE HOY (con paginación opcional)
+// ============================================================
 
 /**
- * Obtener la ruta de hoy para un cobrador (alias de getTodayTasks para compatibilidad)
+ * Obtener la ruta de hoy para un cobrador (con paginación opcional)
+ * @param {string} collectorId - ID del cobrador (opcional)
+ * @param {number} page - Número de página (default: 1)
+ * @param {number} perPage - Elementos por página (default: 10)
+ * @returns {Promise<Object>} { date, tasks, count }
  */
-export async function getTodayRoute(collectorId = null) {
+export async function getTodayRoute(collectorId = null, page = DEFAULT_PAGE, perPage = DEFAULT_PER_PAGE) {
   try {
     const today = new Date().toISOString().split('T')[0];
-    
+
     let filter = `fechaProgramada = "${today}" && (estado = "pendiente" || estado = "asignado")`;
     if (collectorId) {
       filter += ` && (asignadoA = "${collectorId}" || cobradorId = "${collectorId}")`;
     }
-    
-    const tasks = await pb.collection('cobros').getFullList({
+
+    const result = await pb.collection(COLLECTIONS.COBROS).getList(page, perPage, {
       filter: filter,
       expand: 'userId,productId,orderId,paymentId',
       sort: 'horaEstimada'
     });
-    
+
     return {
       date: today,
-      tasks: tasks,
-      count: tasks.length
+      tasks: result.items,
+      count: result.totalItems
     };
   } catch (error) {
     console.error('Error obteniendo ruta de hoy:', error);

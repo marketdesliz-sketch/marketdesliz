@@ -1,21 +1,23 @@
 // src/pages/negocios/estadisticas.js
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import StoreLayout from '../../layouts/StoreLayout';
 import pb from '../../lib/pocketbase';
-import { getNotificacionesNegocio } from '../../lib/notificacionesNegocios';
+import { getNegocioById, getEstadisticasNegocio, getActividadRecienteNegocio } from '../../lib/negociosService';
+import { exportarEstadisticasExcel, exportarEstadisticasPDF } from '../../lib/exportarEstadisticasService';
+import { formatDate, formatDateTime } from '../../lib/utils';
 
 export default function EstadisticasNegocioPage() {
   const router = useRouter();
+  const { periodo = 'semana' } = router.query;
+
   const [negocio, setNegocio] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [exportando, setExportando] = useState(false);
-  const [periodo, setPeriodo] = useState('semana'); // semana, mes, año
+  const [periodoSeleccionado, setPeriodoSeleccionado] = useState(periodo);
   const [estadisticas, setEstadisticas] = useState({
     visitas: { total: 0, hoy: 0, semana: 0, mes: 0 },
     contactos: { total: 0, whatsapp: 0, llamadas: 0 },
@@ -26,24 +28,26 @@ export default function EstadisticasNegocioPage() {
   const [actividadReciente, setActividadReciente] = useState([]);
   const [mostrarExportar, setMostrarExportar] = useState(false);
 
-  useEffect(() => {
-    const user = pb.authStore.model;
-    if (!user) {
-      router.push('/solicitar?redirect=' + encodeURIComponent(router.asPath));
-      return;
-    }
-    cargarNegocio(user);
-  }, []);
-
-  const cargarNegocio = async (user) => {
+  // ─── Cargar datos ──────────────────────────────────────────────────────
+  const cargarDatos = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
 
+      const user = pb.authStore.model;
+      if (!user) {
+        router.push('/solicitar?redirect=' + encodeURIComponent(router.asPath));
+        return;
+      }
+
+      // Obtener el negocio del usuario
       const negocios = await pb.collection('negocios').getFullList({
-        filter: `usuarioId = "${user.id}"`
+        filter: `usuarioId = "${user.id}"`,
+        limit: 1
       });
 
       if (negocios.length === 0) {
+        setNegocio(null);
         setLoading(false);
         return;
       }
@@ -51,338 +55,71 @@ export default function EstadisticasNegocioPage() {
       const negocioData = negocios[0];
       setNegocio(negocioData);
 
-      await cargarEstadisticas(negocioData.id);
-      await cargarActividadReciente(negocioData.id);
+      // Cargar estadísticas y actividad en paralelo
+      const [stats, actividad] = await Promise.all([
+        getEstadisticasNegocio(negocioData.id, periodoSeleccionado),
+        getActividadRecienteNegocio(negocioData.id, 10)
+      ]);
 
-    } catch (error) {
-      console.error('Error cargando negocio:', error);
+      setEstadisticas(stats);
+      setActividadReciente(actividad);
+
+    } catch (err) {
+      console.error('Error cargando datos:', err);
+      setError('No se pudieron cargar las estadísticas. Intenta de nuevo.');
     } finally {
       setLoading(false);
     }
+  }, [router, periodoSeleccionado]);
+
+  useEffect(() => {
+    cargarDatos();
+  }, [cargarDatos]);
+
+  // ─── Actualizar URL al cambiar periodo ──────────────────────────────
+  const handlePeriodoChange = (nuevoPeriodo) => {
+    setPeriodoSeleccionado(nuevoPeriodo);
+    router.push({ pathname: '/negocios/estadisticas', query: { periodo: nuevoPeriodo } }, undefined, { shallow: true });
   };
 
-  const cargarEstadisticas = async (negocioId) => {
-    try {
-      const comentarios = await pb.collection('comentarios_negocios').getFullList({
-        filter: `negocioId = "${negocioId}"`,
-        sort: '-created'
-      });
-
-      const notificaciones = await getNotificacionesNegocio(negocioId);
-
-      const visitasNotif = notificaciones.filter(n => n.tipo === 'visita');
-      const hoy = new Date().toDateString();
-      const semanaInicio = new Date();
-      semanaInicio.setDate(semanaInicio.getDate() - 7);
-      const mesInicio = new Date();
-      mesInicio.setMonth(mesInicio.getMonth() - 1);
-
-      const visitasHoy = visitasNotif.filter(v => new Date(v.fecha).toDateString() === hoy).length;
-      const visitasSemana = visitasNotif.filter(v => new Date(v.fecha) >= semanaInicio).length;
-      const visitasMes = visitasNotif.filter(v => new Date(v.fecha) >= mesInicio).length;
-
-      const contactosWhatsapp = notificaciones.filter(n => n.tipo === 'contacto_whatsapp').length;
-      const contactosLlamadas = notificaciones.filter(n => n.tipo === 'contacto_telefono').length;
-
-      const calificacionPromedio = comentarios.length > 0
-        ? comentarios.reduce((sum, c) => sum + (c.calificacion || 5), 0) / comentarios.length
-        : 0;
-
-      const comentariosPositivos = comentarios.filter(c => (c.calificacion || 5) >= 4).length;
-      const comentariosNegativos = comentarios.filter(c => (c.calificacion || 5) <= 2).length;
-
-      const tendencias = [];
-      for (let i = 6; i >= 0; i--) {
-        const fecha = new Date();
-        fecha.setDate(fecha.getDate() - i);
-        const fechaStr = fecha.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric' });
-
-        const visitasDia = visitasNotif.filter(v => new Date(v.fecha).toDateString() === fecha.toDateString()).length;
-        const contactosDia = notificaciones.filter(n =>
-          (n.tipo === 'contacto_whatsapp' || n.tipo === 'contacto_telefono') &&
-          new Date(n.fecha).toDateString() === fecha.toDateString()
-        ).length;
-
-        tendencias.push({ fecha: fechaStr, visitas: visitasDia, contactos: contactosDia });
-      }
-
-      setEstadisticas({
-        visitas: {
-          total: negocio.visitas || 0,
-          hoy: visitasHoy,
-          semana: visitasSemana,
-          mes: visitasMes
-        },
-        contactos: {
-          total: contactosWhatsapp + contactosLlamadas,
-          whatsapp: contactosWhatsapp,
-          llamadas: contactosLlamadas
-        },
-        comentarios: {
-          total: comentarios.length,
-          positivos: comentariosPositivos,
-          negativos: comentariosNegativos,
-          lista: comentarios.map(c => ({
-            fecha: c.created,
-            usuario: c.usuarioNombre,
-            calificacion: c.calificacion || 5,
-            comentario: c.comentario
-          }))
-        },
-        calificacionPromedio: Math.round(calificacionPromedio * 10) / 10,
-        tendencias
-      });
-
-    } catch (error) {
-      console.error('Error cargando estadísticas:', error);
-    }
-  };
-
-  const cargarActividadReciente = async (negocioId) => {
-    try {
-      const notificaciones = await getNotificacionesNegocio(negocioId);
-      const comentarios = await pb.collection('comentarios_negocios').getFullList({
-        filter: `negocioId = "${negocioId}"`,
-        sort: '-created',
-        limit: 10
-      });
-
-      const actividad = [
-        ...notificaciones.slice(0, 5).map(n => ({
-          id: n.id,
-          tipo: n.tipo,
-          titulo: n.titulo,
-          mensaje: n.mensaje,
-          fecha: n.fecha,
-          leida: n.leida
-        })),
-        ...comentarios.slice(0, 5).map(c => ({
-          id: c.id,
-          tipo: 'comentario',
-          titulo: '💬 Nuevo comentario',
-          mensaje: `${c.usuarioNombre}: "${c.comentario?.substring(0, 50)}..."`,
-          fecha: c.created,
-          leida: true
-        }))
-      ];
-
-      actividad.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-      setActividadReciente(actividad.slice(0, 10));
-
-    } catch (error) {
-      console.error('Error cargando actividad:', error);
-    }
-  };
-
-  // ============================
-  // EXPORTAR A EXCEL
-  // ============================
-  const exportarExcel = () => {
+  // ─── Exportaciones ─────────────────────────────────────────────────────
+  const handleExportarExcel = async () => {
+    if (!negocio) return;
     setExportando(true);
     try {
-      // Crear libro de trabajo
-      const wb = XLSX.utils.book_new();
-
-      // Hoja 1: Resumen general
-      const resumenData = [
-        ['RESUMEN GENERAL DE ESTADÍSTICAS'],
-        [''],
-        ['Métrica', 'Valor'],
-        ['Nombre del negocio', negocio.nombre],
-        ['Categoría', negocio.categoria],
-        ['Fecha de registro', new Date(negocio.created).toLocaleDateString()],
-        [''],
-        ['VISITAS'],
-        ['Total de visitas', estadisticas.visitas.total],
-        ['Visitas hoy', estadisticas.visitas.hoy],
-        ['Visitas esta semana', estadisticas.visitas.semana],
-        ['Visitas este mes', estadisticas.visitas.mes],
-        [''],
-        ['CONTACTOS'],
-        ['Total de contactos', estadisticas.contactos.total],
-        ['Contactos por WhatsApp', estadisticas.contactos.whatsapp],
-        ['Llamadas recibidas', estadisticas.contactos.llamadas],
-        [''],
-        ['OPINIONES'],
-        ['Total de opiniones', estadisticas.comentarios.total],
-        ['Opiniones positivas (4-5 estrellas)', estadisticas.comentarios.positivos],
-        ['Opiniones negativas (1-2 estrellas)', estadisticas.comentarios.negativos],
-        ['Calificación promedio', `${estadisticas.calificacionPromedio} / 5`]
-      ];
-
-      const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
-      XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen General');
-
-      // Hoja 2: Tendencias diarias
-      const tendenciasData = [
-        ['TENDENCIAS DIARIAS'],
-        [''],
-        ['Fecha', 'Visitas', 'Contactos']
-      ];
-      estadisticas.tendencias.forEach(dia => {
-        tendenciasData.push([dia.fecha, dia.visitas, dia.contactos]);
+      await exportarEstadisticasExcel({
+        negocio,
+        estadisticas,
+        actividadReciente,
+        fechaGeneracion: new Date()
       });
-
-      const wsTendencias = XLSX.utils.aoa_to_sheet(tendenciasData);
-      XLSX.utils.book_append_sheet(wb, wsTendencias, 'Tendencias');
-
-      // Hoja 3: Opiniones de clientes
-      if (estadisticas.comentarios.lista.length > 0) {
-        const comentariosData = [
-          ['OPINIONES DE CLIENTES'],
-          [''],
-          ['Fecha', 'Usuario', 'Calificación', 'Comentario']
-        ];
-        estadisticas.comentarios.lista.forEach(com => {
-          comentariosData.push([
-            new Date(com.fecha).toLocaleDateString(),
-            com.usuario,
-            `${com.calificacion} ★`,
-            com.comentario || ''
-          ]);
-        });
-
-        const wsComentarios = XLSX.utils.aoa_to_sheet(comentariosData);
-        XLSX.utils.book_append_sheet(wb, wsComentarios, 'Opiniones');
-      }
-
-      // Hoja 4: Actividad reciente
-      if (actividadReciente.length > 0) {
-        const actividadData = [
-          ['ACTIVIDAD RECIENTE'],
-          [''],
-          ['Fecha', 'Tipo', 'Mensaje']
-        ];
-        actividadReciente.forEach(act => {
-          actividadData.push([
-            new Date(act.fecha).toLocaleString(),
-            act.titulo,
-            act.mensaje
-          ]);
-        });
-
-        const wsActividad = XLSX.utils.aoa_to_sheet(actividadData);
-        XLSX.utils.book_append_sheet(wb, wsActividad, 'Actividad');
-      }
-
-      // Exportar archivo
-      XLSX.writeFile(wb, `estadisticas_${negocio.nombre.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
-
-    } catch (error) {
-      console.error('Error exportando a Excel:', error);
+    } catch (err) {
+      console.error('Error exportando Excel:', err);
       alert('Error al exportar a Excel');
     } finally {
       setExportando(false);
     }
   };
 
-  // ============================
-  // EXPORTAR A PDF
-  // ============================
-  const exportarPDF = () => {
+  const handleExportarPDF = async () => {
+    if (!negocio) return;
     setExportando(true);
     try {
-      const doc = new jsPDF();
-      const fecha = new Date().toLocaleDateString();
-
-      // Título
-      doc.setFontSize(20);
-      doc.setTextColor(108, 59, 255);
-      doc.text('MarketDesliz - Estadísticas', 14, 20);
-
-      doc.setFontSize(14);
-      doc.setTextColor(0, 0, 0);
-      doc.text(`${negocio.nombre}`, 14, 35);
-      doc.setFontSize(10);
-      doc.text(`Reporte generado: ${fecha}`, 14, 42);
-
-      // Resumen de métricas
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.text('📊 Resumen de métricas', 14, 55);
-
-      autoTable(doc, {
-        startY: 60,
-        head: [['Métrica', 'Valor']],
-        body: [
-          ['Total visitas', estadisticas.visitas.total],
-          ['Visitas hoy', estadisticas.visitas.hoy],
-          ['Visitas esta semana', estadisticas.visitas.semana],
-          ['Total contactos', estadisticas.contactos.total],
-          ['Contactos WhatsApp', estadisticas.contactos.whatsapp],
-          ['Llamadas', estadisticas.contactos.llamadas],
-          ['Opiniones recibidas', estadisticas.comentarios.total],
-          ['Calificación promedio', `${estadisticas.calificacionPromedio} / 5`]
-        ],
-        theme: 'striped',
-        headStyles: { fillColor: [108, 59, 255] }
+      await exportarEstadisticasPDF({
+        negocio,
+        estadisticas,
+        actividadReciente,
+        fechaGeneracion: new Date()
       });
-
-      let yPos = doc.lastAutoTable.finalY + 10;
-
-      // Tendencias
-      doc.text('📈 Tendencias diarias', 14, yPos);
-      yPos += 5;
-
-      const tendenciasData = estadisticas.tendencias.map(dia => [dia.fecha, dia.visitas, dia.contactos]);
-      autoTable(doc, {
-        startY: yPos,
-        head: [['Fecha', 'Visitas', 'Contactos']],
-        body: tendenciasData,
-        theme: 'striped'
-      });
-
-      yPos = doc.lastAutoTable.finalY + 10;
-
-      // Opiniones recientes
-      if (estadisticas.comentarios.lista.length > 0) {
-        doc.text('💬 Opiniones de clientes', 14, yPos);
-        yPos += 5;
-
-        const opinionesData = estadisticas.comentarios.lista.slice(0, 10).map(com => [
-          new Date(com.fecha).toLocaleDateString(),
-          com.usuario,
-          `${com.calificacion} ★`,
-          com.comentario?.substring(0, 60) || ''
-        ]);
-
-        autoTable(doc, {
-          startY: yPos,
-          head: [['Fecha', 'Usuario', 'Calif.', 'Comentario']],
-          body: opinionesData,
-          theme: 'striped',
-          columnStyles: {
-            3: { cellWidth: 70 }
-          }
-        });
-      }
-
-      // Guardar PDF
-      doc.save(`estadisticas_${negocio.nombre.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
-
-    } catch (error) {
-      console.error('Error exportando a PDF:', error);
+    } catch (err) {
+      console.error('Error exportando PDF:', err);
       alert('Error al exportar a PDF');
     } finally {
       setExportando(false);
     }
   };
 
-  const formatFecha = (fecha) => {
-    const date = new Date(fecha);
-    const ahora = new Date();
-    const diffMs = ahora - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'Ahora';
-    if (diffMins < 60) return `Hace ${diffMins} min`;
-    if (diffHours < 24) return `Hace ${diffHours} h`;
-    if (diffDays < 7) return `Hace ${diffDays} d`;
-    return date.toLocaleDateString();
-  };
-
+  // ─── Iconos por tipo de actividad ────────────────────────────────────
   const getIconoTipo = (tipo) => {
     const iconos = {
       'comentario': '💬',
@@ -395,11 +132,46 @@ export default function EstadisticasNegocioPage() {
     return iconos[tipo] || '📢';
   };
 
+  // ─── Formato de fecha relativa ──────────────────────────────────────
+  const formatFechaRelativa = (fecha) => {
+    const date = new Date(fecha);
+    const ahora = new Date();
+    const diffMs = ahora - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Ahora';
+    if (diffMins < 60) return `Hace ${diffMins} min`;
+    if (diffHours < 24) return `Hace ${diffHours} h`;
+    if (diffDays < 7) return `Hace ${diffDays} d`;
+    return formatDate(date);
+  };
+
+  // ─── Estados de carga y error ────────────────────────────────────────
   if (loading) {
     return (
       <StoreLayout>
         <div className="flex justify-center items-center min-h-[60vh]">
-          <div className="loading-spinner"></div>
+          <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
+        </div>
+      </StoreLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <StoreLayout>
+        <div className="max-w-2xl mx-auto px-4 py-12 pt-24 text-center">
+          <div className="text-5xl mb-4">⚠️</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Error al cargar estadísticas</h1>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={cargarDatos}
+            className="bg-[#6C3BFF] text-white px-6 py-3 rounded-lg font-medium hover:bg-[#5a2ee6] transition"
+          >
+            Reintentar
+          </button>
         </div>
       </StoreLayout>
     );
@@ -426,12 +198,12 @@ export default function EstadisticasNegocioPage() {
     <>
       <Head>
         <title>Estadísticas | {negocio.nombre}</title>
-        <meta name="description" content="Estadísticas y métricas de tu negocio en MarketDesliz" />
+        <meta name="description" content={`Estadísticas y métricas de ${negocio.nombre} en MarketDesliz`} />
       </Head>
 
       <StoreLayout>
         <div className="max-w-7xl mx-auto px-4 py-8 pt-24">
-          {/* Header con botones de exportación */}
+          {/* ─── Header con exportaciones ─────────────────────────────── */}
           <div className="mb-8">
             <div className="flex justify-between items-center flex-wrap gap-4">
               <div>
@@ -445,21 +217,24 @@ export default function EstadisticasNegocioPage() {
                 <button
                   onClick={() => setMostrarExportar(!mostrarExportar)}
                   className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition flex items-center gap-2"
+                  disabled={exportando}
                 >
-                  📥 Exportar reporte
+                  {exportando ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    '📥 Exportar reporte'
+                  )}
                 </button>
-                {mostrarExportar && (
+                {mostrarExportar && !exportando && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
                     <button
-                      onClick={exportarExcel}
-                      disabled={exportando}
+                      onClick={handleExportarExcel}
                       className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-t-lg flex items-center gap-2"
                     >
                       <span>📊</span> Exportar a Excel
                     </button>
                     <button
-                      onClick={exportarPDF}
-                      disabled={exportando}
+                      onClick={handleExportarPDF}
                       className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-b-lg flex items-center gap-2"
                     >
                       <span>📄</span> Exportar a PDF
@@ -470,19 +245,9 @@ export default function EstadisticasNegocioPage() {
             </div>
           </div>
 
-          {exportando && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-xl p-6 text-center">
-                <div className="loading-spinner mx-auto mb-4"></div>
-                <p className="text-gray-600">Generando reporte...</p>
-              </div>
-            </div>
-          )}
-
-          {/* Resto del contenido igual que antes... */}
-          {/* Tarjetas de métricas principales */}
+          {/* ─── Tarjetas de métricas principales ─────────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-3xl">👁️</span>
                 <span className="text-xs text-gray-400">Total</span>
@@ -495,7 +260,7 @@ export default function EstadisticasNegocioPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-3xl">💬</span>
                 <span className="text-xs text-gray-400">Total</span>
@@ -508,7 +273,7 @@ export default function EstadisticasNegocioPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-3xl">⭐</span>
                 <span className="text-xs text-gray-400">Promedio</span>
@@ -517,14 +282,14 @@ export default function EstadisticasNegocioPage() {
               <div className="text-sm text-gray-500 mt-1">Calificación promedio</div>
               <div className="flex mt-3">
                 {[1, 2, 3, 4, 5].map(star => (
-                  <span key={star} className="text-lg" style={{ color: star <= estadisticas.calificacionPromedio ? '#FFD700' : '#ddd' }}>
+                  <span key={star} className="text-lg" style={{ color: star <= Math.round(estadisticas.calificacionPromedio) ? '#FFD700' : '#e5e7eb' }}>
                     ★
                   </span>
                 ))}
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-3xl">📝</span>
                 <span className="text-xs text-gray-400">Total</span>
@@ -538,20 +303,28 @@ export default function EstadisticasNegocioPage() {
             </div>
           </div>
 
-          {/* Gráfico de tendencias */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
+          {/* ─── Gráfico de tendencias ────────────────────────────────── */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8 shadow-sm">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-bold text-gray-900">📈 Tendencias (últimos 7 días)</h2>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setPeriodo('semana')}
-                  className={`px-3 py-1 rounded-lg text-sm ${periodo === 'semana' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-600'}`}
+                  onClick={() => handlePeriodoChange('semana')}
+                  className={`px-3 py-1 rounded-lg text-sm transition ${
+                    periodoSeleccionado === 'semana'
+                      ? 'bg-purple-100 text-purple-700 font-medium'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
                 >
                   Semana
                 </button>
                 <button
-                  onClick={() => setPeriodo('mes')}
-                  className={`px-3 py-1 rounded-lg text-sm ${periodo === 'mes' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-600'}`}
+                  onClick={() => handlePeriodoChange('mes')}
+                  className={`px-3 py-1 rounded-lg text-sm transition ${
+                    periodoSeleccionado === 'mes'
+                      ? 'bg-purple-100 text-purple-700 font-medium'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
                 >
                   Mes
                 </button>
@@ -559,33 +332,37 @@ export default function EstadisticasNegocioPage() {
             </div>
 
             <div className="space-y-4">
-              {estadisticas.tendencias.map((dia, idx) => (
-                <div key={idx}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-600">{dia.fecha}</span>
-                    <span className="text-gray-500">{dia.visitas} visitas • {dia.contactos} contactos</span>
-                  </div>
-                  <div className="flex gap-1">
-                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-purple-500 rounded-full"
-                        style={{ width: `${Math.min(100, (dia.visitas / Math.max(...estadisticas.tendencias.map(d => d.visitas), 1)) * 100)}%` }}
-                      />
+              {estadisticas.tendencias.map((dia, idx) => {
+                const maxVisitas = Math.max(...estadisticas.tendencias.map(d => d.visitas), 1);
+                const maxContactos = Math.max(...estadisticas.tendencias.map(d => d.contactos), 1);
+                return (
+                  <div key={idx}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">{dia.fecha}</span>
+                      <span className="text-gray-500">{dia.visitas} visitas • {dia.contactos} contactos</span>
                     </div>
-                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-green-500 rounded-full"
-                        style={{ width: `${Math.min(100, (dia.contactos / Math.max(...estadisticas.tendencias.map(d => d.contactos), 1)) * 100)}%` }}
-                      />
+                    <div className="flex gap-1">
+                      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-purple-500 rounded-full transition-all"
+                          style={{ width: `${(dia.visitas / maxVisitas) * 100}%` }}
+                        />
+                      </div>
+                      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-green-500 rounded-full transition-all"
+                          style={{ width: `${(dia.contactos / maxContactos) * 100}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          {/* Actividad reciente */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
+          {/* ─── Actividad reciente ───────────────────────────────────── */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8 shadow-sm">
             <h2 className="text-lg font-bold text-gray-900 mb-4">🕐 Actividad reciente</h2>
 
             {actividadReciente.length === 0 ? (
@@ -598,10 +375,10 @@ export default function EstadisticasNegocioPage() {
                     <div className="flex-1">
                       <p className="font-medium text-gray-900">{act.titulo}</p>
                       <p className="text-sm text-gray-600">{act.mensaje}</p>
-                      <p className="text-xs text-gray-400 mt-1">{formatFecha(act.fecha)}</p>
+                      <p className="text-xs text-gray-400 mt-1">{formatFechaRelativa(act.fecha)}</p>
                     </div>
                     {!act.leida && (
-                      <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+                      <span className="w-2 h-2 bg-purple-500 rounded-full mt-1" />
                     )}
                   </div>
                 ))}
@@ -609,7 +386,7 @@ export default function EstadisticasNegocioPage() {
             )}
           </div>
 
-          {/* Acciones rápidas */}
+          {/* ─── Acciones rápidas ────────────────────────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Link
               href={`/negocios/${negocio.id}`}
@@ -640,21 +417,6 @@ export default function EstadisticasNegocioPage() {
           </div>
         </div>
       </StoreLayout>
-
-      <style jsx>{`
-        .loading-spinner {
-          width: 40px;
-          height: 40px;
-          border: 3px solid #f3f3f3;
-          border-top: 3px solid #6C3BFF;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
     </>
   );
 }

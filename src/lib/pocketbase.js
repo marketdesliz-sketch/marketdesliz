@@ -8,7 +8,7 @@ const USER_STORAGE_KEY = 'pb_user_auth';
 const ADMIN_STORAGE_KEY = 'pb_admin_auth';
 
 // ============================================================
-// 1. DEFINIR LA CLASE CustomAuthStore (ANTES de usarla)
+// 1. DEFINIR LA CLASE CustomAuthStore (CORREGIDA)
 // ============================================================
 class CustomAuthStore {
   constructor() {
@@ -27,15 +27,18 @@ class CustomAuthStore {
     }
   }
 
-  // ✅ Getter para compatibilidad con PocketBase y código existente
   get isValid() {
     return !!this.token && !!this.model;
   }
 
+  get isAdminSession() {
+    return this.role === 'admin';
+  }
+
+  // ✅ SOLO carga sesión de usuario normal (NUNCA admin como fallback)
   loadFromStorage() {
     if (typeof window === 'undefined') return;
-    
-    // Primero intentar cargar sesión de usuario normal
+
     const userStored = localStorage.getItem(USER_STORAGE_KEY);
     if (userStored) {
       try {
@@ -46,10 +49,18 @@ class CustomAuthStore {
           this.role = model.role;
           return;
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Error parsing user session:', e);
+      }
     }
+
+    this.clear();
+  }
+
+  // ✅ Carga la sesión de admin (SOLO para rutas de admin)
+  loadAdminFromStorage() {
+    if (typeof window === 'undefined') return false;
     
-    // Si no hay sesión de usuario, intentar cargar sesión de admin
     const adminStored = localStorage.getItem(ADMIN_STORAGE_KEY);
     if (adminStored) {
       try {
@@ -58,19 +69,21 @@ class CustomAuthStore {
           this.token = token;
           this.model = model;
           this.role = model.role;
-          return;
+          return true;
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Error parsing admin session:', e);
+      }
     }
-    
-    this.clear();
+    return false;
   }
 
+  // ✅ Guarda la sesión en la clave correcta según el rol
   save(token, model) {
     const role = model?.role;
     const isAdmin = role === 'admin';
     const key = isAdmin ? ADMIN_STORAGE_KEY : USER_STORAGE_KEY;
-    
+
     if (token && model) {
       if (typeof window !== 'undefined') {
         localStorage.setItem(key, JSON.stringify({ token, model }));
@@ -84,7 +97,26 @@ class CustomAuthStore {
     this.triggerChange();
   }
 
+  // ✅ Limpia SOLO la sesión actual (no todas)
   clear() {
+    if (this.role === 'admin') {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(ADMIN_STORAGE_KEY);
+      }
+    } else {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(USER_STORAGE_KEY);
+      }
+    }
+    
+    this.token = null;
+    this.model = null;
+    this.role = null;
+    this.triggerChange();
+  }
+
+  // ✅ Limpia TODAS las sesiones (logout completo)
+  clearAll() {
     this.token = null;
     this.model = null;
     this.role = null;
@@ -119,14 +151,14 @@ pb.autoCancellation(false);
 pb.authStore = new CustomAuthStore();
 
 // ============================================================
-// 4. CARGAR SESIÓN SOLO EN EL CLIENTE (evita error SSR)
+// 4. CARGAR SESIÓN SOLO EN EL CLIENTE
 // ============================================================
 if (typeof window !== 'undefined') {
   pb.authStore.loadFromStorage();
 }
 
 // ============================================================
-// 5. FUNCIONES DE AUTENTICACIÓN
+// 5. FUNCIONES DE AUTENTICACIÓN (CORREGIDAS)
 // ============================================================
 
 /**
@@ -136,9 +168,11 @@ if (typeof window !== 'undefined') {
 export const loginUsuario = async (email, password) => {
   try {
     const authData = await pb.collection('users').authWithPassword(email, password);
+    
     if (authData.record.role === 'admin') {
       throw new Error('No puedes iniciar sesión como administrador aquí');
     }
+    
     pb.authStore.save(authData.token, authData.record);
     return { success: true, data: authData };
   } catch (error) {
@@ -147,21 +181,25 @@ export const loginUsuario = async (email, password) => {
   }
 };
 
+
 /**
- * Login de admin (superusuario de PocketBase)
- * Usa la colección _superusers en lugar de _admins
+ * Login de admin - CORREGIDO
+ * Usa el endpoint especial de administradores de PocketBase
  * Guarda la sesión en ADMIN_STORAGE_KEY
  */
 export const loginAdmin = async (email, password) => {
   try {
-    // ✅ CORREGIDO: Usar _superusers en lugar de admins
-    const authData = await pb.collection('_superusers').authWithPassword(email, password);
+    // ✅ Usar pb.admins en lugar de pb.collection('_admins')
+    const authData = await pb.admins.authWithPassword(email, password);
+    
+    // ✅ Crear modelo de admin con los datos correctos
     const adminModel = {
       id: authData.record.id,
       email: authData.record.email,
       role: 'admin',
-      nombre: 'Administrador'
+      nombre: authData.record.name || authData.record.email?.split('@')[0] || 'Administrador'
     };
+    
     pb.authStore.save(authData.token, adminModel);
     return { success: true, data: authData };
   } catch (error) {
@@ -219,10 +257,10 @@ export const isCliente = () => {
 };
 
 /**
- * Cerrar sesión (limpia cualquier sesión)
+ * Cerrar sesión (limpia TODO)
  */
 export const logout = () => {
-  pb.authStore.clear();
+  pb.authStore.clearAll();
   if (typeof window !== 'undefined') {
     localStorage.removeItem('vendedorData');
     localStorage.removeItem('carrito');
@@ -230,6 +268,13 @@ export const logout = () => {
     sessionStorage.removeItem('vendedorAsignadoId');
     sessionStorage.removeItem('vendedorAsignadoNombre');
   }
+};
+
+/**
+ * Obtener el token actual (para depuración o llamadas API)
+ */
+export const getToken = () => {
+  return pb.authStore.token;
 };
 
 // ============================================================

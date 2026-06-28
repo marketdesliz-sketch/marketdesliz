@@ -67,7 +67,7 @@ export default function ContactoPage() {
       </Head>
 
       <StoreLayout>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-36 pb-10">
 
           {/* Header */}
           <div className="text-center mb-9">

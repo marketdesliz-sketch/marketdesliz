@@ -1,48 +1,95 @@
 // src/pages/[tipo]/categoria/[[...slug]].js
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import {
   ChevronLeft, ChevronRight, Home, SlidersHorizontal,
-  Package, Search, Inbox, ArrowUpDown, Plus, Minus
+  Package, Search, Inbox, ArrowUpDown, Plus, Minus,
+  Filter, X
 } from 'lucide-react';
 import CategoryLayout from '../../../layouts/CategoryLayout';
 import pb from '../../../lib/pocketbase';
+import { CATEGORIAS, generarSlug, getCategoriasParaSidebar } from '../../../config/categorias';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-async function getCategoriasFromPB() {
-  try {
-    return await pb.collection('categorias').getFullList({ sort: 'orden', filter: 'activo = true' });
-  } catch { return []; }
+/**
+ * Obtiene la información de una categoría desde la estructura estática
+ * por nombre o slug.
+ */
+function getCategoriaInfoFromStatic(nombreOSlug) {
+  if (!nombreOSlug) return null;
+  const search = nombreOSlug.toLowerCase().trim();
+  for (const [key, categoria] of Object.entries(CATEGORIAS)) {
+    if (categoria.slug === search || categoria.nombre?.toLowerCase() === search) {
+      return { key, ...categoria };
+    }
+    if (categoria.sections) {
+      for (const section of categoria.sections) {
+        for (const cat of section.categories) {
+          const catSlug = generarSlug(cat.name);
+          if (catSlug === search || cat.name.toLowerCase() === search) {
+            return { nombre: cat.name, slug: catSlug, section: section.title };
+          }
+        }
+      }
+    }
+  }
+  return null;
 }
 
-async function getSubcategoriasFromPB(categoriaId = null) {
-  try {
-    let filter = 'activo = true';
-    if (categoriaId) filter += ` && categoriaId = "${categoriaId}"`;
-    return await pb.collection('subcategorias').getFullList({ filter, sort: 'orden' });
-  } catch { return []; }
+/**
+ * Obtiene todas las subcategorías (categorías de productos) desde la estructura estática.
+ */
+function getSubcategoriasFromStatic(tipo = 'productos') {
+  const categoria = CATEGORIAS[tipo];
+  if (!categoria || !categoria.sections) return [];
+  const subcategorias = [];
+  for (const section of categoria.sections) {
+    for (const cat of section.categories) {
+      subcategorias.push({
+        nombre: cat.name,
+        slug: generarSlug(cat.name),
+        items: cat.items || [],
+        section: section.title
+      });
+    }
+  }
+  return subcategorias;
 }
 
-async function getSubcategoriasUnicasDesdeProductos() {
-  try {
-    const productos = await pb.collection('products').getFullList({ filter: 'activo = true' });
-    const set = new Set();
-    productos.forEach(p => { if (p.subcategoria?.trim()) set.add(p.subcategoria.toLowerCase().trim()); });
-    return Array.from(set).sort();
-  } catch { return []; }
+/**
+ * Obtiene los nombres de las secciones para los filtros.
+ */
+function getFiltroSecciones(tipo) {
+  const categoria = CATEGORIAS[tipo];
+  if (!categoria || !categoria.sections) return [];
+  return categoria.sections.map(section => ({
+    id: generarSlug(section.title),
+    title: section.title,
+    categories: section.categories.map(cat => ({
+      name: cat.name,
+      slug: generarSlug(cat.name),
+      items: cat.items || []
+    }))
+  }));
 }
 
 const collections = {
-  productos: 'products', 'uso-personal': 'products',
-  ganado: 'products', instrumentos: 'products', tandas: 'tandas'
+  productos: 'products',
+  'uso-personal': 'products',
+  ganado: 'products',
+  instrumentos: 'products',
+  tandas: 'tandas'
 };
 
 const tipoNombres = {
-  productos: 'Productos', 'uso-personal': 'Uso Personal',
-  ganado: 'Ganado', instrumentos: 'Instrumentos', tandas: 'Tandas'
+  productos: 'Productos',
+  'uso-personal': 'Uso Personal',
+  ganado: 'Ganado',
+  instrumentos: 'Instrumentos',
+  tandas: 'Tandas'
 };
 
 function normalizeItem(item, tipo) {
@@ -82,9 +129,9 @@ function normalizeItem(item, tipo) {
 const filterItems = (items, tipo, categoriaSlug, subcategoriaSlug, activeFilters = {}) => {
   if (!items.length) return [];
   let filtered = [...items];
-  if (categoriaSlug === 'todos') {
-    // no filtrar
-  } else if (categoriaSlug && !subcategoriaSlug) {
+
+  // Filtrar por categoría principal (slug)
+  if (categoriaSlug && categoriaSlug !== 'todos') {
     const searchTerm = categoriaSlug.toLowerCase().replace(/-/g, ' ');
     filtered = filtered.filter(item => {
       const s = (item.subcategoria || '').toLowerCase();
@@ -93,12 +140,19 @@ const filterItems = (items, tipo, categoriaSlug, subcategoriaSlug, activeFilters
       return s.includes(searchTerm) || c.includes(searchTerm) || n.includes(searchTerm);
     });
   }
+
+  // Filtrar por subcategoría (slug)
   if (categoriaSlug && subcategoriaSlug) {
     const sc = categoriaSlug.toLowerCase().replace(/-/g, ' ');
     const ss = subcategoriaSlug.toLowerCase().replace(/-/g, ' ');
     filtered = filtered.filter(i => (i.categoria || '').toLowerCase().includes(sc));
-    filtered = filtered.filter(i => (i.subcategoria || '').toLowerCase().includes(ss) || (i.nombre || '').toLowerCase().includes(ss));
+    filtered = filtered.filter(i =>
+      (i.subcategoria || '').toLowerCase().includes(ss) ||
+      (i.nombre || '').toLowerCase().includes(ss)
+    );
   }
+
+  // Filtros activos (checkboxes)
   if (Object.keys(activeFilters).length > 0) {
     Object.entries(activeFilters).forEach(([, filterItemsArr]) => {
       if (filterItemsArr.length > 0) {
@@ -116,6 +170,7 @@ const filterItems = (items, tipo, categoriaSlug, subcategoriaSlug, activeFilters
       }
     });
   }
+
   return filtered;
 };
 
@@ -127,8 +182,8 @@ const getNombreFromSlug = (slug) => {
   return slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 };
 
-// ── Breadcrumb ────────────────────────────────────────────────────────────────
-function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy }) {
+// ── Breadcrumb (mejorado con datos estáticos) ──────────────────────────────
+function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaInfo }) {
   const router = useRouter();
   const displayTipo = tipoNombres[tipo] || tipo?.replace(/-/g, ' ') || '';
 
@@ -151,15 +206,27 @@ function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy }) {
             </Link>
             <ChevronRight size={12} className="text-gray-300" />
             <Link href={`/${tipo}`} className="hover:text-[#6C3BFF] transition-colors capitalize">{displayTipo}</Link>
+
             {slugs.map((slug, idx) => {
               const href = `/${tipo}/categoria/${slugs.slice(0, idx + 1).join('/')}`;
               const isLast = idx === slugs.length - 1;
+              // Intentar obtener nombre desde la estructura estática
+              let nombreMostrado = getNombreFromSlug(slug);
+              if (categoriaInfo && idx === 0) {
+                // Si es la categoría principal, usar el nombre real
+                nombreMostrado = categoriaInfo.nombre || nombreMostrado;
+              }
+              if (categoriaInfo?.subcategorias && idx === 1) {
+                // Buscar subcategoría
+                const sub = categoriaInfo.subcategorias.find(s => s.slug === slug);
+                if (sub) nombreMostrado = sub.nombre;
+              }
               return (
                 <span key={idx} className="flex items-center gap-1.5">
                   <ChevronRight size={12} className="text-gray-300" />
                   {isLast
-                    ? <span className="text-gray-600 font-medium">{getNombreFromSlug(slug)}</span>
-                    : <Link href={href} className="hover:text-[#6C3BFF] transition-colors">{getNombreFromSlug(slug)}</Link>
+                    ? <span className="text-gray-600 font-medium">{nombreMostrado}</span>
+                    : <Link href={href} className="hover:text-[#6C3BFF] transition-colors">{nombreMostrado}</Link>
                   }
                 </span>
               );
@@ -179,6 +246,7 @@ function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy }) {
                 <option value="newest">Más nuevos</option>
                 <option value="price_asc">Precio: menor a mayor</option>
                 <option value="price_desc">Precio: mayor a menor</option>
+                <option value="popular">Más populares</option>
               </select>
               <ArrowUpDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
@@ -189,29 +257,48 @@ function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy }) {
   );
 }
 
-// ── Filtros laterales ─────────────────────────────────────────────────────────
-function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll }) {
-  const [expanded, setExpanded] = useState({ electrodomesticos: true, electronica: true, hogar: true, cocina: true, instrumentos: true });
+// ── Filtros laterales (dinámicos desde CATEGORIAS) ──────────────────────────
+function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll, items, categoriaSlug }) {
+  const [expanded, setExpanded] = useState({});
+
+  // Inicializar expandidos dinámicamente
+  useEffect(() => {
+    const secciones = getFiltroSecciones(tipo);
+    const initial = {};
+    secciones.forEach((sec, idx) => {
+      initial[sec.id] = idx === 0; // Solo la primera abierta por defecto
+    });
+    setExpanded(initial);
+  }, [tipo]);
 
   const toggle = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
-  const sections = tipo === 'productos'
-    ? [
-        { id: 'electrodomesticos', title: 'Electrodomésticos', items: ['Refrigeradores', 'Lavadoras', 'Secadoras', 'Microondas', 'Estufas', 'Hornos'] },
-        { id: 'electronica', title: 'Electrónica', items: ['Celulares', 'Computadoras', 'Televisores', 'Consolas', 'Tablets'] },
-        { id: 'hogar', title: 'Hogar', items: ['Muebles', 'Decoración', 'Textiles', 'Iluminación', 'Organización'] },
-        { id: 'cocina', title: 'Cocina', items: ['Utensilios', 'Vajilla', 'Cubiertos', 'Electrodomésticos de Cocina'] },
-      ]
-    : tipo === 'instrumentos'
-    ? [{ id: 'instrumentos', title: 'Instrumentos musicales', items: ['Guitarras', 'Bajos', 'Violines', 'Pianos', 'Baterías', 'Teclados'] }]
-    : tipo === 'servicios'
-    ? [
-        { id: 'reparaciones', title: 'Reparaciones', items: ['Plomería', 'Electricidad', 'Carpintería', 'Albañilería', 'Pintura', 'Jardinería'] },
-        { id: 'educacion', title: 'Educación', items: ['Clases Particulares', 'Tutorías', 'Cursos Online', 'Idiomas', 'Música', 'Artes'] },
-      ]
-    : [];
+  // Obtener secciones para el tipo actual desde la estructura estática
+  const secciones = useMemo(() => getFiltroSecciones(tipo), [tipo]);
+
+  // Calcular contadores por categoría/subcategoría
+  const counts = useMemo(() => {
+    const countsMap = {};
+    if (!items) return countsMap;
+    items.forEach(item => {
+      const cat = item.categoria?.trim() || '';
+      const sub = item.subcategoria?.trim() || '';
+      if (cat) countsMap[cat] = (countsMap[cat] || 0) + 1;
+      if (sub) countsMap[sub] = (countsMap[sub] || 0) + 1;
+    });
+    return countsMap;
+  }, [items]);
 
   const hasActiveFilters = Object.values(activeFilters).some(arr => arr?.length > 0);
+
+  // Si no hay secciones, mostrar mensaje
+  if (secciones.length === 0) {
+    return (
+      <div className="w-72 shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-24 p-4">
+        <p className="text-sm text-gray-400 text-center">No hay filtros disponibles</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-72 shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-24">
@@ -227,7 +314,7 @@ function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll }) {
       </div>
 
       <div className="p-4 space-y-1">
-        {sections.map((section) => (
+        {secciones.map((section) => (
           <div key={section.id} className="border-b border-gray-50 pb-3 last:border-0">
             <button
               onClick={() => toggle(section.id)}
@@ -236,26 +323,35 @@ function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll }) {
               <span className="text-xs font-bold text-gray-600 uppercase tracking-wide group-hover:text-[#6C3BFF] transition-colors">
                 {section.title}
               </span>
-              {expanded[section.id]
-                ? <Minus size={13} className="text-gray-400" />
-                : <Plus size={13} className="text-gray-400" />}
+              <span className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                  {section.categories.reduce((acc, cat) => acc + (counts[cat.name] || 0), 0)}
+                </span>
+                {expanded[section.id]
+                  ? <Minus size={13} className="text-gray-400" />
+                  : <Plus size={13} className="text-gray-400" />}
+              </span>
             </button>
 
             {expanded[section.id] && (
               <div className="space-y-1.5 pl-1 pt-1">
-                {section.items.map((item) => {
-                  const isActive = activeFilters[section.id]?.includes(item);
+                {section.categories.map((cat) => {
+                  const isActive = activeFilters[section.id]?.includes(cat.name);
+                  const count = counts[cat.name] || 0;
+                  // Si no hay items en esta categoría, no mostrarla (opcional)
+                  if (count === 0) return null;
                   return (
-                    <label key={item} className="flex items-center gap-2.5 cursor-pointer group">
+                    <label key={cat.name} className="flex items-center gap-2.5 cursor-pointer group">
                       <input
                         type="checkbox"
                         checked={isActive}
-                        onChange={(e) => onFilterChange(section.id, item, e.target.checked)}
+                        onChange={(e) => onFilterChange(section.id, cat.name, e.target.checked)}
                         className="w-3.5 h-3.5 accent-[#6C3BFF] rounded"
                       />
                       <span className={`text-sm transition-colors ${isActive ? 'text-[#6C3BFF] font-medium' : 'text-gray-600 group-hover:text-[#6C3BFF]'}`}>
-                        {item}
+                        {cat.name}
                       </span>
+                      <span className="text-xs text-gray-400 ml-auto">{count}</span>
                     </label>
                   );
                 })}
@@ -278,7 +374,7 @@ function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll }) {
   );
 }
 
-// ── ProductCard ───────────────────────────────────────────────────────────────
+// ── ProductCard (sin cambios, pero añadimos soporte para contador de favoritos) ──
 function ProductCard({ item, tipo, onSelect }) {
   const esTanda = tipo === 'tandas';
   const esServicio = tipo === 'servicios';
@@ -294,6 +390,7 @@ function ProductCard({ item, tipo, onSelect }) {
               src={item.imagen}
               alt={item.nombre}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              loading="lazy"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
@@ -412,8 +509,8 @@ function ProductCard({ item, tipo, onSelect }) {
 export default function CategoriaPage() {
   const router = useRouter();
   const { tipo, slug = [] } = router.query;
-  const categoria = slug[0];
-  const subcategoria = slug[1];
+  const categoriaSlug = slug[0];
+  const subcategoriaSlug = slug[1];
 
   const [items, setItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
@@ -424,37 +521,60 @@ export default function CategoriaPage() {
   const [sortBy, setSortBy] = useState('relevance');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
+  const [categoriaInfo, setCategoriaInfo] = useState(null);
 
+  // ============================================================
+  // 1. CARGAR ITEMS (productos, tandas, etc.)
+  // ============================================================
   useEffect(() => {
     const cargarItems = async () => {
       try {
         setLoading(true);
-        setCategoriaNombre(getNombreFromSlug(categoria));
-        setSubcategoriaNombre(getNombreFromSlug(subcategoria));
         const busqueda = router.query.busqueda;
+
+        // Obtener información de categoría desde estructura estática
+        let catInfo = null;
+        if (categoriaSlug) {
+          const staticInfo = getCategoriaInfoFromStatic(categoriaSlug);
+          if (staticInfo) {
+            catInfo = staticInfo;
+            // Obtener subcategorías para el breadcrumb
+            if (tipo) {
+              const subs = getSubcategoriasFromStatic(tipo);
+              catInfo.subcategorias = subs;
+            }
+          }
+        }
+        setCategoriaInfo(catInfo);
+        setCategoriaNombre(catInfo?.nombre || getNombreFromSlug(categoriaSlug));
+        setSubcategoriaNombre(getNombreFromSlug(subcategoriaSlug));
+
         let records = [];
         if (tipo === 'tandas') {
-          records = await pb.collection('tandas').getFullList({ filter: 'estado = "abierta"', sort: '-created' });
+          records = await pb.collection('tandas').getFullList({
+            filter: 'estado = "abierta"',
+            sort: '-created'
+          });
         } else {
           let filter = 'activo = true';
           if (busqueda?.trim()) {
-            filter += ` && (nombre ~ "${busqueda.trim()}" || descripcion ~ "${busqueda.trim()}" || sku ~ "${busqueda.trim()}")`;
+            const term = busqueda.trim();
+            filter += ` && (nombre ~ "${term}" || descripcion ~ "${term}" || sku ~ "${term}")`;
+          }
+          // Si hay categoría específica, filtrar por categoría (usando el nombre o slug)
+          if (categoriaSlug && categoriaSlug !== 'todos') {
+            const catName = catInfo?.nombre || getNombreFromSlug(categoriaSlug);
+            if (catName) {
+              // Buscar en campo categoria (texto) o en categoriaId (relación)
+              filter += ` && (categoria ~ "${catName}" || categoriaId != "")`;
+            }
           }
           records = await pb.collection('products').getFullList({ filter, sort: '-created' });
         }
-        setItems(records.map(item => ({
-          id: item.id, nombre: item.nombre || 'Sin nombre', descripcion: item.descripcion || 'Sin descripción',
-          precio: item.precio || 0, enganche: item.enganche || 0, paga: item.pagoSemanal || 0,
-          categoria: item.categoria || '', subcategoria: item.subcategoria || '',
-          imagen: item.imagen ? pb.files.getURL(item, item.imagen) : null,
-          semanas: item.semanas || 12, agotado: item.stock === 0, nuevo: item.nuevo || false,
-          sku: item.sku || item.id.substring(0, 6).toUpperCase(), created: item.created,
-          // tandas fields
-          montoTotal: item.montoTotal || item.monto || 0, montoCuota: item.montoCuota || 0,
-          totalMiembros: item.cupoMaximo || 0, frecuencia: item.frecuencia || 'semanal',
-          diaCobro: item.diaPago || 'Lunes', cuotaGasolina: item.gasFee || 25,
-          estado: item.estado, nivelRequerido: item.nivelRequerido || 0
-        })));
+
+        // Normalizar items
+        const itemsData = records.map(item => normalizeItem(item, tipo));
+        setItems(itemsData);
       } catch (error) {
         console.error('Error cargando items:', error);
       } finally {
@@ -462,47 +582,79 @@ export default function CategoriaPage() {
       }
     };
     if (tipo) cargarItems();
-  }, [tipo, categoria, router.query.busqueda]);
+  }, [tipo, categoriaSlug, router.query.busqueda]);
 
-  useEffect(() => {
-    if (items.length > 0) {
-      let filtered = filterItems(items, tipo, categoria, subcategoria, activeFilters);
-      const busqueda = router.query.busqueda;
-      if (busqueda?.trim()) {
-        const t = busqueda.trim().toLowerCase();
-        filtered = filtered.filter(item =>
-          (item.nombre || '').toLowerCase().includes(t) ||
-          (item.descripcion || '').toLowerCase().includes(t) ||
-          (item.sku || '').toLowerCase().includes(t) ||
-          (item.subcategoria || '').toLowerCase().includes(t) ||
-          (item.categoria || '').toLowerCase().includes(t)
-        );
-      }
-      if (sortBy === 'price_asc') filtered.sort((a, b) => a.precio - b.precio);
-      else if (sortBy === 'price_desc') filtered.sort((a, b) => b.precio - a.precio);
-      else if (sortBy === 'newest') filtered.sort((a, b) => new Date(b.created) - new Date(a.created));
-      setFilteredItems(filtered);
-      setCurrentPage(1);
+  // ============================================================
+  // 2. FILTRAR Y ORDENAR (con useMemo para optimizar)
+  // ============================================================
+  const itemsFiltrados = useMemo(() => {
+    if (items.length === 0) return [];
+
+    let filtered = filterItems(items, tipo, categoriaSlug, subcategoriaSlug, activeFilters);
+
+    // Búsqueda por texto (si viene en query)
+    const busqueda = router.query.busqueda;
+    if (busqueda?.trim()) {
+      const t = busqueda.trim().toLowerCase();
+      filtered = filtered.filter(item =>
+        (item.nombre || '').toLowerCase().includes(t) ||
+        (item.descripcion || '').toLowerCase().includes(t) ||
+        (item.sku || '').toLowerCase().includes(t) ||
+        (item.subcategoria || '').toLowerCase().includes(t) ||
+        (item.categoria || '').toLowerCase().includes(t)
+      );
     }
-  }, [tipo, categoria, subcategoria, items, activeFilters, sortBy, router.query.busqueda]);
 
-  const handleFilterChange = (section, item, isChecked) => {
+    // Ordenar
+    if (sortBy === 'price_asc') filtered.sort((a, b) => a.precio - b.precio);
+    else if (sortBy === 'price_desc') filtered.sort((a, b) => b.precio - a.precio);
+    else if (sortBy === 'newest') filtered.sort((a, b) => new Date(b.created) - new Date(a.created));
+    else if (sortBy === 'popular') filtered.sort((a, b) => (b.visitas || 0) - (a.visitas || 0));
+
+    return filtered;
+  }, [items, tipo, categoriaSlug, subcategoriaSlug, activeFilters, sortBy, router.query.busqueda]);
+
+  // Actualizar filteredItems cuando cambie itemsFiltrados
+  useEffect(() => {
+    setFilteredItems(itemsFiltrados);
+    setCurrentPage(1);
+  }, [itemsFiltrados]);
+
+  // ============================================================
+  // 3. MANEJO DE FILTROS Y PAGINACIÓN
+  // ============================================================
+  const handleFilterChange = useCallback((section, item, isChecked) => {
     setActiveFilters(prev => {
       const n = { ...prev };
-      if (isChecked) { if (!n[section]) n[section] = []; if (!n[section].includes(item)) n[section].push(item); }
-      else { if (n[section]) { n[section] = n[section].filter(i => i !== item); if (!n[section].length) delete n[section]; } }
+      if (isChecked) {
+        if (!n[section]) n[section] = [];
+        if (!n[section].includes(item)) n[section].push(item);
+      } else {
+        if (n[section]) {
+          n[section] = n[section].filter(i => i !== item);
+          if (!n[section].length) delete n[section];
+        }
+      }
       return n;
     });
-  };
+  }, []);
+
+  const handleClearAllFilters = useCallback(() => {
+    setActiveFilters({});
+  }, []);
 
   const handleSelect = (itemId) => router.push(`/${tipo}/solicitar/${itemId}`);
 
   const paginatedItems = filteredItems.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+
   const esServicio = tipo === 'servicios';
   const esInstrumento = tipo === 'instrumentos';
   const tipoLabel = esServicio ? 'servicios' : esInstrumento ? 'instrumentos' : 'productos';
 
+  // ============================================================
+  // 4. ESTADOS DE CARGA Y ERROR
+  // ============================================================
   if (loading) {
     return (
       <CategoryLayout>
@@ -513,32 +665,45 @@ export default function CategoriaPage() {
     );
   }
 
+  // ============================================================
+  // 5. RENDERIZADO PRINCIPAL
+  // ============================================================
   return (
     <>
       <Head>
         <title>{subcategoriaNombre || categoriaNombre || 'Categoría'} | MarketDesliz</title>
+        <meta name="description" content={`Explora ${tipoLabel} en ${categoriaNombre || 'categoría'}`} />
       </Head>
 
       <CategoryLayout>
         <div className="pt-20 pb-10">
 
           {/* Breadcrumb */}
-          <Breadcrumb tipo={tipo} slugs={slug} itemCount={filteredItems.length} sortBy={sortBy} setSortBy={setSortBy} />
+          <Breadcrumb
+            tipo={tipo}
+            slugs={slug}
+            itemCount={filteredItems.length}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            categoriaInfo={categoriaInfo}
+          />
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-7">
 
-            {/* Sidebar */}
+            {/* Sidebar de filtros (dinámico) */}
             <CategoryFilters
               onFilterChange={handleFilterChange}
               activeFilters={activeFilters}
               tipo={tipo}
-              onClearAll={() => setActiveFilters({})}
+              onClearAll={handleClearAllFilters}
+              items={items}
+              categoriaSlug={categoriaSlug}
             />
 
             {/* Resultados */}
             <div className="flex-1 min-w-0">
 
-              {/* Filtros activos */}
+              {/* Filtros activos (badges) */}
               {Object.values(activeFilters).some(a => a?.length > 0) && (
                 <div className="flex flex-wrap gap-2 mb-4">
                   {Object.entries(activeFilters).flatMap(([, arr]) =>
@@ -551,11 +716,13 @@ export default function CategoriaPage() {
                             if (section) handleFilterChange(section, item, false);
                           }}
                           className="hover:text-[#5b2ee6]"
-                        >×</button>
+                        >
+                          <X size={12} />
+                        </button>
                       </span>
                     ))
                   )}
-                  <button onClick={() => setActiveFilters({})} className="text-xs text-gray-400 hover:text-gray-600 px-2">
+                  <button onClick={handleClearAllFilters} className="text-xs text-gray-400 hover:text-gray-600 px-2">
                     Limpiar todo
                   </button>
                 </div>

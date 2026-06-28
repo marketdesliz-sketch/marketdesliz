@@ -13,8 +13,12 @@ import pb from '../../lib/pocketbase';
 import { getClientKYC } from '../../lib/kycService';
 import { getClientTandas } from '../../lib/tandasService';
 import { getEstadisticasCliente } from '../../lib/nivelClienteService';
-import { getClientAuthMethods } from '../../lib/accountService';
+import { getClientAuthMethods } from '../../lib/clientsService';
 import ModalCompletarDatos from '../../components/ModalCompletarDatos';
+import { GoogleLogin } from '@react-oauth/google';
+import toast from 'react-hot-toast';
+import { parseJwt, addProviderToUser } from '../../lib/authService';
+
 
 const formatMoney = (amount) => {
   if (!amount) return '$0';
@@ -69,11 +73,15 @@ export default function PerfilPage() {
   const [showModalCompletar, setShowModalCompletar] = useState(false);
   const [userIdCompletar, setUserIdCompletar] = useState(null);
 
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
+  const [googleLinking, setGoogleLinking] = useState(false);
+
   const [formData, setFormData] = useState({
     nombre: '', telefonoAlternativo: '', email: '',
     direccionCalle: '', direccionNumero: '', direccionInterior: '',
-    direccionColonia: '', direccionMunicipio: '', direccionCiudad: '',
-    direccionEstado: '', direccionCp: '', direccionReferencias: '',
+    direccionEstado: '', direccionMunicipio: '', direccionLocalidad: '', direccionSector: '', direccionCp: '',
+    direccionReferencias: '',
     diaPago: 'lunes'
   });
 
@@ -106,10 +114,10 @@ export default function PerfilPage() {
         direccionCalle: clientRecord.direccionCalle || '',
         direccionNumero: clientRecord.direccionNumero || '',
         direccionInterior: clientRecord.direccionInterior || '',
-        direccionColonia: clientRecord.direccionColonia || '',
-        direccionMunicipio: clientRecord.direccionMunicipio || '',
-        direccionCiudad: clientRecord.direccionCiudad || '',
         direccionEstado: clientRecord.direccionEstado || '',
+        direccionMunicipio: clientRecord.direccionMunicipio || '',
+        direccionLocalidad: clientRecord.direccionLocalidad || '',
+        direccionSector: clientRecord.direccionSector || '',
         direccionCp: clientRecord.direccionCp || '',
         direccionReferencias: clientRecord.direccionReferencias || '',
         diaPago: clientRecord.diaPago || 'lunes'
@@ -170,6 +178,19 @@ export default function PerfilPage() {
     catch (error) { console.error('Error cargando métodos de autenticación:', error); }
   };
 
+  // ─── Recargar todos los datos del cliente ────────────────────────────
+  const recargarTodo = async (userId) => {
+    if (!userId) return;
+    await Promise.all([
+      cargarDatos(userId),
+      cargarClientData(userId),
+      cargarKYC(userId),
+      cargarTandas(userId),
+      cargarNivel(userId),
+      cargarAuthMethods(userId)
+    ]);
+  };
+
   const handleFotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -208,11 +229,16 @@ export default function PerfilPage() {
       });
       const clientUpdateData = {
         telefonoAlternativo: formData.telefonoAlternativo,
-        direccionCalle: formData.direccionCalle, direccionNumero: formData.direccionNumero,
-        direccionInterior: formData.direccionInterior, direccionColonia: formData.direccionColonia,
-        direccionMunicipio: formData.direccionMunicipio, direccionCiudad: formData.direccionCiudad,
-        direccionEstado: formData.direccionEstado, direccionCp: formData.direccionCp,
-        direccionReferencias: formData.direccionReferencias, diaPago: formData.diaPago,
+        direccionCalle: formData.direccionCalle,
+        direccionNumero: formData.direccionNumero,
+        direccionInterior: formData.direccionInterior,
+        direccionEstado: formData.direccionEstado,
+        direccionMunicipio: formData.direccionMunicipio,
+        direccionLocalidad: formData.direccionLocalidad,
+        direccionSector: formData.direccionSector,
+        direccionCp: formData.direccionCp,
+        direccionReferencias: formData.direccionReferencias,
+        diaPago: formData.diaPago,
         datosCompletos: true
       };
       if (clientData) {
@@ -228,8 +254,9 @@ export default function PerfilPage() {
       setCliente(updatedUser);
       setFormData(prev => ({ ...prev, nombre: updatedUser.nombre || '', email: updatedUser.email || '' }));
       setFotoFile(null); setFotoPreview(null); setEliminarFoto(false); setIsEditing(false);
+      await recargarTodo(cliente.id);
       setShowSuccessModal(true);
-      setTimeout(() => { setShowSuccessModal(false); cargarDatos(cliente.id); cargarClientData(cliente.id); }, 2000);
+      setTimeout(() => setShowSuccessModal(false), 2000);
     } catch (error) {
       console.error('❌ Error detallado:', error);
       let mensajes = [];
@@ -242,12 +269,75 @@ export default function PerfilPage() {
 
   const handleLogout = () => { pb.authStore.clear(); router.push('/'); };
 
-  const handleDatosCompletados = () => {
+  const handleDatosCompletados = async () => {
     setShowModalCompletar(false);
     localStorage.removeItem('primerIngreso');
     localStorage.removeItem('userIdCompletarDatos');
-    cargarDatos(cliente?.id);
-    cargarClientData(cliente?.id);
+
+    // ✅ REFRESCAR EL ESTADO CLIENTE DESDE AUTHSTORE
+    const currentUser = pb.authStore.model;
+    if (currentUser) {
+      setCliente(currentUser);
+      // Actualizar también el formulario de edición con los nuevos datos
+      setFormData(prev => ({
+        ...prev,
+        nombre: currentUser.nombre || '',
+        email: currentUser.email || '',
+      }));
+    };
+
+
+    // Recargar datos relacionados (dirección, órdenes, etc.)
+    const userId = currentUser?.id || cliente?.id;
+    if (userId) {
+      await recargarTodo(userId);
+    }
+  }
+
+
+
+  const handleAddPhone = async () => {
+    const cleanPhone = phoneInput.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      toast.error('Ingresa un número válido de 10 dígitos');
+      return;
+    };
+
+    try {
+      // ✅ VERIFICAR QUE EL TELÉFONO NO ESTÉ EN USO POR OTRO USUARIO
+      const phoneRes = await fetch('/api/get-user-by-phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telefono: cleanPhone, excludeUserId: cliente.id })
+      });
+      const phoneData = await phoneRes.json();
+      if (phoneData.exists && phoneData.user.id !== cliente.id) {
+        toast.error('Este número de teléfono ya está registrado por otro usuario');
+        return;
+      }
+
+      // 1. Actualizar teléfono en users
+      await fetch('/api/update-user-phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: cliente.id, phone: cleanPhone })
+      });
+      // 2. Agregar provider phone
+      await addProviderToUser(cliente.id, {
+        provider: 'phone',
+        telefono: cleanPhone
+      });
+      // 3. Actualizar cliente y clientData
+      const updatedUser = await pb.collection('users').getOne(cliente.id);
+      setCliente(updatedUser);
+      cargarClientData(cliente.id);
+      cargarAuthMethods(cliente.id);
+      setShowPhoneModal(false);
+      toast.success('Número de teléfono agregado exitosamente');
+    } catch (error) {
+      console.error('Error agregando teléfono:', error);
+      toast.error('Error al agregar el número de teléfono');
+    }
   };
 
   const getKYCStatusInfo = () => {
@@ -350,10 +440,10 @@ export default function PerfilPage() {
                     <span
                       key={method.id}  // ← Usamos el ID único del registro en user_providers
                       className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${method.provider === 'google'
-                          ? 'bg-red-50 text-red-600'
-                          : method.provider === 'phone'
-                            ? 'bg-[#10b981]/10 text-[#10b981]'
-                            : 'bg-blue-50 text-blue-600'
+                        ? 'bg-red-50 text-red-600'
+                        : method.provider === 'phone'
+                          ? 'bg-[#10b981]/10 text-[#10b981]'
+                          : 'bg-blue-50 text-blue-600'
                         }`}
                     >
                       {method.provider === 'google' && <>Google {method.isPrimary && '(principal)'}</>}
@@ -365,6 +455,66 @@ export default function PerfilPage() {
               </div>
             )}
           </div>
+
+          {/* ── AGREGAR TELÉFONO (si no tiene) ── */}
+          {cliente && !cliente.telefono && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-4">
+              <p className="text-sm text-yellow-700 mb-2 flex items-center gap-2">
+                📱 Aún no has registrado un número de teléfono. Esto te permitirá recibir notificaciones y ser contactado por el cobrador.
+              </p>
+              <button
+                onClick={() => setShowPhoneModal(true)}
+                className="bg-[#6C3BFF] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#5b2ee6] transition"
+              >
+                Agregar número de teléfono
+              </button>
+            </div>
+          )}
+
+          {/* ── VINCULAR GOOGLE (si no tiene) ── */}
+          {authMethods && !authMethods.hasGoogle && (
+            <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+              <p className="text-sm text-gray-600 mb-3">
+                🔗 Vincula tu cuenta de Google para iniciar sesión más rápido.
+              </p>
+              <GoogleLogin
+                onSuccess={async (response) => {
+                  setGoogleLinking(true);
+                  try {
+                    const decoded = parseJwt(response.credential);
+                    await addProviderToUser(cliente.id, {
+                      provider: 'google',
+                      providerId: decoded.sub,
+                      email: decoded.email
+                    });
+                    toast.success('Cuenta de Google vinculada exitosamente');
+                    cargarAuthMethods(cliente.id);
+                  } catch (err) {
+                    console.error('Error vinculando Google:', err);
+                    toast.error('Error al vincular Google');
+                  } finally {
+                    setGoogleLinking(false);
+                  }
+                }}
+                onError={() => {
+                  toast.error('Error al vincular Google');
+                  setGoogleLinking(false);
+                }}
+                theme="outline"
+                size="large"
+                text="continue_with"
+                shape="rectangular"
+                width={400}
+                disabled={googleLinking}
+              />
+              {googleLinking && (
+                <p className="text-center text-xs text-gray-400 mt-2">
+                  <span className="inline-block w-3 h-3 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin mr-1" />
+                  Vinculando...
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Modo edición */}
           {isEditing && (
@@ -430,20 +580,20 @@ export default function PerfilPage() {
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Dirección</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {[
-                  ['Calle', 'direccionCalle', 'Av. Insurgentes'],
+                  ['Calle', 'direccionCalle', 'Av. Independencia'],
                   ['Número exterior', 'direccionNumero', '123'],
                   ['Número interior', 'direccionInterior', 'B'],
-                  ['Colonia', 'direccionColonia', 'Condesa'],
-                  ['Municipio/Alcaldía', 'direccionMunicipio', 'Cuauhtémoc'],
-                  ['Ciudad', 'direccionCiudad', 'Ciudad de México'],
-                  ['Estado', 'direccionEstado', 'CDMX'],
-                  ['Código postal', 'direccionCp', '06100'],
+                  ['Estado *', 'direccionEstado', 'Veracruz'],
+                  ['Municipio *', 'direccionMunicipio', 'Perote'],
+                  ['Localidad/Pueblo *', 'direccionLocalidad', 'Juan Marcos'],
+                  ['Sector / Colonia *', 'direccionSector', 'Centro'],
+                  ['Código Postal', 'direccionCp', '91270'],
                 ].map(([label, field, placeholder]) => (
                   <div key={field}>
                     <FieldLabel>{label}</FieldLabel>
                     <Input
                       value={formData[field]}
-                      onChange={(e) => setFormData({ ...formData, [field]: field === 'direccionCp' ? e.target.value.slice(0, 5) : e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
                       placeholder={placeholder}
                     />
                   </div>
@@ -678,6 +828,43 @@ export default function PerfilPage() {
           userId={userIdCompletar}
           onDatosCompletados={handleDatosCompletados}
         />
+
+        {/* ── MODAL AGREGAR TELÉFONO ── */}
+        {showPhoneModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
+              <h3 className="text-lg font-bold text-center mb-2">Agregar número de teléfono</h3>
+              <p className="text-sm text-gray-500 text-center mb-4">
+                Ingresa tu número para recibir notificaciones y ser contactado por el cobrador.
+              </p>
+              <input
+                type="tel"
+                value={phoneInput}
+                onChange={(e) => setPhoneInput(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="55 1234 5678"
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-center text-lg mb-4 focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowPhoneModal(false);
+                    setPhoneInput('');
+                  }}
+                  className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold text-sm transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleAddPhone}
+                  className="flex-1 py-2.5 bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white rounded-xl font-semibold text-sm transition-colors"
+                >
+                  Agregar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </StoreLayout>
     </>
   );

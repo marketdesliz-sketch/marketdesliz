@@ -42,31 +42,47 @@ async function findUserByPhone(telefono, excludeUserId = null) {
 }
 
 // ============================
-// AGREGAR PROVIDER A USUARIO
+// AGREGAR PROVIDER A USUARIO (VERSIÓN CORREGIDA - SIN DUPLICADOS)
 // ============================
 export async function addProviderToUser(userId, providerData) {
   try {
     // Para Google, verificar si ya existe un provider con el mismo providerId
     if (providerData.provider === 'google' && providerData.providerId) {
-      const existingByProviderId = await pb.collection('user_providers').getFirstListItem(
-        `provider = "google" && providerId = "${providerData.providerId}"`
-      ).catch(() => null);
+      let existingByProviderId = null;
+      try {
+        existingByProviderId = await pb.collection('user_providers').getFirstListItem(
+          `provider = "google" && providerId = "${providerData.providerId}"`
+        );
+      } catch (e) {
+        // No existe, lo dejamos null
+      }
 
       if (existingByProviderId) {
-        // Si el provider ya existe pero pertenece a otro usuario, actualizar userId
-        if (existingByProviderId.userId !== userId) {
-          console.log(`🔄 Moviendo provider Google de ${existingByProviderId.userId} a ${userId}`);
-          await pb.collection('user_providers').update(existingByProviderId.id, {
-            userId: userId,
-            isActive: true
-          });
-        } else {
-          // Ya existe para este usuario, solo activar
-          await pb.collection('user_providers').update(existingByProviderId.id, {
-            isActive: true
-          });
+        // Verificar que el registro exista realmente antes de actualizar
+        let existe = true;
+        try {
+          await pb.collection('user_providers').getOne(existingByProviderId.id);
+        } catch (e) {
+          existe = false;
+          console.warn('⚠️ El provider encontrado no existe en la BD, se creará uno nuevo.');
         }
-        return existingByProviderId;
+
+        if (existe) {
+          // Si el provider ya existe, actualizar userId y activarlo
+          if (existingByProviderId.userId !== userId) {
+            console.log(`🔄 Moviendo provider Google de ${existingByProviderId.userId || 'sin usuario'} a ${userId}`);
+            await pb.collection('user_providers').update(existingByProviderId.id, {
+              userId: userId,
+              isActive: true
+            });
+          } else {
+            // Ya existe para este usuario, solo activar
+            await pb.collection('user_providers').update(existingByProviderId.id, {
+              isActive: true
+            });
+          }
+          return existingByProviderId;
+        }
       }
     }
 
@@ -76,7 +92,6 @@ export async function addProviderToUser(userId, providerData) {
     ).catch(() => null);
 
     if (existing) {
-      // Si existe pero está inactivo, activarlo
       if (!existing.isActive) {
         await pb.collection('user_providers').update(existing.id, { isActive: true });
       }
@@ -178,11 +193,18 @@ export async function loginWithGoogle(credentialResponse) {
       console.log('✅ Usuario encontrado por Google ID:', result.user.id);
       const user = result.user;
 
+      // ✅ ACTUALIZAR EMAIL TEMPORAL SI EXISTE (SIEMPRE, ANTES DE CUALQUIER ACCIÓN)
+      if (user.email && user.email.startsWith('user_') && user.email.includes('@marketdesliz.com')) {
+        await pb.collection('users').update(user.id, { email: googleEmail });
+        user.email = googleEmail;
+        console.log(`📧 Email actualizado de temporal a: ${googleEmail}`);
+      }
+
       if (user.telefono && user.telefono !== '') {
         console.log('✅ Usuario con teléfono, login exitoso');
         const tempPassword = generarPasswordTemporal();
 
-        // ✅ USAR API ROUTE en lugar de pb.collection('users').update()
+        // ✅ USAR API ROUTE para actualizar contraseña
         const updateResponse = await fetch('/api/update-user-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -205,13 +227,32 @@ export async function loginWithGoogle(credentialResponse) {
         };
       }
 
+      // ✅ CASO SIN TELÉFONO: generar contraseña temporal y retornarla
       console.log('📱 Usuario sin teléfono, solicitar número');
+      const tempPassword = generarPasswordTemporal();
+
+      // ✅ USAR API ROUTE para actualizar la contraseña (necesaria para autenticar después)
+      const updateResponse = await fetch('/api/update-user-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          newPassword: tempPassword
+        })
+      });
+
+      if (!updateResponse.ok) {
+        const errorData = await updateResponse.json();
+        throw new Error(errorData.error || 'No se pudo actualizar la contraseña');
+      }
+
       return {
         success: false,
         needsPhone: true,
         userId: user.id,
         email: googleEmail,
-        nombre: googleName || user.nombre
+        nombre: googleName || user.nombre,
+        tempPassword: tempPassword
       };
     }
 
@@ -248,6 +289,13 @@ export async function loginWithGoogle(credentialResponse) {
           providerId: googleId,
           email: googleEmail
         });
+      }
+
+      // ✅ ACTUALIZAR EMAIL TEMPORAL AL REAL DE GOOGLE
+      if (existingUser.email && existingUser.email.startsWith('user_') && existingUser.email.includes('@marketdesliz.com')) {
+        await pb.collection('users').update(existingUser.id, { email: googleEmail });
+        existingUser.email = googleEmail; // actualizar la variable local
+        console.log(`📧 Email actualizado de temporal a: ${googleEmail}`);
       }
 
       if (existingUser.telefono && existingUser.telefono !== '') {
@@ -346,39 +394,47 @@ export async function loginWithGoogle(credentialResponse) {
 }
 
 // ============================
-// COMPLETAR REGISTRO CON TELÉFONO
+// COMPLETAR REGISTRO CON TELÉFONO (con skipPhone)
 // ============================
-export async function completeGoogleRegistration(userId, telefono, nombre = null, tempPassword = null) {
+export async function completeGoogleRegistration(userId, telefono, nombre = null, tempPassword = null, skipPhone = false) {
   try {
-    const cleanPhone = telefono.replace(/\D/g, '');
-    if (cleanPhone.length !== 10) {
-      throw new Error('El teléfono debe tener 10 dígitos');
+    let cleanPhone = null;
+    if (!skipPhone) {
+      cleanPhone = telefono.replace(/\D/g, '');
+      if (cleanPhone.length !== 10) {
+        throw new Error('El teléfono debe tener 10 dígitos');
+      }
     }
 
-    // 1. Verificar teléfono único (detecta conflicto con otra cuenta)
-    const existingPhoneUser = await findUserByPhone(cleanPhone, userId);
-    if (existingPhoneUser && existingPhoneUser.id !== userId) {
-      return {
-        success: false,
-        conflict: true,
-        existingUserId: existingPhoneUser.id,
-        existingEmail: existingPhoneUser.email,
-        existingNombre: existingPhoneUser.nombre,
-        phone: cleanPhone
-      };
+    // 1. Verificar teléfono único (solo si no se salta)
+    if (!skipPhone && cleanPhone) {
+      const existingPhoneUser = await findUserByPhone(cleanPhone, userId);
+      if (existingPhoneUser && existingPhoneUser.id !== userId) {
+        return {
+          success: false,
+          conflict: true,
+          existingUserId: existingPhoneUser.id,
+          existingEmail: existingPhoneUser.email,
+          existingNombre: existingPhoneUser.nombre,
+          phone: cleanPhone
+        };
+      }
     }
 
     // 2. Actualizar usuario
-    const updateData = { telefono: cleanPhone };
+    const updateData = {};
+    if (!skipPhone && cleanPhone) updateData.telefono = cleanPhone;
     if (nombre) updateData.nombre = nombre;
     const updatedUser = await pb.collection('users').update(userId, updateData);
     console.log('✅ Usuario actualizado');
 
-    // 3. Agregar provider phone
-    await addProviderToUser(userId, {
-      provider: 'phone',
-      telefono: cleanPhone
-    });
+    // 3. Agregar provider phone (solo si no se salta)
+    if (!skipPhone && cleanPhone) {
+      await addProviderToUser(userId, {
+        provider: 'phone',
+        telefono: cleanPhone
+      });
+    }
 
     // 4. Autenticar con la contraseña temporal
     if (!tempPassword) {
@@ -387,14 +443,14 @@ export async function completeGoogleRegistration(userId, telefono, nombre = null
     const authData = await pb.collection('users').authWithPassword(updatedUser.email, tempPassword);
     console.log('✅ Usuario autenticado');
 
-    // 5. Crear registro en clients si no existe
+    // 5. Crear/verificar registro en clients (sin requerir teléfono)
     try {
       await pb.collection('clients').getFirstListItem(`userId = "${userId}"`);
       console.log('✅ Clients ya existe');
     } catch (e) {
       await pb.collection('clients').create({
         userId: userId,
-        telefono: cleanPhone,
+        telefono: skipPhone ? null : cleanPhone,
         nombre: updatedUser.nombre,
         nivel: 0,
         productosComprados: 0,

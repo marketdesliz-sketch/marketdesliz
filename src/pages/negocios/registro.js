@@ -5,6 +5,12 @@ import Head from 'next/head';
 import Link from 'next/link';
 import StoreLayout from '../../layouts/StoreLayout';
 import pb from '../../lib/pocketbase';
+import {
+  getEstados,
+  getMunicipios,
+  getLocalidades,
+  getSectores
+} from '../../lib/negociosService';
 
 export default function RegistroNegocioPage() {
   const router = useRouter();
@@ -21,7 +27,24 @@ export default function RegistroNegocioPage() {
     telefono: '',
     whatsapp: '',
     horario: '',
-    ubicacion: ''
+    ubicacion: '',
+    // Nuevos campos
+    estadoId: '',
+    municipioId: '',
+    localidadId: '',
+    sectorId: '',
+    codigoPostal: '',
+    latitud: '',
+    longitud: '',
+    email: '',
+    sitioWeb: '',
+    facebook: '',
+    instagram: '',
+    tiktok: '',
+    servicios: '',
+    atencionWhatsapp: true,
+    citasPrevias: false,
+    domicilio: false
   });
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
@@ -29,6 +52,12 @@ export default function RegistroNegocioPage() {
   const [imagenesPreviews, setImagenesPreviews] = useState([]);
   const [saving, setSaving] = useState(false);
   const [user, setUser] = useState(null);
+
+  // Datos geográficos para los selects
+  const [estadosList, setEstadosList] = useState([]);
+  const [municipiosList, setMunicipiosList] = useState([]);
+  const [localidadesList, setLocalidadesList] = useState([]);
+  const [sectoresList, setSectoresList] = useState([]);
 
   // Verificar usuario autenticado
   useEffect(() => {
@@ -43,6 +72,36 @@ export default function RegistroNegocioPage() {
     const unsubscribe = pb.authStore.onChange(() => checkUser());
     return () => unsubscribe();
   }, [router]);
+
+  // Cargar datos geográficos iniciales
+  useEffect(() => {
+    getEstados().then(setEstadosList).catch(() => {});
+  }, []);
+
+  // Efectos para carga dinámica
+  useEffect(() => {
+    if (negocioData.estadoId) {
+      getMunicipios(negocioData.estadoId).then(setMunicipiosList).catch(() => setMunicipiosList([]));
+    } else {
+      setMunicipiosList([]);
+    }
+  }, [negocioData.estadoId]);
+
+  useEffect(() => {
+    if (negocioData.municipioId) {
+      getLocalidades(negocioData.municipioId).then(setLocalidadesList).catch(() => setLocalidadesList([]));
+    } else {
+      setLocalidadesList([]);
+    }
+  }, [negocioData.municipioId]);
+
+  useEffect(() => {
+    if (negocioData.localidadId) {
+      getSectores(negocioData.localidadId).then(setSectoresList).catch(() => setSectoresList([]));
+    } else {
+      setSectoresList([]);
+    }
+  }, [negocioData.localidadId]);
 
   // Categorías disponibles
   const categorias = [
@@ -69,7 +128,6 @@ export default function RegistroNegocioPage() {
     setError('');
 
     try {
-      // Buscar si el código existe en la colección de invitaciones
       const invitacion = await pb.collection('invitaciones_negocios').getFirstListItem(
         `codigo = "${codigo.toUpperCase()}" && usado = false`
       );
@@ -86,8 +144,8 @@ export default function RegistroNegocioPage() {
   };
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNegocioData({ ...negocioData, [name]: value });
+    const { name, value, type, checked } = e.target;
+    setNegocioData({ ...negocioData, [name]: type === 'checkbox' ? checked : value });
   };
 
   const handleLogoChange = (e) => {
@@ -129,34 +187,34 @@ export default function RegistroNegocioPage() {
     try {
       const formData = new FormData();
       
-      // Campos de texto
+      // Campos de texto (incluyendo los nuevos)
       Object.keys(negocioData).forEach(key => {
-        if (negocioData[key]) formData.append(key, negocioData[key]);
+        if (key !== 'logo' && key !== 'imagenes') {
+          const value = negocioData[key];
+          if (typeof value === 'boolean') {
+            formData.append(key, value ? 'true' : 'false');
+          } else if (value !== null && value !== undefined && value !== '') {
+            formData.append(key, value);
+          }
+        }
       });
       
       formData.append('activo', true);
       formData.append('orden', 0);
       formData.append('visitas', 0);
-      // ✅ ESTADO DE ACTIVACIÓN - pendiente hasta primera compra
       formData.append('estadoActivacion', 'pendiente_activacion');
       
-      // ✅ AGREGAR usuarioId del dueño del negocio
       if (user) {
         formData.append('usuarioId', user.id);
-        console.log('✅ Asignando negocio al usuario:', user.id);
       }
       
-      // Logo
       if (logoFile) formData.append('logo', logoFile);
       
-      // Imágenes adicionales
       imagenesFiles.forEach(file => formData.append('imagenes', file));
 
-      // Crear negocio
       const nuevoNegocio = await pb.collection('negocios').create(formData);
       console.log('✅ Negocio creado:', nuevoNegocio.id);
 
-      // Marcar código como usado
       await pb.collection('invitaciones_negocios').update(codigoValido.id, {
         usado: true,
         negocioId: nuevoNegocio.id,
@@ -175,7 +233,6 @@ export default function RegistroNegocioPage() {
     }
   };
 
-  // Si no hay usuario autenticado, mostrar mensaje de carga
   if (!user && step !== 'completado') {
     return (
       <StoreLayout>
@@ -267,179 +324,177 @@ export default function RegistroNegocioPage() {
                   )}
                 </div>
 
-                <div className="space-y-5">
-                  {/* Nombre */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nombre del negocio *
-                    </label>
-                    <input
-                      type="text"
-                      name="nombre"
-                      value={negocioData.nombre}
-                      onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500"
-                      placeholder="Ej: Ferretería El Martillo"
-                      required
-                    />
-                  </div>
-
-                  {/* Categoría */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Categoría *
-                    </label>
-                    <select
-                      name="categoria"
-                      value={negocioData.categoria}
-                      onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500"
-                      required
-                    >
-                      <option value="">Selecciona una categoría</option>
-                      {categorias.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Dirección */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Dirección *
-                    </label>
-                    <input
-                      type="text"
-                      name="direccion"
-                      value={negocioData.direccion}
-                      onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500"
-                      placeholder="Calle, número, colonia, ciudad"
-                      required
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Esta dirección aparecerá en Google Maps</p>
-                  </div>
-
-                  {/* Teléfono y WhatsApp */}
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-8">
+                  {/* ── Información básica ─────────────────── */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Información básica</h3>
+                    
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Teléfono
-                      </label>
-                      <input
-                        type="tel"
-                        name="telefono"
-                        value={negocioData.telefono}
-                        onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                        placeholder="55 1234 5678"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Los clientes podrán llamarte</p>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del negocio *</label>
+                      <input type="text" name="nombre" value={negocioData.nombre} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500" placeholder="Ej: Ferretería El Martillo" required />
                     </div>
+
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        WhatsApp
-                      </label>
-                      <input
-                        type="tel"
-                        name="whatsapp"
-                        value={negocioData.whatsapp}
-                        onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                        placeholder="521234567890"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Formato: 521234567890</p>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Categoría *</label>
+                      <select name="categoria" value={negocioData.categoria} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500" required>
+                        <option value="">Selecciona una categoría</option>
+                        {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Dirección *</label>
+                      <input type="text" name="direccion" value={negocioData.direccion} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500" placeholder="Calle, número, colonia, ciudad" required />
+                      <p className="text-xs text-gray-500 mt-1">Esta dirección aparecerá en Google Maps</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                        <input type="tel" name="telefono" value={negocioData.telefono} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="55 1234 5678" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label>
+                        <input type="tel" name="whatsapp" value={negocioData.whatsapp} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="521234567890" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Horario de atención</label>
+                      <input type="text" name="horario" value={negocioData.horario} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="Lun-Vie 9am-6pm, Sáb 9am-2pm" />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                      <textarea name="descripcion" value={negocioData.descripcion} onChange={handleInputChange} rows="3" className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="Breve descripción de tu negocio..." />
                     </div>
                   </div>
 
-                  {/* Horario */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Horario de atención
-                    </label>
-                    <input
-                      type="text"
-                      name="horario"
-                      value={negocioData.horario}
-                      onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                      placeholder="Lun-Vie 9am-6pm, Sáb 9am-2pm"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Los clientes sabrán cuándo encontrarte</p>
-                  </div>
-
-                  {/* Ubicación */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Ubicación (Google Maps)
-                    </label>
-                    <input
-                      type="text"
-                      name="ubicacion"
-                      value={negocioData.ubicacion}
-                      onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                      placeholder="Coordenadas o enlace de Google Maps"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Ej: 19.4326077,-99.133208</p>
-                  </div>
-
-                  {/* Descripción */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Descripción
-                    </label>
-                    <textarea
-                      name="descripcion"
-                      value={negocioData.descripcion}
-                      onChange={handleInputChange}
-                      rows="3"
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                      placeholder="Breve descripción de tu negocio..."
-                    />
-                  </div>
-
-                  {/* Logo */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Logo / Foto principal *
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleLogoChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                      required
-                    />
-                    {logoPreview && (
-                      <div className="mt-2">
-                        <p className="text-xs text-gray-500">Vista previa:</p>
-                        <img src={logoPreview} alt="Logo" className="w-24 h-24 object-cover rounded-lg mt-1" />
+                  {/* ── Ubicación geográfica ─────────────────── */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Ubicación (opcional)</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+                        <select name="estadoId" value={negocioData.estadoId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
+                          <option value="">Seleccionar estado</option>
+                          {estadosList.map(est => <option key={est.id} value={est.id}>{est.nombre}</option>)}
+                        </select>
                       </div>
-                    )}
-                    <p className="text-xs text-gray-500 mt-1">Recomendado: 500x500px, formato JPG o PNG</p>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Municipio</label>
+                        <select name="municipioId" value={negocioData.municipioId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
+                          <option value="">Seleccionar municipio</option>
+                          {municipiosList.map(mun => <option key={mun.id} value={mun.id}>{mun.nombre}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Localidad</label>
+                        <select name="localidadId" value={negocioData.localidadId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
+                          <option value="">Seleccionar localidad</option>
+                          {localidadesList.map(loc => <option key={loc.id} value={loc.id}>{loc.nombre}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Sector/Colonia</label>
+                        <select name="sectorId" value={negocioData.sectorId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
+                          <option value="">Seleccionar sector</option>
+                          {sectoresList.map(sec => <option key={sec.id} value={sec.id}>{sec.nombre}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Código Postal</label>
+                        <input type="text" name="codigoPostal" value={negocioData.codigoPostal} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="91000" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Latitud</label>
+                          <input type="number" step="any" name="latitud" value={negocioData.latitud} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="19.4326" />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Longitud</label>
+                          <input type="number" step="any" name="longitud" value={negocioData.longitud} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="-99.1332" />
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Imágenes adicionales */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Fotos de tu local
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleImagenesChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                    />
-                    {imagenesPreviews.length > 0 && (
-                      <div className="mt-2 flex gap-2 flex-wrap">
-                        {imagenesPreviews.map((preview, idx) => (
-                          <img key={idx} src={preview} alt={`Foto ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg" />
-                        ))}
+                  {/* ── Presencia en línea ─────────────────── */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Presencia en línea</h3>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+                      <input type="email" name="email" value={negocioData.email} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="correo@negocio.com" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Sitio Web</label>
+                        <input type="url" name="sitioWeb" value={negocioData.sitioWeb} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="https://www.minegocio.com" />
                       </div>
-                    )}
-                    <p className="text-xs text-gray-500 mt-1">Puedes subir varias fotos de tu negocio</p>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Facebook</label>
+                        <input type="text" name="facebook" value={negocioData.facebook} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="URL de Facebook" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Instagram</label>
+                        <input type="text" name="instagram" value={negocioData.instagram} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="URL de Instagram" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">TikTok</label>
+                        <input type="text" name="tiktok" value={negocioData.tiktok} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="URL de TikTok" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── Servicios ────────────────────────────── */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Servicios</h3>
+                    <div className="flex flex-wrap gap-4">
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" name="atencionWhatsapp" checked={negocioData.atencionWhatsapp} onChange={handleInputChange} className="w-4 h-4" />
+                        <span className="text-sm">Atención por WhatsApp</span>
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" name="citasPrevias" checked={negocioData.citasPrevias} onChange={handleInputChange} className="w-4 h-4" />
+                        <span className="text-sm">Requiere cita previa</span>
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" name="domicilio" checked={negocioData.domicilio} onChange={handleInputChange} className="w-4 h-4" />
+                        <span className="text-sm">Servicio a domicilio</span>
+                      </label>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Otros servicios (separados por coma)</label>
+                      <input type="text" name="servicios" value={negocioData.servicios} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="Estacionamiento, Wi-Fi, Pagos con tarjeta" />
+                    </div>
+                  </div>
+
+                  {/* ── Logo e imágenes ───────────────────────── */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Logo / Foto principal *</label>
+                      <input type="file" accept="image/*" onChange={handleLogoChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" required />
+                      {logoPreview && (
+                        <div className="mt-2">
+                          <p className="text-xs text-gray-500">Vista previa:</p>
+                          <img src={logoPreview} alt="Logo" className="w-24 h-24 object-cover rounded-lg mt-1" />
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">Recomendado: 500x500px, formato JPG o PNG</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Fotos de tu local</label>
+                      <input type="file" accept="image/*" multiple onChange={handleImagenesChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" />
+                      {imagenesPreviews.length > 0 && (
+                        <div className="mt-2 flex gap-2 flex-wrap">
+                          {imagenesPreviews.map((preview, idx) => (
+                            <img key={idx} src={preview} alt={`Foto ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg" />
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">Puedes subir varias fotos de tu negocio</p>
+                    </div>
                   </div>
 
                   {error && (
@@ -449,17 +504,10 @@ export default function RegistroNegocioPage() {
                   )}
 
                   <div className="flex gap-3">
-                    <button
-                      onClick={() => setStep('codigo')}
-                      className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-300 transition"
-                    >
+                    <button onClick={() => setStep('codigo')} className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-300 transition">
                       Atrás
                     </button>
-                    <button
-                      onClick={guardarNegocio}
-                      disabled={saving}
-                      className="flex-1 bg-[#6C3BFF] text-white py-2 rounded-lg font-bold hover:bg-purple-700 transition disabled:opacity-50"
-                    >
+                    <button onClick={guardarNegocio} disabled={saving} className="flex-1 bg-[#6C3BFF] text-white py-2 rounded-lg font-bold hover:bg-purple-700 transition disabled:opacity-50">
                       {saving ? 'Registrando...' : 'Registrar negocio'}
                     </button>
                   </div>
@@ -473,9 +521,7 @@ export default function RegistroNegocioPage() {
                   <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
                     <span className="text-4xl">🎉</span>
                   </div>
-                  <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                    ¡Registro completado!
-                  </h1>
+                  <h1 className="text-2xl font-bold text-gray-900 mb-2">¡Registro completado!</h1>
                   <p className="text-gray-500 mb-6">
                     Tu negocio ya está registrado en MarketDesliz. 
                     Aparecerás en la lista de negocios aliados.
@@ -499,24 +545,13 @@ export default function RegistroNegocioPage() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-3">
-                    <Link
-                      href="/negocios"
-                      className="bg-[#6C3BFF] text-white px-6 py-3 rounded-lg font-bold hover:bg-purple-700 transition"
-                    >
+                    <Link href="/negocios" className="bg-[#6C3BFF] text-white px-6 py-3 rounded-lg font-bold hover:bg-purple-700 transition">
                       Ver negocios aliados
                     </Link>
-                    <Link
-                      href="/negocios/notificaciones"
-                      className="bg-gray-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-700 transition"
-                    >
+                    <Link href="/negocios/notificaciones" className="bg-gray-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-700 transition">
                       🔔 Configurar notificaciones
                     </Link>
-                    <a
-                      href={`https://wa.me/522821414939?text=Hola,%20ya%20registr%C3%A9%20mi%20negocio%20${encodeURIComponent(negocioData.nombre)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-green-500 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-600 transition"
-                    >
+                    <a href={`https://wa.me/522821414939?text=Hola,%20ya%20registr%C3%A9%20mi%20negocio%20${encodeURIComponent(negocioData.nombre)}`} target="_blank" rel="noopener noreferrer" className="bg-green-500 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-600 transition">
                       📱 Contactar a MarketDesliz
                     </a>
                   </div>

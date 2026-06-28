@@ -1,26 +1,36 @@
 // src/components/ModalCompletarDatos.jsx
 import { useState, useEffect } from 'react';
 import pb from '../lib/pocketbase';
+import { User } from 'lucide-react';
 
 export default function ModalCompletarDatos({ isOpen, onClose, userId, onDatosCompletados }) {
-  const [formData, setFormData] = useState({
-    direccionCalle: '',
-    direccionNumero: '',
-    direccionInterior: '',
-    direccionColonia: '',
-    direccionMunicipio: '',
-    direccionCiudad: '',
-    direccionEstado: '',
-    direccionCp: '',
-    direccionReferencias: '',
-    telefonoAlternativo: '',
-    diaPago: 'lunes'
-  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  // Cargar datos existentes si ya hay algo guardado
+  // ── Estado del formulario ──
+  const [formData, setFormData] = useState({
+    nombre: '',
+    email: '',
+    telefonoAlternativo: '',
+    direccionCalle: '',
+    direccionNumero: '',
+    direccionInterior: '',
+    direccionEstado: '',
+    direccionMunicipio: '',
+    direccionLocalidad: '',
+    direccionSector: '',
+    direccionCp: '',
+    direccionReferencias: '',
+    diaPago: 'lunes',
+  });
+
+  // ── Estado para la foto ──
+  const [fotoFile, setFotoFile] = useState(null);
+  const [fotoPreview, setFotoPreview] = useState(null);
+  const [fotoActual, setFotoActual] = useState(null);
+
+  // ── Cargar datos existentes del usuario y cliente ──
   useEffect(() => {
     if (isOpen && userId) {
       cargarDatosExistentes();
@@ -29,76 +39,175 @@ export default function ModalCompletarDatos({ isOpen, onClose, userId, onDatosCo
 
   const cargarDatosExistentes = async () => {
     try {
-      const clientData = await pb.collection('clients').getFirstListItem(`userId = "${userId}"`);
-      if (clientData) {
-        setFormData({
-          direccionCalle: clientData.direccionCalle || '',
-          direccionNumero: clientData.direccionNumero || '',
-          direccionInterior: clientData.direccionInterior || '',
-          direccionColonia: clientData.direccionColonia || '',
-          direccionMunicipio: clientData.direccionMunicipio || '',
-          direccionCiudad: clientData.direccionCiudad || '',
-          direccionEstado: clientData.direccionEstado || '',
-          direccionCp: clientData.direccionCp || '',
-          direccionReferencias: clientData.direccionReferencias || '',
-          telefonoAlternativo: clientData.telefonoAlternativo || '',
-          diaPago: clientData.diaPago || 'lunes'
-        });
-        console.log('📝 Datos existentes cargados en el modal');
+      // Obtener datos del usuario
+      const user = await pb.collection('users').getOne(userId);
+      setFormData(prev => ({
+        ...prev,
+        nombre: user.nombre || '',
+        email: user.email || '',
+      }));
+      if (user.foto) {
+        const fotoUrl = pb.files.getURL(user, user.foto);
+        setFotoActual(fotoUrl);
       }
-    } catch (e) {
-      console.log('No hay datos previos, formulario vacío');
+
+      // Obtener datos del cliente
+      try {
+        const client = await pb.collection('clients').getFirstListItem(`userId = "${userId}"`);
+        setFormData(prev => ({
+          ...prev,
+          telefonoAlternativo: client.telefonoAlternativo || '',
+          direccionCalle: client.direccionCalle || '',
+          direccionNumero: client.direccionNumero || '',
+          direccionInterior: client.direccionInterior || '',
+          direccionEstado: client.direccionEstado || '',
+          direccionMunicipio: client.direccionMunicipio || '',
+          direccionLocalidad: client.direccionLocalidad || '',
+          direccionSector: client.direccionSector || '',
+          direccionCp: client.direccionCp || '',
+          direccionReferencias: client.direccionReferencias || '',
+          diaPago: client.diaPago || 'lunes',
+        }));
+      } catch (e) {
+        // No tiene datos en clients, usamos valores por defecto
+      }
+    } catch (error) {
+      console.error('Error cargando datos:', error);
     }
   };
 
+  // ── Manejar cambio de foto ──
+  const handleFotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setError('La foto no debe exceder los 2MB');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        setError('Solo se permiten archivos de imagen');
+        return;
+      }
+      setFotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setFotoPreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // ── Envío del formulario ──
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setSuccess(false);
 
+    // Validaciones (sin cambios)
+    if (!formData.nombre.trim()) {
+      setError('El nombre es requerido');
+      setLoading(false);
+      return;
+    }
+    if (!formData.direccionCalle.trim()) {
+      setError('La calle es requerida');
+      setLoading(false);
+      return;
+    }
+    if (!formData.direccionEstado.trim()) {
+      setError('El estado es requerido');
+      setLoading(false);
+      return;
+    }
+    if (!formData.direccionMunicipio.trim()) {
+      setError('El municipio es requerido');
+      setLoading(false);
+      return;
+    }
+    if (!formData.direccionLocalidad.trim()) {
+      setError('La localidad/pueblo es requerida');
+      setLoading(false);
+      return;
+    }
+    if (!formData.direccionSector.trim()) {
+      setError('El sector/colonia es requerido');
+      setLoading(false);
+      return;
+    }
+    if (!formData.direccionCp.trim()) {
+      setError('El código postal es requerido');
+      setLoading(false);
+      return;
+    }
+
     try {
-      // Verificar que campos requeridos estén llenos (solo los más importantes)
-      if (!formData.direccionCalle.trim()) {
-        throw new Error('La calle es requerida');
-      }
-      if (!formData.direccionColonia.trim()) {
-        throw new Error('La colonia es requerida');
-      }
-      if (!formData.direccionMunicipio.trim()) {
-        throw new Error('El municipio es requerido');
-      }
-      if (!formData.direccionEstado.trim()) {
-        throw new Error('El estado es requerido');
-      }
-      if (!formData.direccionCp.trim()) {
-        throw new Error('El código postal es requerido');
+      // 1. Actualizar usuario
+      const userUpdateData = {
+        nombre: formData.nombre,
+        email: formData.email,
+      };
+
+      if (fotoFile) {
+        const fd = new FormData();
+        fd.append('foto', fotoFile);
+        await pb.collection('users').update(userId, fd);
+        await pb.collection('users').update(userId, userUpdateData);
+      } else {
+        await pb.collection('users').update(userId, userUpdateData);
       }
 
-      // Obtener el registro del cliente
-      const clientData = await pb.collection('clients').getFirstListItem(`userId = "${userId}"`);
-      
-      // Actualizar con los datos del formulario
-      await pb.collection('clients').update(clientData.id, {
+      // ✅ ACTUALIZAR AUTHSTORE CON LOS DATOS NUEVOS
+      const updatedUser = await pb.collection('users').getOne(userId);
+      pb.authStore.save(pb.authStore.token, updatedUser);
+
+      // 2. Actualizar/crear clients
+      let clientData = null;
+      try {
+        clientData = await pb.collection('clients').getFirstListItem(`userId = "${userId}"`);
+      } catch (e) {
+        // No existe, se creará
+      }
+
+      const clientUpdateData = {
+        telefonoAlternativo: formData.telefonoAlternativo,
         direccionCalle: formData.direccionCalle,
         direccionNumero: formData.direccionNumero,
         direccionInterior: formData.direccionInterior,
-        direccionColonia: formData.direccionColonia,
-        direccionMunicipio: formData.direccionMunicipio,
-        direccionCiudad: formData.direccionCiudad,
         direccionEstado: formData.direccionEstado,
+        direccionMunicipio: formData.direccionMunicipio,
+        direccionLocalidad: formData.direccionLocalidad,
+        direccionSector: formData.direccionSector,
         direccionCp: formData.direccionCp,
         direccionReferencias: formData.direccionReferencias,
-        telefonoAlternativo: formData.telefonoAlternativo,
         diaPago: formData.diaPago,
         datosCompletos: true,
-        fechaCompletado: new Date().toISOString()
-      });
+      };
+
+      if (clientData) {
+        await pb.collection('clients').update(clientData.id, clientUpdateData);
+      } else {
+        await pb.collection('clients').create({
+          userId: userId,
+          ...clientUpdateData,
+          nivel: 0,
+          productosComprados: 0,
+          productosPagados: 0,
+          productosEnCurso: 0,
+          deudaActual: 0,
+          limiteDeuda: 5000,
+          estadoKyc: 'pendiente',
+          trustScore: 0,
+          totalGastado: 0,
+          fechaUltimaCompra: null,
+          aceptaTerminos: false,
+          documentosCompletos: false,
+        });
+      }
 
       setSuccess(true);
-      
-      // Esperar un momento para mostrar el éxito antes de cerrar
+
       setTimeout(() => {
+        localStorage.removeItem('primerIngreso');
+        localStorage.removeItem('userIdCompletarDatos');
         if (onDatosCompletados) {
           onDatosCompletados();
         }
@@ -114,7 +223,6 @@ export default function ModalCompletarDatos({ isOpen, onClose, userId, onDatosCo
   };
 
   const handleSkip = () => {
-    // Limpiar flags incluso si omite
     localStorage.removeItem('primerIngreso');
     localStorage.removeItem('userIdCompletarDatos');
     onClose();
@@ -125,18 +233,18 @@ export default function ModalCompletarDatos({ isOpen, onClose, userId, onDatosCo
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-modal">
-        
+
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex justify-between items-center rounded-t-2xl">
           <div>
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <span className="text-2xl">🎉</span> 
+              <span className="text-2xl">🎉</span>
               ¡Bienvenido a MarketDesliz!
             </h2>
             <p className="text-sm text-gray-500 mt-1">Completa tus datos para una mejor experiencia</p>
           </div>
-          <button 
-            onClick={handleSkip} 
+          <button
+            onClick={handleSkip}
             className="text-gray-400 hover:text-gray-600 transition-colors"
             aria-label="Cerrar"
           >
@@ -146,9 +254,8 @@ export default function ModalCompletarDatos({ isOpen, onClose, userId, onDatosCo
           </button>
         </div>
 
-        {/* Formulario */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Mensaje de éxito */}
+
           {success && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 animate-fadeIn">
               <div className="flex items-center gap-3">
@@ -161,7 +268,6 @@ export default function ModalCompletarDatos({ isOpen, onClose, userId, onDatosCo
             </div>
           )}
 
-          {/* Mensaje de error */}
           {error && !success && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex items-center gap-3">
@@ -174,10 +280,10 @@ export default function ModalCompletarDatos({ isOpen, onClose, userId, onDatosCo
             </div>
           )}
 
-          {/* Banner de bienvenida */}
-          <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-4 mb-4">
+          {/* Banner motivacional */}
+          <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-4">
             <p className="text-sm text-gray-700">
-              💡 <strong>¿Por qué necesitamos estos datos?</strong> Tu dirección nos ayuda a:
+              💡 <strong>¿Por qué necesitamos estos datos?</strong> Tu información nos ayuda a:
             </p>
             <ul className="text-xs text-gray-600 mt-2 space-y-1 ml-4">
               <li>✓ Coordinar entregas de productos</li>
@@ -186,119 +292,105 @@ export default function ModalCompletarDatos({ isOpen, onClose, userId, onDatosCo
             </ul>
           </div>
 
-          {/* Campos del formulario */}
+          {/* ── Foto de perfil ── */}
+          <div className="border-b border-gray-100 pb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Foto de perfil</label>
+            <div className="flex items-center gap-5">
+              <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+                {fotoPreview ? (
+                  <img src={fotoPreview} alt="Preview" className="w-full h-full object-cover" />
+                ) : fotoActual ? (
+                  <img src={fotoActual} alt="Foto actual" className="w-full h-full object-cover" />
+                ) : (
+                  <User size={24} className="text-gray-400" />
+                )}
+              </div>
+              <div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFotoChange}
+                  className="text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[#6C3BFF]/8 file:text-[#6C3BFF] hover:file:bg-[#6C3BFF]/15 cursor-pointer"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">JPG, PNG — máx. 2MB</p>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Campos del formulario ── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Calle <span className="text-red-500">*</span>
+                Nombre completo <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
-                value={formData.direccionCalle}
-                onChange={(e) => setFormData({...formData, direccionCalle: e.target.value})}
+                value={formData.nombre}
+                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
-                placeholder="Ej: Av. Insurgentes"
+                placeholder="Juan Pérez"
                 required
               />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Número exterior
+                Correo electrónico
               </label>
               <input
-                type="text"
-                value={formData.direccionNumero}
-                onChange={(e) => setFormData({...formData, direccionNumero: e.target.value})}
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
-                placeholder="Ej: 123"
+                placeholder="correo@ejemplo.com"
               />
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Número interior
-              </label>
-              <input
-                type="text"
-                value={formData.direccionInterior}
-                onChange={(e) => setFormData({...formData, direccionInterior: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
-                placeholder="Ej: 2B"
-              />
+          {/* Dirección */}
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Dirección</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                ['Calle *', 'direccionCalle', 'Av. Independencia'],
+                ['Número exterior *', 'direccionNumero', '123'],
+                ['Número interior', 'direccionInterior', 'B'],
+                ['Estado *', 'direccionEstado', 'Veracruz'],
+                ['Municipio *', 'direccionMunicipio', 'Perote'],
+                ['Localidad/Pueblo *', 'direccionLocalidad', 'Azteca'],
+                ['Sector / Colonia *', 'direccionSector', 'Centro'],
+                ['Código Postal', 'direccionCp', '91270'],
+              ].map(([label, field, placeholder]) => (
+                <div key={field}>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {label}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData[field]}
+                    onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
+                    placeholder={placeholder}
+                    required={label.includes('*')}
+                  />
+                </div>
+              ))}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Referencias de ubicación
+                </label>
+                <textarea
+                  value={formData.direccionReferencias}
+                  onChange={(e) => setFormData({ ...formData, direccionReferencias: e.target.value })}
+                  rows="2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition resize-none"
+                  placeholder="Casa azul, junto a la tienda..."
+                />
+              </div>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Colonia <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.direccionColonia}
-                onChange={(e) => setFormData({...formData, direccionColonia: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
-                placeholder="Ej: Roma Norte"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Municipio/Alcaldía <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.direccionMunicipio}
-                onChange={(e) => setFormData({...formData, direccionMunicipio: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
-                placeholder="Ej: Cuauhtémoc"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Ciudad <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.direccionCiudad}
-                onChange={(e) => setFormData({...formData, direccionCiudad: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
-                placeholder="Ej: Ciudad de México"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Estado <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.direccionEstado}
-                onChange={(e) => setFormData({...formData, direccionEstado: e.target.value})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
-                placeholder="Ej: CDMX"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Código Postal <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.direccionCp}
-                onChange={(e) => setFormData({...formData, direccionCp: e.target.value.replace(/\D/g, '').slice(0, 5)})}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
-                placeholder="Ej: 06700"
-                maxLength="5"
-                required
-              />
-            </div>
-
+          {/* Otros campos */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Teléfono alternativo
@@ -306,20 +398,19 @@ export default function ModalCompletarDatos({ isOpen, onClose, userId, onDatosCo
               <input
                 type="tel"
                 value={formData.telefonoAlternativo}
-                onChange={(e) => setFormData({...formData, telefonoAlternativo: e.target.value.replace(/\D/g, '').slice(0, 10)})}
+                onChange={(e) => setFormData({ ...formData, telefonoAlternativo: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
                 placeholder="55 1234 5678"
               />
               <p className="text-xs text-gray-400 mt-1">Opcional, para contacto de respaldo</p>
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Día de pago preferido
               </label>
               <select
                 value={formData.diaPago}
-                onChange={(e) => setFormData({...formData, diaPago: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, diaPago: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
               >
                 <option value="lunes">Lunes</option>
@@ -329,20 +420,6 @@ export default function ModalCompletarDatos({ isOpen, onClose, userId, onDatosCo
                 <option value="viernes">Viernes</option>
               </select>
               <p className="text-xs text-gray-400 mt-1">El día que prefieres hacer tus pagos</p>
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Referencias de ubicación
-              </label>
-              <textarea
-                value={formData.direccionReferencias}
-                onChange={(e) => setFormData({...formData, direccionReferencias: e.target.value})}
-                rows="2"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
-                placeholder="Ej: Casa de color azul, cerca del Oxxo, entre calles..."
-              />
-              <p className="text-xs text-gray-400 mt-1">Ayuda a localizar tu domicilio más fácilmente</p>
             </div>
           </div>
 
@@ -364,8 +441,8 @@ export default function ModalCompletarDatos({ isOpen, onClose, userId, onDatosCo
               {loading ? (
                 <>
                   <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                   Guardando...
                 </>
@@ -377,7 +454,6 @@ export default function ModalCompletarDatos({ isOpen, onClose, userId, onDatosCo
             </button>
           </div>
 
-          {/* Mensaje de privacidad */}
           <p className="text-center text-xs text-gray-400 pt-2">
             Tus datos están seguros. No compartiremos tu información con terceros sin tu consentimiento.
           </p>
@@ -386,34 +462,15 @@ export default function ModalCompletarDatos({ isOpen, onClose, userId, onDatosCo
 
       <style jsx>{`
         @keyframes modalFadeIn {
-          from {
-            opacity: 0;
-            transform: scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
         }
-        
-        .animate-modal {
-          animation: modalFadeIn 0.2s ease-out;
-        }
-        
+        .animate-modal { animation: modalFadeIn 0.2s ease-out; }
         @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-        
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out; }
       `}</style>
     </div>
   );

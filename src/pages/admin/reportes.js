@@ -1,523 +1,505 @@
 // src/pages/admin/reportes.js
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { 
-  BarChart3, 
-  TrendingUp, 
-  DollarSign, 
-  Users, 
-  Target, 
-  Calendar, 
-  Download, 
-  FileText,
-  Search,
-  Filter,
-  RefreshCw,
-  ChevronLeft,
-  ChevronRight,
-  PieChart,
-  LineChart,
-  Activity,
-  Clock,
-  Wallet,
-  ShoppingBag,
-  CreditCard,
-  UserCheck,
-  Loader2
+import {
+    BarChart3,
+    TrendingUp,
+    DollarSign,
+    Users,
+    Target,
+    Calendar,
+    Download,
+    FileText,
+    Search,
+    Filter,
+    RefreshCw,
+    ChevronLeft,
+    ChevronRight,
+    PieChart,
+    LineChart,
+    Activity,
+    Clock,
+    Wallet,
+    ShoppingBag,
+    CreditCard,
+    UserCheck,
+    Loader2,
+    AlertCircle
 } from 'lucide-react';
 import AdminLayout from '../../layouts/AdminLayout';
-import pb from '../../lib/pocketbase';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import { getReportData, getReportStats } from '../../lib/reportesService';
+import { exportToExcel, exportToPDF } from '../../lib/exportarReportesService';
+import { formatMoney } from '../../lib/utils';
+
+const ITEMS_PER_PAGE = 20;
 
 export default function AdminReportesPage() {
-  const [loading, setLoading] = useState(true);
-  const [exportando, setExportando] = useState(false);
-  const [tipoReporte, setTipoReporte] = useState('ventas');
-  const [dateRange, setDateRange] = useState({
-    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0]
-  });
-  const [reportData, setReportData] = useState({
-    ventas: [],
-    pagos: [],
-    clientesNuevos: [],
-    tandas: []
-  });
-  const [filteredData, setFilteredData] = useState([]);
-  const [summary, setSummary] = useState({
-    totalVentas: 0,
-    totalCobrado: 0,
-    clientesNuevos: 0,
-    tandasActivas: 0,
-    promedioVenta: 0,
-    pagoPromedio: 0
-  });
+    const router = useRouter();
 
-  useEffect(() => {
-    cargarReportes();
-  }, [dateRange]);
+    // ─── Parámetros de URL ────────────────────────────────────────────────
+    const { tipo = 'ventas', start = '', end = '', page = 1, search = '', estado = '', sort = '-created' } = router.query;
+    const currentPage = parseInt(page) || 1;
 
-  const getClientData = async (userId) => {
-    try {
-      const clientRecord = await pb.collection('clients').getFirstListItem(`userId = "${userId}"`);
-      return clientRecord;
-    } catch (e) {
-      return null;
-    }
-  };
+    // ─── Estados ──────────────────────────────────────────────────────────
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState(null);
+    const [exportando, setExportando] = useState(false);
+    const [tipoReporte, setTipoReporte] = useState(tipo);
+    const [filteredData, setFilteredData] = useState([]);
+    const [totalItems, setTotalItems] = useState(0);
+    const [totalPages, setTotalPages] = useState(1);
+    const [summary, setSummary] = useState({
+        totalVentas: 0,
+        totalCobrado: 0,
+        clientesNuevos: 0,
+        tandasActivas: 0,
+        promedioVenta: 0,
+        pagoPromedio: 0
+    });
+    const [filtroSearch, setFiltroSearch] = useState(search || '');
+    const [filtroEstado, setFiltroEstado] = useState(estado || '');
+    const [sortBy, setSortBy] = useState(sort || '-created');
 
-  const cargarReportes = async () => {
-    try {
-      setLoading(true);
+    // ─── Fechas ────────────────────────────────────────────────────────────
+    const getDefaultStartDate = () => {
+        const d = new Date();
+        d.setDate(1);
+        return d.toISOString().split('T')[0];
+    };
+    const getDefaultEndDate = () => new Date().toISOString().split('T')[0];
 
-      const startDate = new Date(dateRange.start);
-      const endDate = new Date(dateRange.end);
-      endDate.setHours(23, 59, 59, 999);
+    const [dateRange, setDateRange] = useState({
+        start: start || getDefaultStartDate(),
+        end: end || getDefaultEndDate()
+    });
 
-      const ventas = await pb.collection('orders').getFullList({
-        filter: `created >= "${startDate.toISOString()}" && created <= "${endDate.toISOString()}"`,
-        expand: 'userId,productId',
-        sort: '-created'
-      });
-
-      const pagos = await pb.collection('payments').getFullList({
-        filter: `fechaPago >= "${startDate.toISOString()}" && fechaPago <= "${endDate.toISOString()}" && estado = "pagado"`,
-        expand: 'userId,orderId',
-        sort: '-fechaPago'
-      });
-
-      const clientes = await pb.collection('users').getFullList({
-        filter: `created >= "${startDate.toISOString()}" && created <= "${endDate.toISOString()}" && role = "cliente"`,
-        sort: '-created'
-      });
-
-      const tandas = await pb.collection('tandas').getFullList({
-        filter: 'estado = "abierta" || estado = "en_curso"'
-      });
-
-      const totalVentas = ventas.reduce((sum, v) => sum + (v.totalPagar || 0), 0);
-      const totalCobrado = pagos.reduce((sum, p) => sum + (p.montoPagado || p.montoProgramado || 0), 0);
-
-      setReportData({
-        ventas,
-        pagos,
-        clientesNuevos: clientes,
-        tandas
-      });
-
-      setSummary({
-        totalVentas,
-        totalCobrado,
-        clientesNuevos: clientes.length,
-        tandasActivas: tandas.length,
-        promedioVenta: ventas.length > 0 ? totalVentas / ventas.length : 0,
-        pagoPromedio: pagos.length > 0 ? totalCobrado / pagos.length : 0
-      });
-
-      filtrarDatos('ventas', ventas, pagos, clientes);
-
-    } catch (error) {
-      console.error('Error cargando reportes:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filtrarDatos = (tipo, ventas, pagos, clientes) => {
-    if (tipo === 'ventas') {
-      setFilteredData(ventas.map(v => ({
-        Fecha: new Date(v.created).toLocaleDateString(),
-        Cliente: v.expand?.userId?.nombre || 'N/A',
-        Producto: v.expand?.productId?.nombre || 'Producto',
-        'Precio Total': `$${v.totalPagar?.toLocaleString()}`,
-        Enganche: `$${v.enganche?.toLocaleString() || 0}`,
-        Semanal: `$${v.pagoSemanal?.toLocaleString() || 0}`,
-        Estado: v.estadoPago || 'pendiente_pago',
-        'ID Venta': v.id.slice(-8)
-      })));
-    } else if (tipo === 'pagos') {
-      setFilteredData(pagos.map(p => ({
-        Fecha: new Date(p.fechaPago).toLocaleDateString(),
-        Cliente: p.expand?.userId?.nombre || 'N/A',
-        Monto: `$${(p.montoPagado || p.montoProgramado || 0).toLocaleString()}`,
-        Semana: p.numeroSemana !== undefined ? `Semana ${p.numeroSemana}` : 'Pago único',
-        Método: p.metodoPago || 'QR',
-        'ID Pago': p.id.slice(-8)
-      })));
-    } else if (tipo === 'clientes') {
-      Promise.all(clientes.map(async (c) => {
-        let direccion = 'No especificada';
-        try {
-          const clientData = await getClientData(c.id);
-          if (clientData) {
-            direccion = `${clientData.direccionCalle || ''} ${clientData.direccionNumero || ''}, ${clientData.direccionColonia || ''}`;
-            if (direccion.trim() === '') direccion = 'No especificada';
-          }
-        } catch (e) { }
-
-        return {
-          Fecha: new Date(c.created).toLocaleDateString(),
-          Nombre: c.nombre || 'Sin nombre',
-          Teléfono: c.telefono || 'No registrado',
-          Dirección: direccion,
-          Estado: c.activo === true ? 'Activo' : 'Inactivo',
-          'ID Cliente': c.id.slice(-8)
+    // ─── Actualizar URL ──────────────────────────────────────────────────
+    const actualizarURL = useCallback((params) => {
+        const query = {
+            tipo: tipoReporte !== 'ventas' ? tipoReporte : undefined,
+            start: dateRange.start !== getDefaultStartDate() ? dateRange.start : undefined,
+            end: dateRange.end !== getDefaultEndDate() ? dateRange.end : undefined,
+            page: currentPage > 1 ? currentPage : undefined,
+            search: filtroSearch || undefined,
+            estado: filtroEstado || undefined,
+            sort: sortBy !== '-created' ? sortBy : undefined,
+            ...params
         };
-      })).then(result => {
-        setFilteredData(result);
-      });
-    }
-  };
-
-  const handleTipoChange = (e) => {
-    const nuevoTipo = e.target.value;
-    setTipoReporte(nuevoTipo);
-    filtrarDatos(nuevoTipo, reportData.ventas, reportData.pagos, reportData.clientesNuevos);
-  };
-
-  const exportToExcel = () => {
-    try {
-      setExportando(true);
-
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(filteredData);
-
-      const colWidths = [];
-      if (filteredData.length > 0) {
-        Object.keys(filteredData[0]).forEach(key => {
-          colWidths.push({ wch: Math.max(key.length, 15) });
+        Object.keys(query).forEach(key => {
+            if (query[key] === undefined || query[key] === '') delete query[key];
         });
-      }
-      ws['!cols'] = colWidths;
+        router.push({ pathname: '/admin/reportes', query }, undefined, { shallow: true });
+    }, [tipoReporte, dateRange.start, dateRange.end, currentPage, filtroSearch, filtroEstado, sortBy, router]);
 
-      XLSX.utils.book_append_sheet(wb, ws, tipoReporte);
+    // ─── Cargar datos ──────────────────────────────────────────────────────
+    const cargarDatos = useCallback(async (showRefreshing = false) => {
+        try {
+            if (showRefreshing) setRefreshing(true);
+            else setLoading(true);
+            setError(null);
 
-      const fileName = `reporte_${tipoReporte}_${dateRange.start}_${dateRange.end}.xlsx`;
-      XLSX.writeFile(wb, fileName);
+            const result = await getReportData({
+                tipo: tipoReporte,
+                startDate: dateRange.start,
+                endDate: dateRange.end,
+                page: currentPage,
+                perPage: ITEMS_PER_PAGE,
+                search: filtroSearch,
+                estado: filtroEstado,
+                sort: sortBy
+            });
 
-    } catch (error) {
-      console.error('Error exportando a Excel:', error);
-      alert('Error al exportar a Excel');
-    } finally {
-      setExportando(false);
-    }
-  };
+            setFilteredData(result.items);
+            setTotalItems(result.totalItems);
+            setTotalPages(result.totalPages);
 
-  const exportToPDF = () => {
-    try {
-      setExportando(true);
+            // Actualizar resumen combinando con datos de estadísticas
+            const stats = await getReportStats(tipoReporte, dateRange.start, dateRange.end);
+            setSummary({
+                totalVentas: stats.totalVentas || 0,
+                totalCobrado: stats.totalCobrado || 0,
+                clientesNuevos: stats.clientesNuevos || 0,
+                tandasActivas: 0, // se puede obtener aparte si se necesita
+                promedioVenta: stats.countVentas > 0 ? (stats.totalVentas || 0) / stats.countVentas : 0,
+                pagoPromedio: stats.countPagos > 0 ? (stats.totalCobrado || 0) / stats.countPagos : 0
+            });
 
-      const doc = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      doc.setFontSize(18);
-      doc.setTextColor(108, 59, 255);
-      doc.text(`Reporte de ${tipoReporte}`, 14, 22);
-
-      doc.setFontSize(11);
-      doc.setTextColor(0, 0, 0);
-      doc.text(`Período: ${new Date(dateRange.start).toLocaleDateString()} al ${new Date(dateRange.end).toLocaleDateString()}`, 14, 32);
-
-      doc.setFontSize(10);
-      doc.text(`Total registros: ${filteredData.length}`, 14, 42);
-
-      if (tipoReporte === 'ventas') {
-        doc.text(`Monto total: $${summary.totalVentas.toLocaleString()}`, 14, 48);
-        doc.text(`Promedio: $${summary.promedioVenta.toFixed(2)}`, 14, 54);
-      } else if (tipoReporte === 'pagos') {
-        doc.text(`Monto total: $${summary.totalCobrado.toLocaleString()}`, 14, 48);
-        doc.text(`Promedio: $${summary.pagoPromedio.toFixed(2)}`, 14, 54);
-      }
-
-      const headers = Object.keys(filteredData[0] || {});
-      const rows = filteredData.map(row => Object.values(row));
-
-      doc.autoTable({
-        startY: 60,
-        head: [headers],
-        body: rows,
-        theme: 'striped',
-        headStyles: {
-          fillColor: [108, 59, 255],
-          textColor: [255, 255, 255],
-          fontSize: 9,
-          halign: 'center'
-        },
-        styles: {
-          fontSize: 8,
-          cellPadding: 2
-        },
-        columnStyles: {
-          'Precio Total': { halign: 'right' },
-          'Monto': { halign: 'right' },
-          'Enganche': { halign: 'right' },
-          'Semanal': { halign: 'right' }
+        } catch (err) {
+            console.error('Error cargando reportes:', err);
+            setError('No se pudieron cargar los reportes. Intenta de nuevo.');
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
         }
-      });
+    }, [tipoReporte, dateRange.start, dateRange.end, currentPage, filtroSearch, filtroEstado, sortBy]);
 
-      const fileName = `reporte_${tipoReporte}_${dateRange.start}.pdf`;
-      doc.save(fileName);
+    useEffect(() => {
+        cargarDatos();
+    }, [cargarDatos]);
 
-    } catch (error) {
-      console.error('Error exportando a PDF:', error);
-      alert('Error al exportar a PDF');
-    } finally {
-      setExportando(false);
+    // ─── Manejadores de eventos ──────────────────────────────────────────
+    const handleTipoChange = (e) => {
+        const val = e.target.value;
+        setTipoReporte(val);
+        actualizarURL({ tipo: val, page: 1 });
+    };
+
+    const handleFechaChange = (field, value) => {
+        setDateRange(prev => ({ ...prev, [field]: value }));
+        actualizarURL({ [field]: value, page: 1 });
+    };
+
+    const handleSearchSubmit = (e) => {
+        e.preventDefault();
+        const term = new FormData(e.target).get('search') || '';
+        setFiltroSearch(term);
+        actualizarURL({ search: term, page: 1 });
+    };
+
+    const handleEstadoChange = (e) => {
+        const val = e.target.value;
+        setFiltroEstado(val);
+        actualizarURL({ estado: val, page: 1 });
+    };
+
+    const handleSortChange = (e) => {
+        const val = e.target.value;
+        setSortBy(val);
+        actualizarURL({ sort: val, page: 1 });
+    };
+
+    const handlePageChange = (newPage) => {
+        if (newPage < 1 || newPage > totalPages) return;
+        actualizarURL({ page: newPage });
+    };
+
+    const handleExportExcel = () => {
+        if (filteredData.length === 0) return;
+        setExportando(true);
+        try {
+            exportToExcel(filteredData, tipoReporte, dateRange.start, dateRange.end);
+        } catch (err) {
+            console.error(err);
+            alert('Error al exportar a Excel');
+        } finally {
+            setExportando(false);
+        }
+    };
+
+    const handleExportPDF = () => {
+        if (filteredData.length === 0) return;
+        setExportando(true);
+        try {
+            exportToPDF(filteredData, tipoReporte, dateRange.start, dateRange.end, summary);
+        } catch (err) {
+            console.error(err);
+            alert('Error al exportar a PDF');
+        } finally {
+            setExportando(false);
+        }
+    };
+
+    const tipoReportes = [
+        { id: 'ventas', label: 'Ventas', icon: ShoppingBag, color: 'purple' },
+        { id: 'pagos', label: 'Pagos', icon: CreditCard, color: 'green' },
+        { id: 'clientes', label: 'Clientes nuevos', icon: UserCheck, color: 'blue' }
+    ];
+
+    const TipoIcono = tipoReportes.find(t => t.id === tipoReporte)?.icon || BarChart3;
+
+    if (loading && !refreshing) {
+        return (
+            <AdminLayout>
+                <div className="flex justify-center items-center h-64">
+                    <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
+                </div>
+            </AdminLayout>
+        );
     }
-  };
 
-  const formatMoney = (amount) => {
-    if (!amount) return '$0';
-    return `$${amount.toLocaleString()}`;
-  };
-
-  const tipoReportes = [
-    { id: 'ventas', label: 'Ventas', icon: ShoppingBag, color: 'purple' },
-    { id: 'pagos', label: 'Pagos', icon: CreditCard, color: 'green' },
-    { id: 'clientes', label: 'Clientes nuevos', icon: UserCheck, color: 'blue' }
-  ];
-
-  if (loading) {
     return (
-      <AdminLayout>
-        <div className="flex justify-center items-center h-64">
-          <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
-        </div>
-      </AdminLayout>
-    );
-  }
+        <>
+            <Head>
+                <title>Reportes | Admin</title>
+            </Head>
 
-  const TipoIcono = tipoReportes.find(t => t.id === tipoReporte)?.icon || BarChart3;
+            <AdminLayout>
+                <div className="max-w-7xl mx-auto">
 
-  return (
-    <>
-      <Head>
-        <title>Reportes | Admin</title>
-      </Head>
+                    {/* Header */}
+                    <div className="mb-8">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="w-10 h-10 bg-[#6C3BFF]/10 rounded-xl flex items-center justify-center">
+                                <BarChart3 size={20} className="text-[#6C3BFF]" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-900">Reportes y Estadísticas</h1>
+                                <p className="text-sm text-gray-500">Visualiza, analiza y exporta el rendimiento de tu negocio</p>
+                            </div>
+                        </div>
+                    </div>
 
-      <AdminLayout>
-        <div className="max-w-7xl mx-auto">
-          
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 bg-[#6C3BFF]/10 rounded-xl flex items-center justify-center">
-                <BarChart3 size={20} className="text-[#6C3BFF]" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Reportes y Estadísticas</h1>
-                <p className="text-sm text-gray-500">Visualiza, analiza y exporta el rendimiento de tu negocio</p>
-              </div>
-            </div>
-          </div>
+                    {/* Filtros */}
+                    <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6 shadow-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de reporte</label>
+                                <div className="relative">
+                                    <TipoIcono size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <select
+                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#6C3BFF] bg-white appearance-none"
+                                        value={tipoReporte}
+                                        onChange={handleTipoChange}
+                                    >
+                                        {tipoReportes.map(t => (
+                                            <option key={t.id} value={t.id}>{t.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha inicio</label>
+                                <div className="relative">
+                                    <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="date"
+                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#6C3BFF]"
+                                        value={dateRange.start}
+                                        onChange={(e) => handleFechaChange('start', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha fin</label>
+                                <div className="relative">
+                                    <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="date"
+                                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#6C3BFF]"
+                                        value={dateRange.end}
+                                        onChange={(e) => handleFechaChange('end', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex items-end">
+                                <button
+                                    onClick={() => cargarDatos(true)}
+                                    disabled={refreshing}
+                                    className="w-full flex items-center justify-center gap-2 bg-[#6C3BFF] text-white py-2.5 rounded-xl font-medium hover:bg-[#5a2ee6] transition disabled:opacity-50"
+                                >
+                                    <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+                                    {refreshing ? 'Actualizando...' : 'Actualizar'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
-          {/* Filtros */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-6 shadow-sm">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de reporte</label>
-                <div className="relative">
-                  <TipoIcono size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <select
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent bg-white appearance-none"
-                    value={tipoReporte}
-                    onChange={handleTipoChange}
-                  >
-                    {tipoReportes.map(tipo => (
-                      <option key={tipo.id} value={tipo.id}>{tipo.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha inicio</label>
-                <div className="relative">
-                  <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="date"
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent"
-                    value={dateRange.start}
-                    onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha fin</label>
-                <div className="relative">
-                  <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="date"
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent"
-                    value={dateRange.end}
-                    onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="flex items-end">
-                <button
-                  onClick={cargarReportes}
-                  className="w-full flex items-center justify-center gap-2 bg-[#6C3BFF] text-white py-2.5 rounded-xl font-medium hover:bg-[#5a2ee6] transition"
-                >
-                  <RefreshCw size={16} /> Actualizar
-                </button>
-              </div>
-            </div>
-          </div>
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                            <div className="flex items-center justify-between mb-1">
+                                <DollarSign size={18} className="text-green-500" />
+                                <span className="text-xl font-bold text-gray-900">{formatMoney(summary.totalVentas)}</span>
+                            </div>
+                            <p className="text-xs text-gray-500">Ventas totales</p>
+                            <p className="text-xs text-gray-400 mt-1">{filteredData.length} registros</p>
+                        </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-1">
-                <DollarSign size={18} className="text-green-500" />
-                <span className="text-xl font-bold text-gray-900">{formatMoney(summary.totalVentas)}</span>
-              </div>
-              <p className="text-xs text-gray-500">Ventas totales</p>
-              <p className="text-xs text-gray-400 mt-1">{reportData.ventas.length} ventas</p>
-            </div>
-            
-            <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-1">
-                <Wallet size={18} className="text-blue-500" />
-                <span className="text-xl font-bold text-gray-900">{formatMoney(summary.totalCobrado)}</span>
-              </div>
-              <p className="text-xs text-gray-500">Total cobrado</p>
-              <p className="text-xs text-gray-400 mt-1">{reportData.pagos.length} pagos</p>
-            </div>
-            
-            <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-1">
-                <Users size={18} className="text-purple-500" />
-                <span className="text-xl font-bold text-gray-900">{summary.clientesNuevos}</span>
-              </div>
-              <p className="text-xs text-gray-500">Clientes nuevos</p>
-              <p className="text-xs text-gray-400 mt-1">En el período</p>
-            </div>
-            
-            <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-1">
-                <Target size={18} className="text-orange-500" />
-                <span className="text-xl font-bold text-gray-900">{summary.tandasActivas}</span>
-              </div>
-              <p className="text-xs text-gray-500">Tandas activas</p>
-              <p className="text-xs text-gray-400 mt-1">En curso</p>
-            </div>
-          </div>
+                        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                            <div className="flex items-center justify-between mb-1">
+                                <Wallet size={18} className="text-blue-500" />
+                                <span className="text-xl font-bold text-gray-900">{formatMoney(summary.totalCobrado)}</span>
+                            </div>
+                            <p className="text-xs text-gray-500">Total cobrado</p>
+                        </div>
 
-          {/* Promedios */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <TrendingUp size={18} className="text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Promedio por venta</p>
-                  <p className="text-xl font-bold text-gray-900">{formatMoney(summary.promedioVenta)}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                  <Activity size={18} className="text-green-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Promedio por pago</p>
-                  <p className="text-xl font-bold text-gray-900">{formatMoney(summary.pagoPromedio)}</p>
-                </div>
-              </div>
-            </div>
-          </div>
+                        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                            <div className="flex items-center justify-between mb-1">
+                                <Users size={18} className="text-purple-500" />
+                                <span className="text-xl font-bold text-gray-900">{summary.clientesNuevos}</span>
+                            </div>
+                            <p className="text-xs text-gray-500">Clientes nuevos</p>
+                        </div>
 
-          {/* Botones de exportación */}
-          {filteredData.length > 0 && (
-            <div className="flex flex-wrap gap-3 mb-6">
-              <button
-                onClick={exportToExcel}
-                disabled={exportando}
-                className="flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-green-700 transition disabled:opacity-50"
-              >
-                {exportando ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                {exportando ? 'Exportando...' : 'Exportar a Excel'}
-              </button>
-              <button
-                onClick={exportToPDF}
-                disabled={exportando}
-                className="flex items-center gap-2 bg-red-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-red-700 transition disabled:opacity-50"
-              >
-                {exportando ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
-                {exportando ? 'Exportando...' : 'Exportar a PDF'}
-              </button>
-            </div>
-          )}
+                        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                            <div className="flex items-center justify-between mb-1">
+                                <TrendingUp size={18} className="text-orange-500" />
+                                <span className="text-lg font-bold text-gray-900">{formatMoney(summary.promedioVenta)}</span>
+                            </div>
+                            <p className="text-xs text-gray-500">Promedio por venta</p>
+                        </div>
+                    </div>
 
-          {/* Tabla de datos */}
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-            <div className="border-b border-gray-100 px-6 py-4 bg-gradient-to-r from-gray-50 to-white">
-              <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-                <TipoIcono size={16} className="text-[#6C3BFF]" />
-                {tipoReporte === 'ventas' && 'Listado de Ventas'}
-                {tipoReporte === 'pagos' && 'Listado de Pagos'}
-                {tipoReporte === 'clientes' && 'Clientes Nuevos'}
-                <span className="text-sm text-gray-400 font-normal ml-2">
-                  ({filteredData.length} registros encontrados)
-                </span>
-              </h2>
-            </div>
+                    {/* Búsqueda y filtros adicionales */}
+                    <div className="bg-white rounded-xl border border-gray-100 p-4 mb-6 shadow-sm">
+                        <div className="flex flex-col md:flex-row gap-4">
+                            <form onSubmit={handleSearchSubmit} className="flex-1 relative">
+                                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input
+                                    type="text"
+                                    name="search"
+                                    defaultValue={filtroSearch}
+                                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#6C3BFF] text-sm"
+                                    placeholder="Buscar por cliente, producto o ID..."
+                                />
+                            </form>
+                            <div className="relative">
+                                <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <select
+                                    className="pl-10 pr-8 py-2.5 border border-gray-200 rounded-xl bg-white text-sm"
+                                    value={filtroEstado}
+                                    onChange={handleEstadoChange}
+                                >
+                                    <option value="">Todos los estados</option>
+                                    <option value="completada">Completadas</option>
+                                    <option value="activa">Activas</option>
+                                    <option value="pendiente_pago">Pendientes</option>
+                                    <option value="cancelada">Canceladas</option>
+                                </select>
+                            </div>
+                            <div className="relative">
+                                <select
+                                    className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm"
+                                    value={sortBy}
+                                    onChange={handleSortChange}
+                                >
+                                    <option value="-created">Más recientes</option>
+                                    <option value="created">Más antiguos</option>
+                                    <option value="totalPagar">Por monto</option>
+                                    <option value="cliente">Por cliente</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
 
-            <div className="overflow-x-auto">
-              {filteredData.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <BarChart3 size={32} className="text-gray-300" />
-                  </div>
-                  <p className="text-sm text-gray-500">No hay datos para el período seleccionado</p>
-                </div>
-              ) : (
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-100">
-                    <tr>
-                      {Object.keys(filteredData[0] || {}).map(key => (
-                        <th key={key} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          {key}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {filteredData.map((row, idx) => (
-                      <tr key={idx} className={`hover:bg-gray-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                        {Object.entries(row).map(([key, val], i) => {
-                          if (key === 'Estado' && tipoReporte === 'ventas') {
-                            const status = String(val).toLowerCase();
-                            let badgeClass = '';
-                            if (status.includes('completada')) badgeClass = 'bg-green-100 text-green-700';
-                            else if (status.includes('activa')) badgeClass = 'bg-blue-100 text-blue-700';
-                            else badgeClass = 'bg-yellow-100 text-yellow-700';
-                            return (
-                              <td key={i} className="px-5 py-3 text-sm">
-                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
-                                  {val}
+                    {/* Error */}
+                    {error && (
+                        <div className="mb-6 p-4 bg-red-50 rounded-xl border border-red-200 flex items-center gap-3 text-red-700">
+                            <AlertCircle size={18} className="shrink-0" />
+                            <span className="text-sm">{error}</span>
+                            <button
+                                onClick={() => cargarDatos()}
+                                className="ml-auto text-sm font-medium hover:underline"
+                            >
+                                Reintentar
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Exportación y tabla */}
+                    {filteredData.length > 0 && (
+                        <div className="flex flex-wrap gap-3 mb-6">
+                            <button
+                                onClick={handleExportExcel}
+                                disabled={exportando}
+                                className="flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-green-700 transition disabled:opacity-50"
+                            >
+                                {exportando ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                                {exportando ? 'Exportando...' : 'Exportar a Excel'}
+                            </button>
+                            <button
+                                onClick={handleExportPDF}
+                                disabled={exportando}
+                                className="flex items-center gap-2 bg-red-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-red-700 transition disabled:opacity-50"
+                            >
+                                {exportando ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+                                {exportando ? 'Exportando...' : 'Exportar a PDF'}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Tabla */}
+                    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+                        <div className="border-b border-gray-100 px-6 py-4 bg-gradient-to-r from-gray-50 to-white">
+                            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+                                <TipoIcono size={16} className="text-[#6C3BFF]" />
+                                {tipoReporte === 'ventas' && 'Listado de Ventas'}
+                                {tipoReporte === 'pagos' && 'Listado de Pagos'}
+                                {tipoReporte === 'clientes' && 'Clientes Nuevos'}
+                                <span className="text-sm text-gray-400 font-normal ml-2">
+                                    ({filteredData.length} registros encontrados)
                                 </span>
-                              </td>
-                            );
-                          }
-                          return <td key={i} className="px-5 py-3 text-sm text-gray-600">{val}</td>;
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-        </div>
-      </AdminLayout>
-    </>
-  );
+                            </h2>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            {filteredData.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                        <BarChart3 size={32} className="text-gray-300" />
+                                    </div>
+                                    <p className="text-sm text-gray-500">No hay datos para el período seleccionado</p>
+                                </div>
+                            ) : (
+                                <table className="w-full">
+                                    <thead className="bg-gray-50 border-b border-gray-100">
+                                        <tr>
+                                            {Object.keys(filteredData[0] || {}).map(key => (
+                                                <th key={key} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                                    {key}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {filteredData.map((row, idx) => (
+                                            <tr key={idx} className={`hover:bg-gray-50 transition ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                                                {Object.entries(row).map(([key, val], i) => {
+                                                    if (key === 'Estado' && tipoReporte === 'ventas') {
+                                                        const status = String(val).toLowerCase();
+                                                        let badgeClass = '';
+                                                        if (status.includes('completada')) badgeClass = 'bg-green-100 text-green-700';
+                                                        else if (status.includes('activa')) badgeClass = 'bg-blue-100 text-blue-700';
+                                                        else badgeClass = 'bg-yellow-100 text-yellow-700';
+                                                        return (
+                                                            <td key={i} className="px-5 py-3 text-sm">
+                                                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
+                                                                    {val}
+                                                                </span>
+                                                            </td>
+                                                        );
+                                                    }
+                                                    return <td key={i} className="px-5 py-3 text-sm text-gray-600">{val}</td>;
+                                                })}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+
+                        {/* Paginación */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-between gap-4 mt-4 pt-4 border-t border-gray-100 px-6 py-4">
+                                <span className="text-sm text-gray-500">
+                                    Mostrando {filteredData.length} de {totalItems} registros
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => handlePageChange(currentPage - 1)}
+                                        disabled={currentPage === 1}
+                                        className="flex items-center gap-1 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
+                                    >
+                                        <ChevronLeft size={14} /> Anterior
+                                    </button>
+                                    <span className="px-4 py-2 text-sm text-gray-500">
+                                        {currentPage} / {totalPages}
+                                    </span>
+                                    <button
+                                        onClick={() => handlePageChange(currentPage + 1)}
+                                        disabled={currentPage === totalPages}
+                                        className="flex items-center gap-1 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
+                                    >
+                                        Siguiente <ChevronRight size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </AdminLayout>
+        </>
+    );
 }
