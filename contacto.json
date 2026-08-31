@@ -1,0 +1,10 @@
+[
+  {
+    "nombre": "Juan Pérez",
+    "email": "juan@example.com",
+    "telefono": "5512345678",
+    "asunto": "Consulta",
+    "mensaje": "Hola, tengo una duda...",
+    "leido": false
+  }
+]

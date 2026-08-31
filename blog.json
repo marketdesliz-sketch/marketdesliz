@@ -1,0 +1,12 @@
+[
+  {
+    "titulo": "Bienvenidos a MarketDesliz",
+    "descripcion": "Descripción del artículo",
+    "contenido": "Contenido del artículo...",
+    "imagen": "",
+    "autor": "Admin",
+    "vistas": 0,
+    "activo": true,
+    "excerpt": "Resumen del artículo"
+  }
+]

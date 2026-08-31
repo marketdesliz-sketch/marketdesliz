@@ -9,7 +9,7 @@ import {
   LogOut, Rocket, Settings, Crown, Bell, Zap
 } from 'lucide-react';
 import pb from '../../lib/pocketbase';
-import LoginModal from '../LoginModal';
+import LoginDropdown from '../LoginDropdown';
 import { getMenuItems, generarSlug } from '../../config/categorias';
 
 export default function ModernHeader({ subtitle, showAuth = true }) {
@@ -28,6 +28,8 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
   const timeoutRef = useRef(null);
   const menuRef = useRef(null);
   const userMenuRef = useRef(null);
+
+  const [showLoginDropdown, setShowLoginDropdown] = useState(false);
 
   // ============================================================
   // 1. MENÚ ESTÁTICO (optimizado con useMemo)
@@ -132,7 +134,7 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
     setIsMenuOpen(false);
   };
 
-  const handleLoginClick = () => window.dispatchEvent(new CustomEvent('openLoginModal'));
+  const handleLoginClick = () => setShowLoginDropdown(true);
   const handleLogoutClick = (e) => { e.preventDefault(); handleLogout(); };
 
   // Búsqueda funcional (Enter)
@@ -340,19 +342,31 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
               </div>
             ) : (
               /* Usuario no autenticado */
-              <button
-                onClick={handleLoginClick}
-                className="flex items-center gap-2 text-sm text-gray-700 hover:text-[#6C3BFF] transition-colors"
-                aria-label="Iniciar sesión"
-              >
-                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                  <User size={16} className="text-gray-500" />
-                </div>
-                <div className="hidden sm:block text-left leading-tight">
-                  <p className="font-semibold text-sm">Iniciar sesión</p>
-                  <p className="text-[#10b981] text-xs font-medium">$0.00</p>
-                </div>
-              </button>
+              <div className="relative">
+  <button
+    onClick={handleLoginClick}
+    className="flex items-center gap-2 text-sm text-gray-700 hover:text-[#6C3BFF] transition-colors"
+    aria-label="Iniciar sesión"
+  >
+    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+      <User size={16} className="text-gray-500" />
+    </div>
+    <div className="hidden sm:block text-left leading-tight">
+      <p className="font-semibold text-sm">Iniciar sesión</p>
+      <p className="text-[#10b981] text-xs font-medium">$0.00</p>
+    </div>
+  </button>
+  {showLoginDropdown && (
+    <LoginDropdown
+      onClose={() => setShowLoginDropdown(false)}
+      onSuccess={() => {
+        // El estado de autenticación se actualizará automáticamente
+        // en el useEffect de autenticación.
+        setShowLoginDropdown(false);
+      }}
+    />
+  )}
+</div>
             )}
 
             {/* Hamburguesa mobile */}
@@ -562,8 +576,6 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
           </div>
         </div>
       )}
-
-      <LoginModal />
     </header>
   );
 }

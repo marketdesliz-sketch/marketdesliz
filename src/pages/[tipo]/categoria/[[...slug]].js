@@ -6,18 +6,20 @@ import Link from 'next/link';
 import {
   ChevronLeft, ChevronRight, Home, SlidersHorizontal,
   Package, Search, Inbox, ArrowUpDown, Plus, Minus,
-  Filter, X
+  Filter, X, Bell, User, ChevronDown, Heart
 } from 'lucide-react';
-import CategoryLayout from '../../../layouts/CategoryLayout';
 import pb from '../../../lib/pocketbase';
-import { CATEGORIAS, generarSlug, getCategoriasParaSidebar } from '../../../config/categorias';
+import { CATEGORIAS, generarSlug } from '../../../config/categorias';
+import HeaderSimple from '../../../components/HeaderSimple';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Formateador de moneda ─────────────────────────────────────
+const formatMoney = (amount) =>
+  new Intl.NumberFormat('es-MX', {
+    style: 'currency', currency: 'MXN',
+    minimumFractionDigits: 0, maximumFractionDigits: 0
+  }).format(amount);
 
-/**
- * Obtiene la información de una categoría desde la estructura estática
- * por nombre o slug.
- */
+// ─── Helpers (sin cambios) ────────────────────────────────────
 function getCategoriaInfoFromStatic(nombreOSlug) {
   if (!nombreOSlug) return null;
   const search = nombreOSlug.toLowerCase().trim();
@@ -39,9 +41,6 @@ function getCategoriaInfoFromStatic(nombreOSlug) {
   return null;
 }
 
-/**
- * Obtiene todas las subcategorías (categorías de productos) desde la estructura estática.
- */
 function getSubcategoriasFromStatic(tipo = 'productos') {
   const categoria = CATEGORIAS[tipo];
   if (!categoria || !categoria.sections) return [];
@@ -59,9 +58,6 @@ function getSubcategoriasFromStatic(tipo = 'productos') {
   return subcategorias;
 }
 
-/**
- * Obtiene los nombres de las secciones para los filtros.
- */
 function getFiltroSecciones(tipo) {
   const categoria = CATEGORIAS[tipo];
   if (!categoria || !categoria.sections) return [];
@@ -130,7 +126,6 @@ const filterItems = (items, tipo, categoriaSlug, subcategoriaSlug, activeFilters
   if (!items.length) return [];
   let filtered = [...items];
 
-  // Filtrar por categoría principal (slug)
   if (categoriaSlug && categoriaSlug !== 'todos') {
     const searchTerm = categoriaSlug.toLowerCase().replace(/-/g, ' ');
     filtered = filtered.filter(item => {
@@ -141,7 +136,6 @@ const filterItems = (items, tipo, categoriaSlug, subcategoriaSlug, activeFilters
     });
   }
 
-  // Filtrar por subcategoría (slug)
   if (categoriaSlug && subcategoriaSlug) {
     const sc = categoriaSlug.toLowerCase().replace(/-/g, ' ');
     const ss = subcategoriaSlug.toLowerCase().replace(/-/g, ' ');
@@ -152,7 +146,6 @@ const filterItems = (items, tipo, categoriaSlug, subcategoriaSlug, activeFilters
     );
   }
 
-  // Filtros activos (checkboxes)
   if (Object.keys(activeFilters).length > 0) {
     Object.entries(activeFilters).forEach(([, filterItemsArr]) => {
       if (filterItemsArr.length > 0) {
@@ -174,15 +167,12 @@ const filterItems = (items, tipo, categoriaSlug, subcategoriaSlug, activeFilters
   return filtered;
 };
 
-const formatMoney = (amount) =>
-  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
-
 const getNombreFromSlug = (slug) => {
   if (!slug) return '';
   return slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 };
 
-// ── Breadcrumb (mejorado con datos estáticos) ──────────────────────────────
+// ─── Breadcrumb (sin cambios) ────────────────────────────────
 function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaInfo }) {
   const router = useRouter();
   const displayTipo = tipoNombres[tipo] || tipo?.replace(/-/g, ' ') || '';
@@ -191,8 +181,6 @@ function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaI
     <div className="bg-white border-b border-gray-100 mb-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
         <div className="flex items-center justify-between flex-wrap gap-3">
-
-          {/* Ruta */}
           <nav className="flex items-center gap-1.5 text-xs text-gray-400 flex-wrap">
             <button
               onClick={() => window.history.length > 1 ? router.back() : router.push('/')}
@@ -210,14 +198,11 @@ function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaI
             {slugs.map((slug, idx) => {
               const href = `/${tipo}/categoria/${slugs.slice(0, idx + 1).join('/')}`;
               const isLast = idx === slugs.length - 1;
-              // Intentar obtener nombre desde la estructura estática
               let nombreMostrado = getNombreFromSlug(slug);
               if (categoriaInfo && idx === 0) {
-                // Si es la categoría principal, usar el nombre real
                 nombreMostrado = categoriaInfo.nombre || nombreMostrado;
               }
               if (categoriaInfo?.subcategorias && idx === 1) {
-                // Buscar subcategoría
                 const sub = categoriaInfo.subcategorias.find(s => s.slug === slug);
                 if (sub) nombreMostrado = sub.nombre;
               }
@@ -233,7 +218,6 @@ function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaI
             })}
           </nav>
 
-          {/* Contador + orden */}
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-400">{itemCount} {itemCount === 1 ? 'resultado' : 'resultados'}</span>
             <div className="relative">
@@ -257,26 +241,23 @@ function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaI
   );
 }
 
-// ── Filtros laterales (dinámicos desde CATEGORIAS) ──────────────────────────
-function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll, items, categoriaSlug }) {
+// ─── CategoryFilters (sin cambios) ──────────────────────────
+function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll, items }) {
   const [expanded, setExpanded] = useState({});
 
-  // Inicializar expandidos dinámicamente
   useEffect(() => {
     const secciones = getFiltroSecciones(tipo);
     const initial = {};
     secciones.forEach((sec, idx) => {
-      initial[sec.id] = idx === 0; // Solo la primera abierta por defecto
+      initial[sec.id] = idx === 0;
     });
     setExpanded(initial);
   }, [tipo]);
 
   const toggle = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
-  // Obtener secciones para el tipo actual desde la estructura estática
   const secciones = useMemo(() => getFiltroSecciones(tipo), [tipo]);
 
-  // Calcular contadores por categoría/subcategoría
   const counts = useMemo(() => {
     const countsMap = {};
     if (!items) return countsMap;
@@ -291,7 +272,6 @@ function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll, item
 
   const hasActiveFilters = Object.values(activeFilters).some(arr => arr?.length > 0);
 
-  // Si no hay secciones, mostrar mensaje
   if (secciones.length === 0) {
     return (
       <div className="w-72 shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-24 p-4">
@@ -338,7 +318,6 @@ function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll, item
                 {section.categories.map((cat) => {
                   const isActive = activeFilters[section.id]?.includes(cat.name);
                   const count = counts[cat.name] || 0;
-                  // Si no hay items en esta categoría, no mostrarla (opcional)
                   if (count === 0) return null;
                   return (
                     <label key={cat.name} className="flex items-center gap-2.5 cursor-pointer group">
@@ -374,138 +353,70 @@ function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll, item
   );
 }
 
-// ── ProductCard (sin cambios, pero añadimos soporte para contador de favoritos) ──
-function ProductCard({ item, tipo, onSelect }) {
-  const esTanda = tipo === 'tandas';
-  const esServicio = tipo === 'servicios';
+// ─── NUEVO ProductCard (estilo igual a /productos) ────────────
+function ProductCard({ item, tipo, onSelect, favorites, toggleFavorite }) {
+  const router = useRouter();
 
   return (
-    <div className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col h-full">
-
-      {/* Imagen */}
-      <Link href={`/${tipo}/${item.id}`} className="block">
-        <div className="relative aspect-square bg-gray-50 overflow-hidden">
-          {item.imagen ? (
-            <img
-              src={item.imagen}
-              alt={item.nombre}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              loading="lazy"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Package size={36} className="text-gray-300" />
-            </div>
-          )}
-          <div className="absolute top-2 left-2 flex gap-1">
-            {item.nuevo && !item.agotado && (
-              <span className="bg-orange-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">Nuevo</span>
-            )}
-            {item.agotado && (
-              <span className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">Agotado</span>
-            )}
-          </div>
-        </div>
-      </Link>
-
-      {/* Info */}
-      <div className="p-3.5 flex flex-col flex-1">
-        {item.sku && (
-          <span className="text-[9px] text-gray-300 font-mono mb-1">{item.sku}</span>
-        )}
-
-        <Link href={`/${tipo}/${item.id}`}>
-          <h3 className="font-semibold text-gray-800 text-sm line-clamp-2 group-hover:text-[#6C3BFF] transition-colors min-h-[40px]">
-            {item.nombre}
-          </h3>
-        </Link>
-
-        {/* Badges categoría */}
-        <div className="flex flex-wrap gap-1 mt-1.5 mb-2">
-          {item.categoria && (
-            <span className="text-[9px] font-semibold text-[#6C3BFF] bg-[#6C3BFF]/8 px-2 py-0.5 rounded-full uppercase tracking-wide">
-              {item.categoria}
-            </span>
-          )}
-          {item.subcategoria && (
-            <span className="text-[9px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-              {item.subcategoria}
-            </span>
-          )}
-        </div>
-
-        <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed min-h-[32px] mb-2">{item.descripcion}</p>
-
-        {/* Precios */}
-        {!esServicio && !esTanda && (
-          <div className="mt-auto space-y-1 pt-2.5 border-t border-gray-50">
-            <div className="flex justify-between">
-              <span className="text-[10px] text-gray-400">Desde</span>
-              <span className="text-sm font-bold text-gray-900">{formatMoney(item.precio)}</span>
-            </div>
-            {item.enganche > 0 && (
-              <div className="flex justify-between">
-                <span className="text-[10px] text-gray-400">Enganche</span>
-                <span className="text-sm font-semibold text-[#6C3BFF]">{formatMoney(item.enganche)}</span>
-              </div>
-            )}
-            {item.paga > 0 && (
-              <div className="flex justify-between">
-                <span className="text-[10px] text-gray-400">Pago semanal</span>
-                <span className="text-sm font-semibold text-[#10b981]">{formatMoney(item.paga)}</span>
-              </div>
-            )}
+    <div
+      onClick={() => router.push(`/${tipo}/${item.id}`)}
+      className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+    >
+      <div className="aspect-[4/3] bg-muted/30 relative overflow-hidden">
+        {item.imagen ? (
+          <img
+            src={item.imagen}
+            alt={item.nombre}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gray-100">
+            <Package className="w-12 h-12 text-gray-300" />
           </div>
         )}
-
-        {esServicio && (
-          <div className="mt-auto pt-2.5 border-t border-gray-50">
-            <div className="flex justify-between">
-              <span className="text-[10px] text-gray-400">Precio</span>
-              <span className="text-sm font-bold text-gray-900">{formatMoney(item.precio)}</span>
-            </div>
-          </div>
-        )}
-
-        {esTanda && (
-          <div className="mt-auto space-y-1 pt-2.5 border-t border-gray-50">
-            <div className="flex justify-between">
-              <span className="text-[10px] text-gray-400">Monto por ronda</span>
-              <span className="text-sm font-bold text-[#6C3BFF]">{formatMoney(item.montoTotal)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-[10px] text-gray-400">Participantes</span>
-              <span className="text-xs text-gray-700">{item.totalMiembros}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Botones */}
-        <div className="flex gap-2 mt-3">
+        <div className="absolute top-3 right-3">
           <button
-            onClick={() => onSelect(item.id)}
-            disabled={item.agotado}
-            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-colors ${
-              item.agotado
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white'
-            }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavorite(item.id);
+            }}
+            className="w-8 h-8 rounded-full bg-white/90 shadow-sm flex items-center justify-center hover:scale-110 transition-transform"
           >
-            {item.agotado ? 'Agotado' : esTanda ? 'Unirme' : 'Lo quiero'}
+            <Heart
+              className={`w-4 h-4 ${favorites.includes(item.id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`}
+            />
           </button>
-          <Link
-            href={`/${tipo}/${item.id}`}
-            className="flex-1 border border-[#6C3BFF] text-[#6C3BFF] py-2 rounded-xl text-xs font-bold text-center hover:bg-[#6C3BFF] hover:text-white transition-colors"
-          >
-            Ver
-          </Link>
         </div>
+      </div>
+      <div className="p-3">
+        <h3 className="font-bold text-sm text-gray-800 line-clamp-1">{item.nombre}</h3>
+        <p className="text-base font-black text-gray-900 mt-1">
+          {formatMoney(item.paga)} / semana
+        </p>
+        {item.precio > 0 && (
+          <div className="mt-1 text-xs text-gray-500">
+            Enganche{' '}
+            <span className="font-semibold text-[#6C3BFF]">
+              {formatMoney(Math.round(item.precio * 0.25))}
+            </span>
+            <span className="text-gray-400"> (25%)</span>
+          </div>
+        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/${tipo}/${item.id}`);
+          }}
+          className="mt-4 w-full bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white text-xs font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5"
+        >
+          Ver producto <ChevronRight size={13} />
+        </button>
       </div>
     </div>
   );
 }
 
-// ── Página principal ──────────────────────────────────────────────────────────
+// ─── PÁGINA PRINCIPAL ──────────────────────────────────────────
 export default function CategoriaPage() {
   const router = useRouter();
   const { tipo, slug = [] } = router.query;
@@ -523,22 +434,61 @@ export default function CategoriaPage() {
   const itemsPerPage = 12;
   const [categoriaInfo, setCategoriaInfo] = useState(null);
 
-  // ============================================================
-  // 1. CARGAR ITEMS (productos, tandas, etc.)
-  // ============================================================
+  // ─── Estados de autenticación ──────────────────────────────
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  const [showLoginDropdown, setShowLoginDropdown] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // ─── Favoritos (igual que en productos.js) ─────────────────
+  const [favorites, setFavorites] = useState([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('favorites');
+    if (saved) setFavorites(JSON.parse(saved));
+  }, []);
+
+  const toggleFavorite = (productId) => {
+    const newFavorites = favorites.includes(productId)
+      ? favorites.filter(id => id !== productId)
+      : [...favorites, productId];
+    setFavorites(newFavorites);
+    localStorage.setItem('favorites', JSON.stringify(newFavorites));
+  };
+
+  const notifications = [
+    { id: 1, title: '¡Nueva colección!', description: 'Descubre la línea Otoño 2026', time: 'Hace 2 horas', read: false },
+    { id: 2, title: '¡Bienvenido!', description: 'Completa tu registro para empezar', time: 'Hace 5 horas', read: false },
+  ];
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  // ─── Efecto de autenticación ──────────────────────────────
+  useEffect(() => {
+    const checkAuth = () => {
+      const currentUser = pb.authStore.model;
+      setIsAuthenticated(!!currentUser);
+      setUser(currentUser);
+    };
+    checkAuth();
+    const unsubscribe = pb.authStore.onChange(() => checkAuth());
+    return () => unsubscribe();
+  }, []);
+
+  // ─── Navegación ─────────────────────────────────────────────
+  const navigateTo = (path) => router.push(path);
+
+  // ─── Cargar items ──────────────────────────────────────────
   useEffect(() => {
     const cargarItems = async () => {
       try {
         setLoading(true);
         const busqueda = router.query.busqueda;
 
-        // Obtener información de categoría desde estructura estática
         let catInfo = null;
         if (categoriaSlug) {
           const staticInfo = getCategoriaInfoFromStatic(categoriaSlug);
           if (staticInfo) {
             catInfo = staticInfo;
-            // Obtener subcategorías para el breadcrumb
             if (tipo) {
               const subs = getSubcategoriasFromStatic(tipo);
               catInfo.subcategorias = subs;
@@ -561,18 +511,15 @@ export default function CategoriaPage() {
             const term = busqueda.trim();
             filter += ` && (nombre ~ "${term}" || descripcion ~ "${term}" || sku ~ "${term}")`;
           }
-          // Si hay categoría específica, filtrar por categoría (usando el nombre o slug)
           if (categoriaSlug && categoriaSlug !== 'todos') {
             const catName = catInfo?.nombre || getNombreFromSlug(categoriaSlug);
             if (catName) {
-              // Buscar en campo categoria (texto) o en categoriaId (relación)
               filter += ` && (categoria ~ "${catName}" || categoriaId != "")`;
             }
           }
           records = await pb.collection('products').getFullList({ filter, sort: '-created' });
         }
 
-        // Normalizar items
         const itemsData = records.map(item => normalizeItem(item, tipo));
         setItems(itemsData);
       } catch (error) {
@@ -584,15 +531,12 @@ export default function CategoriaPage() {
     if (tipo) cargarItems();
   }, [tipo, categoriaSlug, router.query.busqueda]);
 
-  // ============================================================
-  // 2. FILTRAR Y ORDENAR (con useMemo para optimizar)
-  // ============================================================
+  // ─── Filtrar y ordenar ─────────────────────────────────────
   const itemsFiltrados = useMemo(() => {
     if (items.length === 0) return [];
 
     let filtered = filterItems(items, tipo, categoriaSlug, subcategoriaSlug, activeFilters);
 
-    // Búsqueda por texto (si viene en query)
     const busqueda = router.query.busqueda;
     if (busqueda?.trim()) {
       const t = busqueda.trim().toLowerCase();
@@ -605,7 +549,6 @@ export default function CategoriaPage() {
       );
     }
 
-    // Ordenar
     if (sortBy === 'price_asc') filtered.sort((a, b) => a.precio - b.precio);
     else if (sortBy === 'price_desc') filtered.sort((a, b) => b.precio - a.precio);
     else if (sortBy === 'newest') filtered.sort((a, b) => new Date(b.created) - new Date(a.created));
@@ -614,15 +557,12 @@ export default function CategoriaPage() {
     return filtered;
   }, [items, tipo, categoriaSlug, subcategoriaSlug, activeFilters, sortBy, router.query.busqueda]);
 
-  // Actualizar filteredItems cuando cambie itemsFiltrados
   useEffect(() => {
     setFilteredItems(itemsFiltrados);
     setCurrentPage(1);
   }, [itemsFiltrados]);
 
-  // ============================================================
-  // 3. MANEJO DE FILTROS Y PAGINACIÓN
-  // ============================================================
+  // ─── Handlers ──────────────────────────────────────────────
   const handleFilterChange = useCallback((section, item, isChecked) => {
     setActiveFilters(prev => {
       const n = { ...prev };
@@ -652,22 +592,31 @@ export default function CategoriaPage() {
   const esInstrumento = tipo === 'instrumentos';
   const tipoLabel = esServicio ? 'servicios' : esInstrumento ? 'instrumentos' : 'productos';
 
-  // ============================================================
-  // 4. ESTADOS DE CARGA Y ERROR
-  // ============================================================
+  // ─── Renderizado ────────────────────────────────────────────
   if (loading) {
     return (
-      <CategoryLayout>
+      <div className="min-h-screen bg-background flex flex-col">
+        <HeaderSimple
+          showNotifications={showNotifications}
+          setShowNotifications={setShowNotifications}
+          unreadCount={unreadCount}
+          navigateTo={navigateTo}
+          notifications={notifications}
+          showLoginDropdown={showLoginDropdown}
+          setShowLoginDropdown={setShowLoginDropdown}
+          onLoginSuccess={() => {
+            const user = pb.authStore.model;
+            setIsAuthenticated(!!user);
+            setUser(user);
+          }}
+        />
         <div className="flex justify-center items-center min-h-[60vh]">
           <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
         </div>
-      </CategoryLayout>
+      </div>
     );
   }
 
-  // ============================================================
-  // 5. RENDERIZADO PRINCIPAL
-  // ============================================================
   return (
     <>
       <Head>
@@ -675,119 +624,135 @@ export default function CategoriaPage() {
         <meta name="description" content={`Explora ${tipoLabel} en ${categoriaNombre || 'categoría'}`} />
       </Head>
 
-      <CategoryLayout>
-        <div className="pt-20 pb-10">
+      <div className="min-h-screen bg-background flex flex-col">
+        <HeaderSimple
+          showNotifications={showNotifications}
+          setShowNotifications={setShowNotifications}
+          unreadCount={unreadCount}
+          navigateTo={navigateTo}
+          notifications={notifications}
+          showLoginDropdown={showLoginDropdown}
+          setShowLoginDropdown={setShowLoginDropdown}
+          onLoginSuccess={() => {
+            const user = pb.authStore.model;
+            setIsAuthenticated(!!user);
+            setUser(user);
+          }}
+        />
 
-          {/* Breadcrumb */}
-          <Breadcrumb
-            tipo={tipo}
-            slugs={slug}
-            itemCount={filteredItems.length}
-            sortBy={sortBy}
-            setSortBy={setSortBy}
-            categoriaInfo={categoriaInfo}
-          />
-
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-7">
-
-            {/* Sidebar de filtros (dinámico) */}
-            <CategoryFilters
-              onFilterChange={handleFilterChange}
-              activeFilters={activeFilters}
+        <div className="max-w-[1400px] mx-auto w-full px-4 py-6 flex-1">
+          <main className="flex flex-col gap-6">
+            {/* Breadcrumb */}
+            <Breadcrumb
               tipo={tipo}
-              onClearAll={handleClearAllFilters}
-              items={items}
-              categoriaSlug={categoriaSlug}
+              slugs={slug}
+              itemCount={filteredItems.length}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              categoriaInfo={categoriaInfo}
             />
 
-            {/* Resultados */}
-            <div className="flex-1 min-w-0">
+            <div className="flex gap-7">
+              {/* Sidebar de filtros */}
+              <CategoryFilters
+                onFilterChange={handleFilterChange}
+                activeFilters={activeFilters}
+                tipo={tipo}
+                onClearAll={handleClearAllFilters}
+                items={items}
+              />
 
-              {/* Filtros activos (badges) */}
-              {Object.values(activeFilters).some(a => a?.length > 0) && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {Object.entries(activeFilters).flatMap(([, arr]) =>
-                    (arr || []).map(item => (
-                      <span key={item} className="flex items-center gap-1.5 bg-[#6C3BFF]/8 text-[#6C3BFF] text-xs font-medium px-3 py-1.5 rounded-full">
-                        {item}
-                        <button
-                          onClick={() => {
-                            const section = Object.keys(activeFilters).find(k => activeFilters[k]?.includes(item));
-                            if (section) handleFilterChange(section, item, false);
-                          }}
-                          className="hover:text-[#5b2ee6]"
-                        >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    ))
-                  )}
-                  <button onClick={handleClearAllFilters} className="text-xs text-gray-400 hover:text-gray-600 px-2">
-                    Limpiar todo
-                  </button>
-                </div>
-              )}
-
-              {/* Estado vacío */}
-              {filteredItems.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center shadow-sm">
-                  <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    {router.query.busqueda ? <Search size={28} className="text-gray-400" /> : <Inbox size={28} className="text-gray-300" />}
+              {/* Resultados */}
+              <div className="flex-1 min-w-0">
+                {Object.values(activeFilters).some(a => a?.length > 0) && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {Object.entries(activeFilters).flatMap(([, arr]) =>
+                      (arr || []).map(item => (
+                        <span key={item} className="flex items-center gap-1.5 bg-[#6C3BFF]/8 text-[#6C3BFF] text-xs font-medium px-3 py-1.5 rounded-full">
+                          {item}
+                          <button
+                            onClick={() => {
+                              const section = Object.keys(activeFilters).find(k => activeFilters[k]?.includes(item));
+                              if (section) handleFilterChange(section, item, false);
+                            }}
+                            className="hover:text-[#5b2ee6]"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))
+                    )}
+                    <button onClick={handleClearAllFilters} className="text-xs text-gray-400 hover:text-gray-600 px-2">
+                      Limpiar todo
+                    </button>
                   </div>
-                  <h3 className="text-base font-semibold text-gray-800 mb-2">
-                    {router.query.busqueda
-                      ? `Sin resultados para "${router.query.busqueda}"`
-                      : `No hay ${tipoLabel} disponibles`}
-                  </h3>
-                  <p className="text-sm text-gray-400 mb-6 max-w-sm mx-auto">
-                    {router.query.busqueda
-                      ? 'Intenta con otra palabra clave o revisa la ortografía.'
-                      : `No se encontraron ${tipoLabel} en esta categoría.`}
-                  </p>
-                  <Link
-                    href={`/${tipo}`}
-                    className="inline-flex items-center gap-2 bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors"
-                  >
-                    Ver todos los {tipoLabel}
-                  </Link>
-                </div>
-              ) : (
-                <>
-                  {/* Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {paginatedItems.map((item) => (
-                      <ProductCard key={item.id} item={item} tipo={tipo} onSelect={handleSelect} />
-                    ))}
-                  </div>
+                )}
 
-                  {/* Paginación */}
-                  {totalPages > 1 && (
-                    <div className="flex items-center justify-center gap-2 mt-8">
-                      <button
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                        className="flex items-center gap-1 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
-                      >
-                        <ChevronLeft size={14} /> Anterior
-                      </button>
-                      <span className="px-4 py-2 text-sm text-gray-500">
-                        {currentPage} / {totalPages}
-                      </span>
-                      <button
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                        className="flex items-center gap-1 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
-                      >
-                        Siguiente <ChevronRight size={14} />
-                      </button>
+                {filteredItems.length === 0 ? (
+                  <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center shadow-sm">
+                    <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      {router.query.busqueda ? <Search size={28} className="text-gray-400" /> : <Inbox size={28} className="text-gray-300" />}
                     </div>
-                  )}
-                </>
-              )}
+                    <h3 className="text-base font-semibold text-gray-800 mb-2">
+                      {router.query.busqueda
+                        ? `Sin resultados para "${router.query.busqueda}"`
+                        : `No hay ${tipoLabel} disponibles`}
+                    </h3>
+                    <p className="text-sm text-gray-400 mb-6 max-w-sm mx-auto">
+                      {router.query.busqueda
+                        ? 'Intenta con otra palabra clave o revisa la ortografía.'
+                        : `No se encontraron ${tipoLabel} en esta categoría.`}
+                    </p>
+                    <Link
+                      href={`/${tipo}`}
+                      className="inline-flex items-center gap-2 bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                    >
+                      Ver todos los {tipoLabel}
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+                      {paginatedItems.map((item) => (
+                        <ProductCard
+                          key={item.id}
+                          item={item}
+                          tipo={tipo}
+                          onSelect={handleSelect}
+                          favorites={favorites}
+                          toggleFavorite={toggleFavorite}
+                        />
+                      ))}
+                    </div>
+
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-center gap-2 mt-8">
+                        <button
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          className="flex items-center gap-1 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
+                        >
+                          <ChevronLeft size={14} /> Anterior
+                        </button>
+                        <span className="px-4 py-2 text-sm text-gray-500">
+                          {currentPage} / {totalPages}
+                        </span>
+                        <button
+                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                          className="flex items-center gap-1 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
+                        >
+                          Siguiente <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
-          </div>
+          </main>
         </div>
-      </CategoryLayout>
+      </div>
     </>
   );
 }

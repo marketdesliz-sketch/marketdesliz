@@ -1,0 +1,8 @@
+[
+  {
+    "clave": "comision_por_defecto",
+    "valor": 10,
+    "descripcion": "Comisión por defecto para vendedores",
+    "editable": true
+  }
+]

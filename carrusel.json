@@ -1,0 +1,9 @@
+[
+  {
+    "imagen": "",
+    "orden": 1,
+    "activo": true,
+    "botonEnlace": "/productos",
+    "botonPosicion": "centro"
+  }
+]

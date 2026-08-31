@@ -1,0 +1,11 @@
+[
+  {
+    "nombre": "Electrónicos",
+    "slug": "electronicos",
+    "icono": "📱",
+    "imagen": "",
+    "descripcion": "Tiendas de electrónica",
+    "orden": 1,
+    "activo": true
+  }
+]

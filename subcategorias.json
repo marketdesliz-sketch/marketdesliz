@@ -1,0 +1,11 @@
+[
+  {
+    "nombre": "Lavadoras",
+    "slug": "lavadoras",
+    "categoriaId": "47ofj5kb5zgu985",
+    "descripcion": "Lavadoras de carga frontal",
+    "imagen": "",
+    "orden": 1,
+    "activo": true
+  }
+]

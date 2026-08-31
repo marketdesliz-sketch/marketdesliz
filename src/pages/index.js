@@ -1,674 +1,428 @@
-import { useEffect, useState } from 'react';
-import Head from 'next/head';
-import Link from 'next/link';
-import { useRouter } from 'next/router';
+// pages/index.js
+import { useState } from "react";
+import { useRouter } from "next/router";
 import {
-  CreditCard, Calendar, QrCode, ShieldCheck,
-  Headphones, Star, Heart, ChevronRight,
-  Globe, Camera, MessageCircle,
-  Phone, Mail, Clock, Send,
-  Package, Smartphone, Home as HomeIcon, Shirt, Guitar
-} from 'lucide-react';
-import pb from '../lib/pocketbase';
-import StoreLayout from '../layouts/StoreLayout';
-import CategorySection from '../components/store/CategorySection';
+  ShoppingBag,
+  Store,
+  Wrench,
+  Apple as AppleIcon,
+  Users,
+  Bell as BellIcon,
+  ChevronRight,
+  CreditCard,
+  X,
+  User,
+  ChevronDown,
+} from "lucide-react";
 
-// ─── Formateador de dinero ─────────────────────────────────────────────────
-const formatMoney = (amount) =>
-  new Intl.NumberFormat('es-MX', {
-    style: 'currency', currency: 'MXN',
-    minimumFractionDigits: 0, maximumFractionDigits: 0
-  }).format(amount);
+// ─── Componente LogoMark ──────────────────────────────────────────────
+const LogoMark = ({ size = 72, color = "#5B2BE0" }) => (
+  <div className="flex items-center gap-3">
+    <span className="font-logo font-bold text-4xl text-primary tracking-tight">
+      ʃƪʃƪ
+    </span>
+    <div className="flex flex-col">
+      <span className="font-bold text-xl text-textMain tracking-tight leading-none">
+        Market<span className="text-primary">Desliz</span>
+      </span>
+      <span className="text-[10px] text-textMuted tracking-[0.2em] uppercase font-medium">
+        Desliza • Descubre • Conecta
+      </span>
+    </div>
+  </div>
+);
 
-// ─── Por qué elegirnos ────────────────────────────────────────────────────
-function WhyChooseUs() {
-  const features = [
-    { icon: ShieldCheck, title: "Vendedores Verificados", description: "Todos nuestros vendedores pasan por un proceso de verificación para garantizar que ofrecen productos reales." },
-    { icon: CreditCard, title: "Flexibilidad de Pagos", description: "Opciones de pago adaptadas a tus necesidades, con pagos semanales que se ajustan a tu presupuesto." },
-    { icon: Star, title: "Sistema de Tandas", description: "Únete a tandas digitales seguras, conoce a los otros miembros y construye tu historial de confianza." },
-    { icon: QrCode, title: "Cobro con QR", description: "Nuestro cobrador escanea tu código QR. Todo digital, todo seguro, sin efectivo perdido." },
-    { icon: Headphones, title: "Atención Personalizada", description: "Nuestro equipo de soporte te acompaña en cada paso de tu experiencia de compra." },
-    { icon: ShieldCheck, title: "Confianza y Respaldo", description: "Plataforma con respaldo digital y reputación basada en tu historial de pagos." },
-  ];
-
+// ─── Action Card ──────────────────────────────────────────────────────
+function ActionCard({ icon, title, subtitle, onClick }) {
   return (
-    <section className="py-16 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-10">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
-            ¿Por qué elegir <span className="text-[#6C3BFF]">MarketDesliz</span>?
-          </h2>
-          <p className="text-gray-500 max-w-xl mx-auto text-sm leading-relaxed">
-            Creamos un espacio confiable donde puedes comprar a crédito y participar en tandas
-            con <span className="text-[#6C3BFF] font-medium">total tranquilidad y seguridad</span>.
-          </p>
+    <div
+      onClick={onClick}
+      className="flex items-center justify-between bg-white rounded-[20px] px-[22px] py-5 shadow-card border border-white/90 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 hover:shadow-card-hover"
+    >
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-[14px] bg-primaryLight flex items-center justify-center shrink-0">
+          {icon}
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {features.map((feature, index) => {
-            const Icon = feature.icon;
-            return (
-              <div
-                key={index}
-                className="group bg-white border border-gray-100 rounded-2xl p-6 hover:border-[#6C3BFF]/30 hover:shadow-md transition-all duration-200"
-              >
-                <div className="w-10 h-10 rounded-xl bg-[#6C3BFF]/8 flex items-center justify-center mb-4 group-hover:bg-[#6C3BFF]/15 transition-colors">
-                  <Icon size={20} className="text-[#6C3BFF]" />
-                </div>
-                <h3 className="font-bold text-gray-900 text-base mb-2">{feature.title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{feature.description}</p>
-              </div>
-            );
-          })}
+        <div>
+          <p className="text-[15px] font-bold text-textMain mb-0.5 tracking-tight">{title}</p>
+          <p className="text-[13px] text-textMuted font-normal">{subtitle}</p>
         </div>
       </div>
-    </section>
+      <div className="w-8 h-8 rounded-full bg-[#F5F4FA] flex items-center justify-center shrink-0">
+        <ChevronRight size={16} />
+      </div>
+    </div>
   );
 }
 
-// ─── CTA Final ────────────────────────────────────────────────────────────
-function CTASection() {
+// ─── Feature Item ─────────────────────────────────────────────────────
+function FeatureItem({ icon, title, subtitle }) {
   return (
-    <section className="bg-[#6C3BFF] py-16">
-      <div className="max-w-3xl mx-auto px-4 text-center">
-        <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
-          ¿Listo para comenzar?
-        </h2>
-        <p className="text-white/75 text-sm mb-8 max-w-md mx-auto leading-relaxed">
-          Únete a miles de usuarios que ya confían en MarketDesliz para sus compras a crédito y tandas.
+    <div className="flex items-start gap-3.5">
+      <div className="w-[38px] h-[38px] bg-bgPage rounded-[10px] flex items-center justify-center shrink-0">
+        {icon}
+      </div>
+      <div>
+        <p className="text-[14px] font-semibold text-textMain mb-0.5 tracking-tight">{title}</p>
+        <p className="text-[12px] text-textMuted font-normal">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── LoginDropdown ────────────────────────────────────────────────────
+const LoginDropdown = ({ onClose }) => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  return (
+    <div className="absolute right-0 top-full mt-3 w-80 bg-white shadow-xl border border-gray-200 rounded-2xl z-[100] overflow-hidden">
+      <div className="p-6">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">
+          LOG IN WITH AN ACCOUNT
         </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link
-            href="/productos"
-            className="bg-white text-[#6C3BFF] px-7 py-2.5 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors shadow-sm"
-          >
-            Ver Productos
-          </Link>
-          <Link
-            href="/tandas"
-            className="border border-white/40 text-white px-7 py-2.5 rounded-xl font-bold text-sm hover:bg-white/10 transition-colors"
-          >
-            Explorar Tandas
-          </Link>
+        <button className="w-full bg-white text-gray-700 border border-gray-300 flex items-center gap-3 px-4 py-2.5 rounded-xl mb-2 font-medium text-sm hover:bg-gray-50 transition-colors">
+          <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+          </svg>
+          Teléfono
+        </button>
+        <button className="w-full bg-white text-gray-700 border border-gray-300 flex items-center gap-3 px-4 py-2.5 rounded-xl mb-5 font-medium text-sm hover:bg-gray-50 transition-colors">
+          <svg className="w-4 h-4" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" />
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+          </svg>
+          Google
+        </button>
+        <div className="text-center text-gray-400 text-sm mb-4">O inicia sesión con</div>
+        <input
+          type="email"
+          placeholder="Ingresa tu correo"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm mb-3 outline-none focus:border-gray-400 transition-colors"
+        />
+        <input
+          type="password"
+          placeholder="Ingresa tu contraseña"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full border border-gray-300 rounded-xl px-4 py-2.5 text-sm mb-4 outline-none focus:border-gray-400 transition-colors"
+        />
+        <button className="w-full bg-[#6C3BF5] text-white font-bold py-3 rounded-xl text-sm tracking-wider hover:bg-[#5A32D4] transition-colors mb-4">
+          ENTRAR
+        </button>
+        <div className="text-center space-y-1">
+          <p className="text-[#6C3BF5] text-sm cursor-pointer hover:underline">¿Olvidaste tu contraseña?</p>
+          <p className="text-[#6C3BF5] text-sm cursor-pointer hover:underline">¿No tienes cuenta? Crea una aquí</p>
         </div>
       </div>
-    </section>
+    </div>
   );
-}
+};
 
-// ─── Footer ───────────────────────────────────────────────────────────────
-function Footer() {
-  return (
-    <footer className="bg-[#111827] text-gray-400">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 mb-10">
-          {/* Brand */}
-          <div className="lg:col-span-1">
-            <h2 className="text-white font-bold text-lg mb-3">
-              <span className="text-white">Market</span>
-              <span className="text-[#9A7BFF]">Desliz</span>
-            </h2>
-            <p className="text-sm leading-relaxed mb-5 text-gray-500">
-              Tu plataforma de confianza para compras a crédito y tandas digitales con pagos semanales y respaldo QR.
-            </p>
-            <div className="flex items-center gap-3">
-              <a href="#" className="w-8 h-8 rounded-lg bg-white/5 hover:bg-[#1877F2] flex items-center justify-center transition-colors">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" className="text-gray-400 hover:text-white">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                </svg>
-              </a>
-              <a href="#" className="w-8 h-8 rounded-lg bg-white/5 hover:bg-[#E4405F] flex items-center justify-center transition-colors">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" className="text-gray-400 hover:text-white">
-                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
-                </svg>
-              </a>
-              <a href="#" className="w-8 h-8 rounded-lg bg-white/5 hover:bg-[#1DA1F2] flex items-center justify-center transition-colors">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" className="text-gray-400 hover:text-white">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                </svg>
-              </a>
-              <a href="#" className="w-8 h-8 rounded-lg bg-white/5 hover:bg-[#FF0000] flex items-center justify-center transition-colors">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" className="text-gray-400 hover:text-white">
-                  <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
-                </svg>
-              </a>
-              <a href="#" className="w-8 h-8 rounded-lg bg-white/5 hover:bg-[#25D366] flex items-center justify-center transition-colors">
-                <MessageCircle size={15} className="text-gray-400 hover:text-white" />
-              </a>
-            </div>
-          </div>
-
-          {/* Compañía */}
-          <div>
-            <h3 className="text-white text-sm font-semibold mb-4">Compañía</h3>
-            <ul className="space-y-2.5">
-              {[
-                ["Sobre Nosotros", "/nosotros"],
-                ["Trabaja con Nosotros", "/trabaja-con-nosotros"],
-                ["Sala de Prensa", "/prensa"],
-                ["Blog", "/blog"],
-                ["Programa de Afiliados", "/afiliados"],
-              ].map(([label, href]) => (
-                <li key={href}>
-                  <a href={href} className="text-sm text-gray-500 hover:text-white transition-colors">{label}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Ayuda */}
-          <div>
-            <h3 className="text-white text-sm font-semibold mb-4">Ayuda</h3>
-            <ul className="space-y-2.5">
-              {[
-                ["Preguntas Frecuentes", "/preguntas-frecuentes"],
-                ["Cómo Comprar", "/como-comprar"],
-                ["Métodos de Pago", "/metodos-de-pago"],
-                ["Envíos y Entregas", "/envios"],
-                ["Devoluciones", "/devoluciones"],
-                ["Contacto", "/contacto"],
-              ].map(([label, href]) => (
-                <li key={href}>
-                  <a href={href} className="text-sm text-gray-500 hover:text-white transition-colors">{label}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Legal */}
-          <div>
-            <h3 className="text-white text-sm font-semibold mb-4">Legal</h3>
-            <ul className="space-y-2.5">
-              {[
-                ["Términos y Condiciones", "/condiciones"],
-                ["Aviso de Privacidad", "/privacidad"],
-                ["Política de Cookies", "/cookies"],
-                ["Contratos de Adhesión", "/contratos"],
-                ["Protección de Datos", "/proteccion-datos"],
-              ].map(([label, href]) => (
-                <li key={href}>
-                  <a href={href} className="text-sm text-gray-500 hover:text-white transition-colors">{label}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Contacto + Newsletter */}
-          <div>
-            <h3 className="text-white text-sm font-semibold mb-4">Contáctanos</h3>
-            <ul className="space-y-3 mb-6">
-              <li className="flex items-center gap-2 text-sm text-gray-500">
-                <Phone size={14} className="text-[#6C3BFF] shrink-0" />
-                (+52) 282-141-4939
-              </li>
-              <li className="flex items-center gap-2 text-sm text-gray-500">
-                <Mail size={14} className="text-[#6C3BFF] shrink-0" />
-                marketdesliz@gmail.com
-              </li>
-              <li className="flex items-center gap-2 text-sm text-gray-500">
-                <Clock size={14} className="text-[#6C3BFF] shrink-0" />
-                Lun–Vie: 9am – 6pm
-              </li>
-            </ul>
-
-            <p className="text-white text-xs font-semibold mb-2">Newsletter</p>
-            <div className="flex gap-2">
-              <input
-                type="email"
-                placeholder="Tu email"
-                className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-[#6C3BFF] transition-colors"
-              />
-              <button className="bg-[#6C3BFF] hover:bg-[#5b2ee6] px-3 py-2 rounded-lg transition-colors shrink-0">
-                <Send size={14} className="text-white" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom bar */}
-        <div className="pt-6 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-3">
-          <p className="text-xs text-gray-600">
-            © {new Date().getFullYear()} Market Desliz. Todos los derechos reservados.
-          </p>
-          <div className="flex items-center gap-5">
-            {[["Mapa del Sitio", "/mapa-sitio"], ["Accesibilidad", "/accesibilidad"], ["Seguridad", "/seguridad"]].map(([label, href]) => (
-              <a key={href} href={href} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">{label}</a>
-            ))}
-          </div>
-        </div>
-      </div>
-    </footer>
-  );
-}
-
-// ─── Página principal ─────────────────────────────────────────────────────
-export default function Home() {
+// ─── Página Principal ─────────────────────────────────────────────────
+export default function WelcomePage() {
   const router = useRouter();
-  const [productos, setProductos] = useState([]);
-  const [productosDestacados, setProductosDestacados] = useState([]);
-  const [carrusel, setCarrusel] = useState([]);
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [busqueda, setBusqueda] = useState('');
-  const [favorites, setFavorites] = useState([]);
-  // Estados para secciones por categoría
-  const [productosPorCategoria, setProductosPorCategoria] = useState({});
-  const [cargandoCategorias, setCargandoCategorias] = useState(true);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
 
-  // Categorías a mostrar en secciones horizontales
-  const categoriasSecciones = [
-    { nombre: 'Electrónicos', icono: Smartphone, slug: 'electronica' },
-    { nombre: 'Hogar', icono: HomeIcon, slug: 'hogar' },
-    { nombre: 'Ropa', icono: Shirt, slug: 'ropa' },
-    { nombre: 'Instrumentos', icono: Guitar, slug: 'instrumentos' },
-    { nombre: 'Cortinas', icono: HomeIcon, slug: 'cortinas' },
-    { nombre: 'Sábanas', icono: HomeIcon, slug: 'sabanas' },
-    { nombre: 'Almohadas', icono: HomeIcon, slug: 'almohadas' },
-    { nombre: 'Cubre Salas', icono: HomeIcon, slug: 'cubre-salas' },
-    { nombre: 'Cocina', icono: HomeIcon, slug: 'cocina' },
-    { nombre: 'Colchones', icono: HomeIcon, slug: 'colchones' },
-    { nombre: 'Electrodomésticos', icono: Smartphone, slug: 'electrodomesticos' },
+  // Navegación
+  const goTo = (path) => router.push(path);
+
+  const notifications = [
+    { id: 1, title: '¡Nueva colección Éshé Parallel!', description: 'Descubre la línea Otoño 2026', time: 'Hace 2 horas', read: false },
+    { id: 2, title: '¡Bienvenido a MarketDesliz!', description: 'Completa tu registro para empezar', time: 'Hace 5 horas', read: false },
+    { id: 3, title: 'Productos disponibles', description: 'Descubre lo que tenemos para ti', time: 'Hace 1 día', read: true },
   ];
-
-  useEffect(() => { cargarDatos(); }, []);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('favorites');
-    if (saved) setFavorites(JSON.parse(saved));
-  }, []);
-
-  useEffect(() => {
-    if (carrusel.length > 1) {
-      const timer = setInterval(() => {
-        setCurrentSlide((prev) => (prev + 1) % carrusel.length);
-      }, 5000);
-      return () => clearInterval(timer);
-    }
-  }, [carrusel.length]);
-
-  const toggleFavorite = (productId) => {
-    const newFavorites = favorites.includes(productId)
-      ? favorites.filter(id => id !== productId)
-      : [...favorites, productId];
-    setFavorites(newFavorites);
-    localStorage.setItem('favorites', JSON.stringify(newFavorites));
-  };
-
-  const cargarDatos = async () => {
-    try {
-      setLoading(true);
-
-      // Cargar productos activos
-      const products = await pb.collection('products').getFullList({
-        filter: 'activo = true',
-        sort: '-created'
-      });
-
-      const productosData = products.map(p => {
-        let imagenUrl = null;
-        if (p.imagen && Array.isArray(p.imagen) && p.imagen.length > 0) {
-          imagenUrl = pb.files.getURL(p, p.imagen[0]);
-        } else if (p.imagen && typeof p.imagen === 'string') {
-          imagenUrl = pb.files.getURL(p, p.imagen);
-        }
-
-        return {
-          id: p.id,
-          nombre: p.nombre || 'Producto sin nombre',
-          descripcion: p.descripcion || 'Sin descripción',
-          precio: p.precio || 0,
-          enganche: p.enganche || 0,
-          paga: p.pagoSemanal || 0,
-          categoria: p.categoria || 'General',
-          imagen: imagenUrl,
-          semanas: p.semanas || 12,
-          stock: p.stock || 0,
-          nuevo: p.nuevo || false
-        };
-      });
-
-      setProductos(productosData);
-
-      // Productos destacados (nuevos o los primeros 8)
-      const destacados = productosData.filter(p => p.nuevo === true).slice(0, 8);
-      setProductosDestacados(destacados.length > 0 ? destacados : productosData.slice(0, 8));
-
-      // Cargar productos por categoría
-      await cargarProductosPorCategoria();
-
-      // Cargar carrusel
-      const carruselData = await pb.collection('carrusel').getFullList({
-        filter: 'activo = true',
-        sort: 'orden'
-      });
-
-      setCarrusel(carruselData.map(c => {
-        let posicion = c.boton_posicion;
-        if (typeof posicion === 'string') {
-          try { posicion = JSON.parse(posicion); }
-          catch (e) { posicion = null; }
-        }
-        return {
-          id: c.id,
-          imagen: c.imagen ? pb.files.getURL(c, c.imagen) : null,
-          boton_enlace: c.boton_enlace || null,
-          boton_posicion: posicion || null
-        };
-      }));
-
-    } catch (error) {
-      console.error('Error cargando datos:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Cargar productos agrupados por categoría
-  const cargarProductosPorCategoria = async () => {
-    try {
-      setCargandoCategorias(true);
-      const productosPorCat = {};
-
-      for (const cat of categoriasSecciones) {
-        // ✅ IMPORTANTE: Eliminamos "&& stock > 0" para que los productos nuevos sin stock inicial también aparezcan
-        const products = await pb.collection('products').getFullList({
-          filter: `categoria = "${cat.slug}" && activo = true`,
-          sort: '-created',
-          limit: 5
-        });
-
-        const productosData = products.map(p => {
-          let imagenUrl = null;
-          if (p.imagen && Array.isArray(p.imagen) && p.imagen.length > 0) {
-            imagenUrl = pb.files.getURL(p, p.imagen[0]);
-          } else if (p.imagen && typeof p.imagen === 'string') {
-            imagenUrl = pb.files.getURL(p, p.imagen);
-          }
-
-          return {
-            id: p.id,
-            nombre: p.nombre || 'Producto sin nombre',
-            precio: p.precio || 0,
-            enganche: p.enganche || 0,
-            pagoSemanal: p.pagoSemanal || 0,
-            imagen: imagenUrl,
-            stock: p.stock || 0
-          };
-        });
-
-        productosPorCat[cat.slug] = productosData;
-      }
-
-      setProductosPorCategoria(productosPorCat);
-    } catch (error) {
-      console.error('Error cargando productos por categoría:', error);
-    } finally {
-      setCargandoCategorias(false);
-    }
-  };
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <>
-      <Head>
-        <title>MarketDesliz — Compra a crédito con pagos semanales</title>
-        <meta name="description" content="Compra productos a crédito con pagos semanales. Únete a tandas digitales seguras. Todo con respaldo QR." />
-      </Head>
+    <div className="min-h-screen bg-[#ECEAF5] font-sans">
+      {/* HEADER */}
+      <header className="px-6 md:px-12 py-6">
+        <div className="flex items-center justify-between max-w-7xl mx-auto">
+          <LogoMark size={56} color="#5B2BE0" />
 
-      <StoreLayout>
-        {loading ? (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : (
-          <>
-            {/* ── CARRUSEL ──────────────────────────────────────── */}
-            <section className="relative w-full overflow-hidden bg-gray-100" style={{ height: '480px' }}>
-              {carrusel.map((slide, index) => (
-                <div
-                  key={slide.id}
-                  className={`absolute inset-0 transition-opacity duration-700 ${index === currentSlide ? 'opacity-100' : 'opacity-0'}`}
-                >
-                  {slide.imagen ? (
-                    <>
-                      <img
-                        src={slide.imagen}
-                        alt="Oferta"
-                        className="w-full h-full object-cover"
-                      />
-                      {slide.boton_enlace && slide.boton_posicion && (
-                        <Link
-                          href={slide.boton_enlace}
-                          style={{
-                            position: 'absolute',
-                            bottom: slide.boton_posicion.bottom,
-                            left: slide.boton_posicion.left,
-                            right: slide.boton_posicion.right,
-                            top: slide.boton_posicion.top,
-                            transform: slide.boton_posicion.transform,
-                            width: slide.boton_posicion.width,
-                            height: slide.boton_posicion.height,
-                            backgroundColor: 'transparent',
-                            cursor: 'pointer',
-                            zIndex: 20
-                          }}
-                        />
-                      )}
-                    </>
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-r from-[#6C3BFF] to-[#9A7BFF]" />
-                  )}
-                </div>
-              ))}
+          <nav className="hidden md:flex items-center gap-8">
+            {[
+              { label: "Cómo funciona", path: "/como-funciona" },
+              { label: "Acerca de nosotros", path: "/acerca-de-nosotros" },
+              { label: "Trabaja Con Nosotros", path: "/trabaja-con-nosotros" },
+              { label: "Éshé Parallel", path: "/eshe-parallel" }
+            ].map((link) => (
+              <span
+                key={link.label}
+                onClick={() => goTo(link.path)}
+                className="text-[15px] font-medium text-textMuted cursor-pointer transition-colors duration-200 hover:text-primary"
+              >
+                {link.label}
+              </span>
+            ))}
+          </nav>
 
-              {/* Indicadores */}
-              {carrusel.length > 1 && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-30">
-                  {carrusel.map((_, index) => (
+          <div className="flex items-center gap-6">
+            {/* Notificaciones */}
+            <div className="relative">
+              <div
+                className="relative cursor-pointer"
+                onClick={() => setShowNotifications(!showNotifications)}
+              >
+                <BellIcon size={22} className="text-textMuted" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-primary rounded-full border-2 border-bgPage" />
+                )}
+              </div>
+              {showNotifications && (
+                <div className="absolute right-0 mt-3 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
+                  <div className="flex items-center justify-between p-4 border-b">
+                    <h3 className="font-bold text-gray-800">Notificaciones</h3>
                     <button
-                      key={index}
-                      onClick={() => setCurrentSlide(index)}
-                      className={`h-1.5 rounded-full transition-all duration-300 ${index === currentSlide ? 'bg-white w-6' : 'bg-white/50 w-1.5'
-                        }`}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* ── PRODUCTOS DESTACADOS ──────────────────────────── */}
-            <section className="py-12 bg-gray-50">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6">
-
-                {/* Encabezado de sección */}
-                <div className="flex items-center justify-between mb-7">
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-                      Productos <span className="text-[#6C3BFF]">Destacados</span>
-                    </h2>
-                    <div className="w-10 h-0.5 bg-[#6C3BFF] mt-1.5 rounded-full" />
-                  </div>
-                  <Link
-                    href="/productos"
-                    className="flex items-center gap-1 text-sm text-[#6C3BFF] font-medium hover:gap-2 transition-all"
-                  >
-                    Ver todos <ChevronRight size={15} />
-                  </Link>
-                </div>
-
-                {/* Grid de productos */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {productosDestacados.map((producto) => (
-                    <div
-                      key={producto.id}
-                      className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group"
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                      onClick={() => setShowNotifications(false)}
                     >
-                      {/* Imagen */}
-                      <div className="relative">
-                        <Link href={`/productos/${producto.id}`}>
-                          <div className="aspect-square bg-gray-50 overflow-hidden">
-                            {producto.imagen ? (
-                              <img
-                                src={producto.imagen}
-                                alt={producto.nombre}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center">
-                                <Package size={40} className="text-gray-300" />
-                              </div>
-                            )}
-                          </div>
-                        </Link>
-
-                        {/* Botón favorito */}
-                        <button
-                          onClick={() => toggleFavorite(producto.id)}
-                          className="absolute top-2.5 right-2.5 w-8 h-8 bg-white rounded-full shadow-sm flex items-center justify-center hover:scale-110 transition-transform"
-                        >
-                          <Heart
-                            size={15}
-                            className={favorites.includes(producto.id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}
-                          />
-                        </button>
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <div className="p-6 text-center text-muted-foreground text-sm">
+                        No tienes notificaciones
                       </div>
-
-                      {/* Info */}
-                      <div className="p-4">
-                        {/* Badge categoría */}
-                        <span className="inline-block text-[10px] font-semibold text-[#6C3BFF] bg-[#6C3BFF]/8 px-2 py-0.5 rounded-full mb-2 uppercase tracking-wide">
-                          {producto.categoria}
-                        </span>
-
-                        <Link href={`/productos/${producto.id}`}>
-                          <h3 className="text-sm font-bold text-gray-900 leading-tight mb-1 line-clamp-2 hover:text-[#6C3BFF] transition-colors">
-                            {producto.nombre}
-                          </h3>
-                        </Link>
-
-                        {/* Precios — diferenciador clave de MarketDesliz */}
-                        <div className="mt-3 space-y-1.5 border-t border-gray-50 pt-3">
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-400">Paga</span>
-                            <span className="text-sm font-bold text-[#6C3BFF]">{formatMoney(producto.paga)}/sem</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-gray-400">Enganche</span>
-                            <span className="text-sm font-semibold text-[#10b981]">{formatMoney(producto.enganche)}</span>
+                    ) : (
+                      notifications.map((notif) => (
+                        <div
+                          key={notif.id}
+                          className={`p-4 border-b last:border-0 cursor-pointer hover:bg-muted/30 transition-colors ${
+                            !notif.read ? 'bg-primary/5' : ''
+                          }`}
+                          onClick={() => {
+                            setShowNotifications(false);
+                            goTo('/notificaciones');
+                          }}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`w-2 h-2 rounded-full mt-1.5 ${!notif.read ? 'bg-primary' : 'bg-gray-300'}`} />
+                            <div>
+                              <p className="text-sm font-semibold text-gray-800">{notif.title}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{notif.description}</p>
+                              <p className="text-[10px] text-muted-foreground mt-1">{notif.time}</p>
+                            </div>
                           </div>
                         </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="p-3 border-t">
+                    <button
+                      className="w-full text-center text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+                      onClick={() => {
+                        setShowNotifications(false);
+                        goTo('/notificaciones');
+                      }}
+                    >
+                      Ver todas las notificaciones
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
+            {/* Cuenta */}
+            <div className="relative">
+              <button
+                className="flex items-center gap-2 text-textMuted hover:text-primary transition-colors"
+                onClick={() => setShowLogin(!showLogin)}
+              >
+                <User size={20} />
+                <span className="text-sm font-medium">Mi cuenta</span>
+                <ChevronDown size={16} className="text-gray-400" />
+              </button>
+              {showLogin && <LoginDropdown onClose={() => setShowLogin(false)} />}
+            </div>
+          </div>
+        </div>
+      </header>
 
-                        {/* CTA */}
-                        <Link
-                          href={`/productos/${producto.id}`}
-                          className="mt-4 flex items-center justify-center gap-1.5 w-full bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white text-xs font-semibold py-2.5 rounded-xl transition-colors"
-                        >
-                          Ver producto <ChevronRight size={13} />
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
+      {/* MAIN THREE-COLUMN LAYOUT */}
+      <main className="max-w-7xl mx-auto px-6 md:px-12 pt-0">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 min-h-[600px] items-start">
+          {/* LEFT: Greeting + Action Cards */}
+          <div className="lg:col-span-5 pt-7">
+            <div className="mb-9">
+              <h1 className="text-4xl md:text-5xl font-extrabold text-textMain leading-[1.1] tracking-[-0.03em] mb-2">
+                Hola, Bienvenido.
+              </h1>
+              <p className="text-xl text-textSub font-normal">
+                ¿Qué quieres hacer hoy?
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <ActionCard
+                icon={<ShoppingBag size={22} />}
+                title="Explorar productos"
+                subtitle="Descubre lo que tenemos para ti"
+                onClick={() => goTo('/productos')}
+              />
+              <ActionCard
+                icon={<Store size={22} />}
+                title="Explorar negocios"
+                subtitle="Locales verificados"
+                onClick={() => goTo('/negocios')}
+              />
+              <ActionCard
+                icon={<Wrench size={22} />}
+                title="Explorar servicios"
+                subtitle="Encuentra profesionales cerca de ti"
+                onClick={() => goTo('/servicios')}
+              />
+              <ActionCard
+                icon={<AppleIcon size={22} />}
+                title="Fruta de temporada"
+                subtitle="Productos frescos y locales"
+                onClick={() => goTo('/fruta')}
+              />
+              <ActionCard
+                icon={<Users size={22} />}
+                title="Tandas exclusivas"
+                subtitle="Según tu nivel"
+                onClick={() => goTo('/tandas')}
+              />
+            </div>
+          </div>
+
+          {/* CENTER: 3D Glass Card */}
+          <div className="lg:col-span-4 flex items-center justify-center relative min-h-[420px]">
+            {/* Burbujas flotantes */}
+            {[
+              { w: 16, h: 16, top: 80, left: 60 },
+              { w: 10, h: 10, top: 160, left: 30 },
+              { w: 20, h: 20, bottom: 120, right: 50 },
+              { w: 11, h: 11, bottom: 180, right: 30 },
+              { w: 8, h: 8, top: 240, left: 80 },
+            ].map((b, i) => (
+              <div
+                key={i}
+                className="absolute rounded-full bg-white/60 border border-white/80 backdrop-blur-sm"
+                style={{
+                  width: b.w,
+                  height: b.h,
+                  top: b.top,
+                  left: b.left,
+                  bottom: b.bottom,
+                  right: b.right,
+                  boxShadow: "0 2px 8px rgba(130,90,220,0.10)",
+                }}
+              />
+            ))}
+
+            <div className="relative inline-flex flex-col items-center">
+              {/* Glass Card */}
+              <div
+                className="w-[300px] h-[320px] md:w-[360px] md:h-[380px] rounded-[44px] flex items-center justify-center relative z-10 transition-all duration-500 hover:scale-105 cursor-pointer mt-16 md:mt-20"
+                style={{
+                  background: "linear-gradient(145deg, rgba(255,255,255,0.85) 0%, rgba(235,228,255,0.60) 100%)",
+                  boxShadow: "30px 30px 80px rgba(130,90,220,0.18), -15px -15px 40px rgba(255,255,255,0.85), inset 0 1px 1px rgba(255,255,255,0.9)",
+                  backdropFilter: "blur(18px)",
+                  WebkitBackdropFilter: "blur(18px)",
+                  border: "1.5px solid rgba(255,255,255,0.75)",
+                }}
+                onClick={() => goTo('/productos')}
+              >
+                <div className="flex flex-col items-center">
+                  <span
+                    className="font-logo font-bold text-7xl md:text-8xl tracking-tight"
+                    style={{
+                      background: 'linear-gradient(135deg, #5B2BE0, #9B5AFF)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                    }}
+                  >
+                    ʃƪʃƪ
+                  </span>
                 </div>
               </div>
-            </section>
 
-            {/* ── SECCIONES POR CATEGORÍA ─────────────────────── */}
-            {!cargandoCategorias && categoriasSecciones.map((cat) => {
-              const productosCat = productosPorCategoria[cat.slug] || [];
-              if (productosCat.length === 0) return null;
-
-              return (
-                <CategorySection
-                  key={cat.slug}
-                  title={cat.nombre}
-                  icon={cat.icono}
-                  categoria={cat.slug}
-                  productos={productosCat}
-                  seeAllLink={`/productos/categoria/${cat.slug}`}
+              {/* Anillos inferiores */}
+              <div
+                className="absolute -bottom-9 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 mt-4"
+                style={{ width: 320 }}
+              >
+                <div
+                  className="rounded-full"
+                  style={{
+                    width: 320, height: 30,
+                    marginTop: -8,
+                    border: "1.5px solid rgba(180,160,240,0.35)",
+                  }}
                 />
-              );
-            })}
-
-            {/* ── BENEFICIOS ────────────────────────────────────── */}
-            <section className="py-12 bg-white border-y border-gray-100">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-                  {[
-                    { icon: CreditCard, title: "Crédito Fácil", desc: "Compra ahora y paga a tu ritmo. Sin requisitos complicados ni largas esperas." },
-                    { icon: Calendar, title: "Pagos Semanales", desc: "Cuotas que se ajustan a tu economía. Paga en plazos cómodos y flexibles." },
-                    { icon: QrCode, title: "Cobro con QR", desc: "Nuestro cobrador escanea tu código QR. Todo digital, todo seguro." },
-                  ].map(({ icon: Icon, title, desc }) => (
-                    <div key={title} className="flex flex-col items-center text-center px-4">
-                      <div className="w-14 h-14 rounded-2xl bg-[#6C3BFF]/8 flex items-center justify-center mb-4">
-                        <Icon size={26} className="text-[#6C3BFF]" />
-                      </div>
-                      <h3 className="font-bold text-gray-900 text-base mb-2">{title}</h3>
-                      <p className="text-gray-500 text-sm leading-relaxed">{desc}</p>
-                    </div>
-                  ))}
-                </div>
+                <div
+                  className="rounded-full"
+                  style={{
+                    width: 290, height: 22,
+                    marginTop: -18, opacity: 0.7,
+                    border: "1.5px solid rgba(180,160,240,0.35)",
+                  }}
+                />
+                <div
+                  style={{
+                    width: 300, height: 22,
+                    background: "radial-gradient(ellipse at center, rgba(185,160,255,0.38) 0%, rgba(180,155,255,0.10) 70%, transparent 100%)",
+                    borderRadius: "50%",
+                    filter: "blur(4px)",
+                  }}
+                />
               </div>
-            </section>
+            </div>
+          </div>
 
-            {/* ── BANNER TANDA ──────────────────────────────────── */}
-            <section className="py-14 bg-gradient-to-r from-[#6C3BFF] to-[#9A7BFF]">
-              <div className="max-w-2xl mx-auto px-4 text-center">
-                <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3">
-                  ¿Listo para una tanda?
-                </h2>
-                <p className="text-white/75 text-sm mb-7 leading-relaxed">
-                  Únete a una tanda digital, paga tu cuota de gasolina y recibe tu turno.
-                  Todo transparente, todo seguro.
-                </p>
-                <Link
-                  href="/tandas"
-                  className="inline-block bg-white text-[#6C3BFF] px-8 py-2.5 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors shadow-sm"
-                >
-                  Ver tandas activas
-                </Link>
-              </div>
-            </section>
+          {/* RIGHT: Feature List */}
+          <div className="lg:col-span-3 pt-12 flex flex-col gap-6">
+            <FeatureItem
+              icon={<ShoppingBag size={18} />}
+              title="Compra fácil"
+              subtitle="A crédito o de contado"
+            />
+            <FeatureItem
+              icon={<Users size={18} />}
+              title="Pagos semanales"
+              subtitle="Desde $50 por semana"
+            />
+            <FeatureItem
+              icon={<CreditCard size={18} />}
+              title="Tarjeta virtual"
+              subtitle="Identificador único"
+            />
+          </div>
+        </div>
+      </main>
 
-            {/* ── ¿POR QUÉ ELEGIRNOS? ───────────────────────────── */}
-            <WhyChooseUs />
+      {/* SCROLL HINT */}
+      <div
+        className="flex flex-col items-center gap-2 pt-2 pb-6 cursor-pointer"
+        onClick={() => goTo('/productos')}
+      >
+        <div className="w-6 h-10 rounded-full border-2 border-textMuted/30 flex items-start justify-center p-1">
+          <div className="w-1.5 h-3 rounded-full bg-primary/60 animate-scroll-dot" />
+        </div>
+        <p className="text-[12px] text-textMuted tracking-[0.2em] uppercase font-medium">
+          Desliza para descubrir
+        </p>
+      </div>
 
-            {/* ── CÓMO FUNCIONA ─────────────────────────────────── */}
-            <section className="py-14 bg-gray-50">
-              <div className="max-w-4xl mx-auto px-4 sm:px-6">
-                <div className="text-center mb-10">
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    Así de <span className="text-[#6C3BFF]">fácil</span> es
-                  </h2>
-                  <div className="w-10 h-0.5 bg-[#6C3BFF] mt-2 mx-auto rounded-full" />
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                  {[
-                    { n: "1", title: "Elige", desc: "Selecciona el producto que más te guste" },
-                    { n: "2", title: "Solicita", desc: "Regístrate con tu teléfono y elige tu plan" },
-                    { n: "3", title: "Recibe", desc: "Te contactamos para coordinar la entrega" },
-                    { n: "4", title: "Paga", desc: "El cobrador escanea tu QR y listo" },
-                  ].map(({ n, title, desc }) => (
-                    <div key={n} className="flex flex-col items-center text-center">
-                      <div className="w-12 h-12 rounded-full bg-[#6C3BFF] flex items-center justify-center mb-4 shadow-md shadow-[#6C3BFF]/25">
-                        <span className="text-white font-bold text-lg">{n}</span>
-                      </div>
-                      <h3 className="font-bold text-gray-900 text-sm mb-1">{title}</h3>
-                      <p className="text-gray-500 text-xs leading-relaxed">{desc}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            {/* ── CTA FINAL ─────────────────────────────────────── */}
-            <CTASection />
-
-            {/* ── FOOTER ────────────────────────────────────────── */}
-            <Footer />
-          </>
-        )}
-      </StoreLayout>
-    </>
+      {/* Estilos de animación */}
+      <style jsx global>{`
+        @keyframes scroll-dot {
+          0% { transform: translateY(0); opacity: 1; }
+          100% { transform: translateY(16px); opacity: 0; }
+        }
+        .animate-scroll-dot {
+          animation: scroll-dot 1.5s ease-in-out infinite;
+        }
+      `}</style>
+    </div>
   );
 }

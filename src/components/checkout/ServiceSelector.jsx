@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Banknote, CreditCard, Home, Truck } from 'lucide-react';
 
 const formatMoney = (amount) => {
-  if (!amount) return '';
+  if (!amount && amount !== 0) return '$0';
   return new Intl.NumberFormat('es-MX', {
     style: 'currency', currency: 'MXN', minimumFractionDigits: 0
   }).format(amount);
@@ -11,7 +11,22 @@ const formatMoney = (amount) => {
 
 export default function ServiceSelector({ product, planCalculado, onSelect }) {
   const [selectedService, setSelectedService] = useState(null);
-  const precioContado = product?.precio ? Math.round(product.precio * 2 / 3) : 0;
+
+  // ✅ Usar precioTotal (o precio como fallback)
+  const precioTotal = product?.precioTotal || product?.precio || 0;
+  const precioContado = Math.round(precioTotal * 2 / 3);
+
+  // ✅ Obtener enganche de forma segura
+  const enganche = planCalculado?.enganche || Math.round(precioTotal * 0.25);
+
+  // ✅ Verificar que product existe
+  if (!product) {
+    return (
+      <div className="p-4 text-center text-gray-500">
+        No hay información del producto
+      </div>
+    );
+  }
 
   const services = [
     {
@@ -29,8 +44,8 @@ export default function ServiceSelector({ product, planCalculado, onSelect }) {
       id: 'credito',
       icon: CreditCard,
       title: 'Comprar a crédito',
-      description: `Enganche + pagos semanales`,
-      detail: planCalculado?.enganche ? `Desde ${formatMoney(planCalculado.enganche)}` : null,
+      description: 'Enganche + pagos semanales',
+      detail: `Desde ${formatMoney(enganche)}`,
       accent: '#6C3BFF',
       bg: 'hover:border-[#6C3BFF]/40 hover:bg-[#6C3BFF]/5',
       activeBg: 'border-[#6C3BFF] bg-[#6C3BFF]/8',
@@ -78,7 +93,7 @@ export default function ServiceSelector({ product, planCalculado, onSelect }) {
             }`}
           >
             <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${
-              isActive ? `bg-white shadow-sm` : 'bg-gray-50'
+              isActive ? 'bg-white shadow-sm' : 'bg-gray-50'
             }`}>
               <Icon size={18} className={isActive ? activeIcon : 'text-gray-400'} />
             </div>

@@ -1,0 +1,12 @@
+[
+  {
+    "nombre": "Electrónicos",
+    "slug": "electronicos",
+    "icono": "⚡",
+    "imagen": "",
+    "orden": 1,
+    "descripcion": "Productos electrónicos",
+    "activo": true,
+    "productCount": 0
+  }
+]

@@ -78,3 +78,12 @@ export const formatPhone = (phone) => {
   }
   return phone;
 };
+
+/**
+ * Combina clases de Tailwind (utilidad para shadcn/ui)
+ * @param  {...any} inputs - Clases a combinar
+ * @returns {string} - Clases combinadas
+ */
+export const cn = (...inputs) => {
+  return inputs.filter(Boolean).join(' ');
+};

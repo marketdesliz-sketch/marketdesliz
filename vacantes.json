@@ -1,0 +1,11 @@
+[
+  {
+    "nombre": "Empresa XYZ",
+    "email": "rh@xyz.com",
+    "telefono": "5512345678",
+    "puesto": "Vendedor",
+    "experiencia": "2 años",
+    "mensaje": "Buscamos vendedor",
+    "leido": false
+  }
+]

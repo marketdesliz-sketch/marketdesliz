@@ -1,0 +1,22 @@
+[
+  {
+    "nivel": 0,
+    "nombre": "Básico",
+    "productosRequeridos": 0,
+    "limiteDeuda": 5000,
+    "tandaDisponible": 0,
+    "maxProductosCurso": 3,
+    "colorTarjeta": "#4A90D9",
+    "icono": "⭐"
+  },
+  {
+    "nivel": 1,
+    "nombre": "Bronce",
+    "productosRequeridos": 3,
+    "limiteDeuda": 10000,
+    "tandaDisponible": 1,
+    "maxProductosCurso": 5,
+    "colorTarjeta": "#CD7F32",
+    "icono": "🥉"
+  }
+]
