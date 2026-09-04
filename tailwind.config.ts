@@ -8,7 +8,7 @@ module.exports = {
     extend: {
       colors: {
         // === COLORES EXISTENTES (los mantienes) ===
-        primary: "#5B2BE0",
+        primaryHex: "#5B2BE0",
         primaryLight: "#F3EEFF",
         primaryDark: "#4A1FB8",
         bgPage: "#ECEAF5",
