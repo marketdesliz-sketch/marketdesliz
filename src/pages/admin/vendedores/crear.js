@@ -21,7 +21,7 @@ import {
   Smartphone,
   User
 } from 'lucide-react';
-import AdminLayout from '../../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../../layouts/AdminLayoutMinimal';
 import { crearVendedorCompleto } from '../../../lib/vendedorService';
 
 export default function CrearVendedorPage() {
@@ -160,7 +160,7 @@ export default function CrearVendedorPage() {
         <title>Crear Vendedor | Admin MarketDesliz</title>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-3xl mx-auto">
 
           {/* Success Card */}
@@ -446,7 +446,7 @@ export default function CrearVendedorPage() {
             </form>
           </div>
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     </>
   );
 }

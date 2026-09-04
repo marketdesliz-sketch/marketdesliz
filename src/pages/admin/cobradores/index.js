@@ -24,7 +24,7 @@ import {
   ChevronRight,
   Filter
 } from 'lucide-react';
-import AdminLayout from '../../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../../layouts/AdminLayoutMinimal';
 import pb from '../../../lib/pocketbase';
 import {
   getCobradoresPaginated,
@@ -286,11 +286,11 @@ export default function AdminCobradoresPage() {
   // ─── Renderizado ──────────────────────────────────────────────────────
   if (loading && !refreshing) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="flex justify-center items-center h-64">
           <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
@@ -300,7 +300,7 @@ export default function AdminCobradoresPage() {
         <title>Cobradores | Admin MarketDesliz</title>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-7xl mx-auto">
 
           {/* ─── Header ─────────────────────────────────────────────────── */}
@@ -746,7 +746,7 @@ export default function AdminCobradoresPage() {
             </div>
           </div>
         )}
-      </AdminLayout>
+      </AdminLayoutMinimal>
     </>
   );
 }

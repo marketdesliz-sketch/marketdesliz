@@ -39,12 +39,13 @@ function formatProduct(record) {
     nombre: record.nombre || '',
     descripcion: record.descripcion || '',
     precio: record.precio || 0,
-    precioContado: Math.round((record.precio || 0) * 2 / 3),
+    precioContado: Math.round((record.precio || 0) * 0.9), // 90% del precio a crédito
     enganche: record.enganche || Math.round((record.precio || 0) * 0.15),
     pagoSemanal: record.pagoSemanal || Math.round((record.precio || 0) * 0.05),
     semanas: record.semanas || 12,
     frecuenciaPago: record.frecuenciaPago || 'semanal',
-    categoria: record.categoria || '',
+    categoria: record.expand?.categoriaId?.nombre || '',
+    categoriaId: record.categoriaId, // 🟢 añadimos el ID
     subcategoria: record.subcategoria || '',
     imagen: imageUrl,
     activo: record.activo === true,
@@ -66,7 +67,8 @@ export async function getProducts() {
 
     const records = await pb.collection('products').getFullList({
       filter: 'activo = true',
-      sort: '-created'
+      sort: '-created',
+      expand: 'categoriaId'
     });
 
     console.log(`✅ ${records.length} productos cargados`);
@@ -82,7 +84,9 @@ export async function getProducts() {
 // ============================================
 export async function getProductById(id) {
   try {
-    const record = await pb.collection('products').getOne(id);
+    const record = await pb.collection('products').getOne(id, {
+      expand: 'categoriaId,subcategoriaId'
+    });
     return formatProduct(record);
   } catch (error) {
     console.error('❌ Error obteniendo producto por ID:', error);
@@ -93,27 +97,25 @@ export async function getProductById(id) {
 // ============================================
 // OBTENER PRODUCTOS POR CATEGORÍA (MEJORADO)
 // ============================================
-export async function getProductsByCategory(categoria, limit = null) {
+export async function getProductsByCategory(categoriaId, limit = null) {
   try {
-    if (!categoria || categoria === 'todos' || categoria === 'Todas') {
+    if (!categoriaId || categoriaId === 'todos' || categoriaId === 'Todas') {
       return await getProducts();
     }
 
-    // Normalizar el nombre de la categoría
-    const categoriaNormalizada = escapeFilterValue(categoria.toLowerCase().trim());
-
-    console.log(`📂 Filtrando productos por categoría: "${categoriaNormalizada}"`);
+    console.log(`📂 Filtrando productos por categoría ID: "${categoriaId}"`);
 
     const options = {
-      filter: `categoria = "${categoriaNormalizada}" && activo = true`,
-      sort: '-created'
+      filter: `categoriaId = "${categoriaId}" && activo = true`,
+      sort: '-created',
+      expand: 'categoriaId'
     };
 
     if (limit) options.limit = limit;
 
     const records = await pb.collection('products').getFullList(options);
 
-    console.log(`✅ ${records.length} productos en categoría ${categoriaNormalizada}`);
+    console.log(`✅ ${records.length} productos en categoría ${categoriaId}`);
     return records.map(formatProduct);
   } catch (error) {
     console.error('❌ Error obteniendo productos por categoría:', error);
@@ -143,11 +145,11 @@ export async function getFeaturedProducts(limit = 8) {
 // ============================================
 // BUSCAR PRODUCTOS (MEJORADO - PROFESIONAL)
 // ============================================
-export async function searchProducts(query, categoria = null, filtros = {}) {
+export async function searchProducts(query, categoriaId = null, filtros = {}) {
   try {
     // Caso: Sin búsqueda, solo filtrar por categoría
-    if ((!query || query.trim() === '') && categoria && categoria !== 'todos') {
-      return await getProductsByCategory(categoria);
+    if ((!query || query.trim() === '') && categoriaId && categoriaId !== 'todos') {
+      return await getProductsByCategory(categoriaId);
     }
 
     // Caso: Sin búsqueda ni categoría, traer todos
@@ -162,8 +164,8 @@ export async function searchProducts(query, categoria = null, filtros = {}) {
     let filter = `activo = true && (nombre ~ "${searchTerm}" || descripcion ~ "${searchTerm}" || sku ~ "${searchTerm}")`;
 
     // Agregar filtro de categoría si viene
-    if (categoria && categoria !== 'todos') {
-      filter += ` && categoria = "${categoria}"`;
+    if (categoriaId && categoriaId !== 'todos') {
+      filter += ` && categoriaId = "${categoriaId}"`;
     }
 
     // Agregar filtro de precio máximo
@@ -180,7 +182,8 @@ export async function searchProducts(query, categoria = null, filtros = {}) {
 
     const records = await pb.collection('products').getFullList({
       filter: filter,
-      sort: '-created'
+      sort: '-created',
+      expand: 'categoriaId'
     });
 
     console.log(`✅ Encontrados ${records.length} productos para "${query}"`);
@@ -194,14 +197,15 @@ export async function searchProducts(query, categoria = null, filtros = {}) {
 // ============================================
 // OBTENER PRODUCTOS RELACIONADOS
 // ============================================
-export async function getRelatedProducts(productId, categoria, limit = 6) {
+export async function getRelatedProducts(productId, categoriaId, limit = 6) {
   try {
-    if (!categoria) return [];
+    if (!categoriaId) return [];
 
     const records = await pb.collection('products').getFullList({
-      filter: `categoria = "${escapeFilterValue(categoria)}" && id != "${productId}" && activo = true`,
+      filter: `categoriaId = "${categoriaId}" && id != "${productId}" && activo = true`,
       sort: '-created',
-      limit: limit
+      limit: limit,
+      expand: 'categoriaId'
     });
 
     console.log(`🔗 ${records.length} productos relacionados encontrados`);
@@ -215,17 +219,18 @@ export async function getRelatedProducts(productId, categoria, limit = 6) {
 // ============================================
 // OBTENER PRODUCTOS POR RANGO DE PRECIO
 // ============================================
-export async function getProductsByPriceRange(minPrice, maxPrice, categoria = null) {
+export async function getProductsByPriceRange(minPrice, maxPrice, categoriaId = null) {
   try {
     let filter = `activo = true && precio >= ${minPrice} && precio <= ${maxPrice}`;
 
-    if (categoria && categoria !== 'todos') {
-      filter += ` && categoria = "${escapeFilterValue(categoria)}"`;
+    if (categoriaId && categoriaId !== 'todos') {
+      filter += ` && categoriaId = "${categoriaId}"`;
     }
 
     const records = await pb.collection('products').getFullList({
       filter: filter,
-      sort: 'precio'
+      sort: 'precio',
+      expand: 'categoriaId'
     });
 
     return records.map(formatProduct);
@@ -260,22 +265,41 @@ export async function getTopSellingProducts(limit = 10) {
 // ============================================
 export async function getCategoriesWithCount() {
   try {
-    const productos = await pb.collection('products').getFullList({
-      filter: 'activo = true'
+    // 1. Obtener todas las categorías activas (id + nombre)
+    const categorias = await pb.collection('categorias').getFullList({
+      filter: 'activo = true',
+      sort: 'nombre',
+      fields: 'id,nombre'
     });
 
+    if (categorias.length === 0) return [];
+
+    // 2. Obtener todos los productos activos (solo necesitamos categoriaId)
+    const productos = await pb.collection('products').getFullList({
+      filter: 'activo = true',
+      fields: 'categoriaId'
+    });
+
+    // 3. Contar productos por categoriaId
     const conteo = {};
     productos.forEach(p => {
-      if (p.categoria) {
-        conteo[p.categoria] = (conteo[p.categoria] || 0) + 1;
+      if (p.categoriaId) {
+        conteo[p.categoriaId] = (conteo[p.categoriaId] || 0) + 1;
       }
     });
 
-    return Object.entries(conteo).map(([nombre, count]) => ({
-      nombre,
-      slug: nombre.toLowerCase().replace(/\s+/g, '-'),
-      count
-    })).sort((a, b) => b.count - a.count);
+    // 4. Construir resultado combinando nombre + count
+    const resultado = categorias.map(cat => ({
+      id: cat.id,
+      nombre: cat.nombre,
+      slug: cat.nombre.toLowerCase().replace(/\s+/g, '-'),
+      count: conteo[cat.id] || 0
+    }));
+
+    // Ordenar por cantidad descendente
+    resultado.sort((a, b) => b.count - a.count);
+
+    return resultado;
   } catch (error) {
     console.error('❌ Error obteniendo conteo de categorías:', error);
     return [];
@@ -289,30 +313,25 @@ export async function createProduct(data) {
   try {
     const formData = new FormData();
 
-    // Campos obligatorios
     formData.append('nombre', data.nombre);
     formData.append('precio', parseFloat(data.precio));
     formData.append('enganche', parseFloat(data.enganche) || 0);
     formData.append('pagoSemanal', parseFloat(data.pagoSemanal) || 0);
     formData.append('semanas', parseInt(data.semanas) || 12);
-    formData.append('categoria', data.categoria.toLowerCase().trim());
+    formData.append('categoriaId', data.categoriaId);  // 👈 Relación
     formData.append('activo', data.activo === true);
 
-    // Campos opcionales
     if (data.descripcion) formData.append('descripcion', data.descripcion);
-    if (data.subcategoria) formData.append('subcategoria', data.subcategoria);
     if (data.stock !== undefined) formData.append('stock', parseInt(data.stock) || 0);
     if (data.sku) formData.append('sku', data.sku);
     if (data.costo !== undefined) formData.append('costo', parseFloat(data.costo) || 0);
     if (data.diasEntrega !== undefined) formData.append('diasEntrega', parseInt(data.diasEntrega) || 1);
     if (data.nuevo !== undefined) formData.append('nuevo', data.nuevo === true);
 
-    // Imagen principal
     if (data.imagen) {
       formData.append('imagen', data.imagen);
     }
 
-    // Múltiples imágenes
     if (data.imagenes && Array.isArray(data.imagenes) && data.imagenes.length > 0) {
       data.imagenes.forEach(file => {
         formData.append('imagenes', file);
@@ -320,7 +339,6 @@ export async function createProduct(data) {
     }
 
     const record = await pb.collection('products').create(formData);
-    console.log(`✅ Producto creado: ${record.nombre}`);
     return formatProduct(record);
   } catch (error) {
     console.error('❌ Error creando producto:', error);
@@ -335,30 +353,25 @@ export async function updateProduct(id, data) {
   try {
     const formData = new FormData();
 
-    // Campos obligatorios
     formData.append('nombre', data.nombre);
     formData.append('precio', parseFloat(data.precio));
     formData.append('enganche', parseFloat(data.enganche) || 0);
     formData.append('pagoSemanal', parseFloat(data.pagoSemanal) || 0);
     formData.append('semanas', parseInt(data.semanas) || 12);
-    formData.append('categoria', data.categoria.toLowerCase().trim());
+    formData.append('categoriaId', data.categoriaId);
     formData.append('activo', data.activo === true);
 
-    // Campos opcionales
     if (data.descripcion) formData.append('descripcion', data.descripcion);
-    if (data.subcategoria) formData.append('subcategoria', data.subcategoria);
     if (data.stock !== undefined) formData.append('stock', parseInt(data.stock) || 0);
     if (data.sku) formData.append('sku', data.sku);
     if (data.costo !== undefined) formData.append('costo', parseFloat(data.costo) || 0);
     if (data.diasEntrega !== undefined) formData.append('diasEntrega', parseInt(data.diasEntrega) || 1);
     if (data.nuevo !== undefined) formData.append('nuevo', data.nuevo === true);
 
-    // Imagen principal (si es un archivo nuevo, no una URL)
     if (data.imagen && typeof data.imagen !== 'string') {
       formData.append('imagen', data.imagen);
     }
 
-    // Múltiples imágenes
     if (data.imagenes && Array.isArray(data.imagenes) && data.imagenes.length > 0) {
       data.imagenes.forEach(file => {
         formData.append('imagenes', file);
@@ -366,7 +379,6 @@ export async function updateProduct(id, data) {
     }
 
     const record = await pb.collection('products').update(id, formData);
-    console.log(`✅ Producto actualizado: ${record.nombre}`);
     return formatProduct(record);
   } catch (error) {
     console.error('❌ Error actualizando producto:', error);
@@ -426,20 +438,39 @@ export async function getProductsPaginated({ page = 1, perPage = ITEMS_PER_PAGE,
   try {
     let filter = '';
 
-    // Filtro de estado (activo/inactivo/todos)
+    // 🔹 Filtro de estado (activo/inactivo/todos)
     if (estado === 'activos') {
       filter = 'activo = true';
     } else if (estado === 'inactivos') {
       filter = 'activo = false';
     }
 
-    // Filtro de categoría
+    // 🔹 Filtro de categoría (convertir nombre a ID)
+    let categoriaId = null;
     if (categoria && categoria !== 'todos') {
-      const catFilter = `categoria = "${escapeFilterValue(categoria)}"`;
+      try {
+        const catRecord = await pb.collection('categorias').getFirstListItem(
+          `nombre = "${escapeFilterValue(categoria)}" && activo = true`,
+          { fields: 'id' }
+        );
+        if (catRecord) {
+          categoriaId = catRecord.id;
+        } else {
+          // Si no se encuentra, intentar buscar por ID directamente (por si se pasó un ID)
+          // Pero asumimos que es nombre.
+          console.warn(`⚠️ Categoría no encontrada: ${categoria}`);
+        }
+      } catch (e) {
+        console.warn(`⚠️ Error buscando categoría: ${categoria}`, e);
+      }
+    }
+
+    if (categoriaId) {
+      const catFilter = `categoriaId = "${categoriaId}"`;
       filter = filter ? `${filter} && ${catFilter}` : catFilter;
     }
 
-    // Búsqueda por nombre, descripción o SKU
+    // 🔹 Búsqueda por nombre, descripción o SKU
     if (search.trim()) {
       const term = escapeFilterValue(search.trim());
       const searchFilter = `(nombre ~ "${term}" || descripcion ~ "${term}" || sku ~ "${term}")`;
@@ -448,19 +479,18 @@ export async function getProductsPaginated({ page = 1, perPage = ITEMS_PER_PAGE,
 
     const result = await pb.collection('products').getList(page, perPage, {
       filter: filter || undefined,
-      sort: sort
+      sort: sort,
+      expand: 'categoriaId'
     });
 
-    // Formatear productos (con imágenes)
+    // Formatear productos
     const items = result.items.map(record => {
       const formatted = formatProduct(record);
-      // Agregar URLs de imágenes adicionales
       if (record.imagenes && Array.isArray(record.imagenes)) {
         formatted.imagenesUrls = record.imagenes.map(img => pb.files.getURL(record, img));
       } else {
         formatted.imagenesUrls = [];
       }
-      // Agregar campo costo y diasEntrega
       formatted.costo = record.costo || 0;
       formatted.diasEntrega = record.diasEntrega || 1;
       return formatted;
@@ -483,43 +513,22 @@ export async function getProductsPaginated({ page = 1, perPage = ITEMS_PER_PAGE,
  * Obtener lista de categorías de productos (desde PocketBase o fallback)
  * @returns {Promise<Array>} Lista de nombres de categorías
  */
+// productsService.js
 export async function getProductCategories() {
   try {
-    // Intentar obtener desde la colección 'categorias' (si existe)
     const categorias = await pb.collection('categorias').getFullList({
       filter: 'activo = true',
       sort: 'nombre',
-      fields: 'nombre'
+      fields: 'id,nombre'
     });
     if (categorias.length > 0) {
-      const names = categorias.map(c => c.nombre).filter(Boolean);
-      // Filtrar duplicados y categorías que no son de productos
-      return [...new Set(names)];
+      return categorias.map(c => ({ id: c.id, nombre: c.nombre }));
     }
   } catch (e) {
-    console.warn('⚠️ No se pudieron cargar categorías desde PocketBase, usando fallback');
+    console.warn('⚠️ No se pudieron cargar categorías desde PocketBase');
   }
-
-  // Fallback: extraer categorías únicas de productos existentes
-  try {
-    const productos = await pb.collection('products').getFullList({
-      fields: 'categoria',
-      filter: 'activo = true'
-    });
-    const names = productos.map(p => p.categoria).filter(Boolean);
-    return [...new Set(names)].sort();
-  } catch (e) {
-    console.warn('⚠️ No se pudieron obtener categorías desde productos, usando fallback estático');
-  }
-
-  // Fallback final: lista estática de categorías comunes
-  return [
-    'electronica', 'hogar', 'ropa', 'instrumentos', 'ganado', 'servicios',
-    'cortinas', 'sabanas', 'almohadas', 'cubre-salas', 'botes', 'sillas',
-    'bancos-plastico', 'baterias-peltre', 'acero-inoxidable', 'vapoderas',
-    'sartenes', 'colchones', 'bases-cama', 'cajoneras', 'licuadoras',
-    'bocinas', 'mesas', 'batidoras', 'planchas', 'ventiladores', 'anaqueles'
-  ];
+  // ❌ NO devolver IDs falsos
+  return []; // ✅ Mejor: array vacío para que el usuario cree categorías
 }
 
 /**
@@ -538,12 +547,17 @@ export async function getProductsStats() {
       fields: 'id'
     });
 
-    // Contar categorías únicas (solo de productos activos)
+    // Contar categorías únicas usando expand
     const productos = await pb.collection('products').getFullList({
-      fields: 'categoria',
-      filter: 'activo = true'
+      filter: 'activo = true',
+      expand: 'categoriaId',
+      fields: 'categoriaId'
     });
-    const categoriasSet = new Set(productos.map(p => p.categoria).filter(Boolean));
+    const categoriasSet = new Set();
+    productos.forEach(p => {
+      const nombre = p.expand?.categoriaId?.nombre || p.categoriaId;
+      if (nombre) categoriasSet.add(nombre);
+    });
 
     return {
       total: totalResult.totalItems,

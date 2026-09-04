@@ -26,7 +26,7 @@ import {
   Users,
   DollarSign
 } from 'lucide-react';
-import AdminLayout from '../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../layouts/AdminLayoutMinimal';
 import pb from '../../lib/pocketbase';
 import {
   getOrCreateTarjeta,
@@ -317,11 +317,11 @@ export default function AdminTarjetasPage() {
   // ─── Renderizado ──────────────────────────────────────────────────────
   if (loading && !refreshing) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="flex justify-center items-center min-h-[60vh]">
           <div className="loading-spinner"></div>
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
@@ -338,7 +338,7 @@ export default function AdminTarjetasPage() {
         `}</style>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-7xl mx-auto">
 
           {/* ─── Header ─────────────────────────────────────────────────── */}
@@ -561,7 +561,7 @@ export default function AdminTarjetasPage() {
             </>
           )}
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
 
       {/* ─── Modales (sin cambios estructurales, solo ajustes de estado) ──── */}
 

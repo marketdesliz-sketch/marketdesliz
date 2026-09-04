@@ -6,7 +6,8 @@ import Link from 'next/link';
 import {
   ChevronRight, Home, Grid2X2, Heart, Package, Star,
   PlayCircle, ArrowRight, Sofa, CookingPot, Waves,
-  Phone, Mail, MapPin
+  Phone, Mail, MapPin, Shirt, Bed, Guitar, Tag,
+  Layout
 } from 'lucide-react';
 import pb from '../lib/pocketbase';
 import { formatMoney } from '../lib/utils';
@@ -15,29 +16,65 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import HeaderSimple from '../components/HeaderSimple';
 
+// ─── MAPA DE ÍCONOS POR CATEGORÍA ────────────────
+const iconMap = {
+  'hogar': Sofa,
+  'cortinas': Layout,
+  'cocina': CookingPot,
+  'electronicos': Waves,
+  'electrónicos': Waves,
+  'ropa': Shirt,
+  'instrumentos': Guitar,
+  'colchones': Bed,
+  'sábanas': Bed,
+  'cubre salas': Sofa,
+  'almohadas': Bed,
+  'cubre': Sofa,
+  'sala': Sofa,
+  'muebles': Sofa,
+  'linea blanca': Waves,
+  'electrodomesticos': Waves,
+  'más categorías': Grid2X2, // Para el caso de que se agregue una categoría con este nombre
+};
+
+const getIcon = (nombre) => {
+  const lower = nombre?.toLowerCase().trim() || '';
+  if (iconMap[lower]) return iconMap[lower];
+  for (const [key, icon] of Object.entries(iconMap)) {
+    if (lower.includes(key) || key.includes(lower)) {
+      return icon;
+    }
+  }
+  return Tag;
+};
+
 export default function ProductosPage() {
   const router = useRouter();
   const [productos, setProductos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showLoginDropdown, setShowLoginDropdown] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Cargar favoritos desde localStorage
+  // Cargar favoritos
   useEffect(() => {
     const saved = localStorage.getItem('favorites');
     if (saved) setFavorites(JSON.parse(saved));
   }, []);
 
-  // Cargar productos desde PocketBase
+  // Cargar productos y categorías
   useEffect(() => {
-    const cargarProductos = async () => {
+    const cargarDatos = async () => {
       try {
         setLoading(true);
+
+        // 1. Productos activos con expand
         const products = await pb.collection('products').getFullList({
           filter: 'activo = true',
-          sort: '-created'
+          sort: '-created',
+          expand: 'categoriaId'
         });
 
         const productosData = products.map((p) => {
@@ -55,7 +92,8 @@ export default function ProductosPage() {
             precio: p.precio || 0,
             enganche: p.enganche || 0,
             paga: p.pagoSemanal || 0,
-            categoria: p.categoria || 'General',
+            categoria: p.expand?.categoriaId?.nombre || '',
+            categoriaId: p.categoriaId,
             imagen: imagenUrl,
             semanas: p.semanas || 12,
             stock: p.stock || 0,
@@ -64,17 +102,55 @@ export default function ProductosPage() {
         });
 
         setProductos(productosData);
+
+        // 2. Categorías con conteo de productos
+        const todasCategorias = await pb.collection('categorias').getFullList({
+          filter: 'activo = true',
+          sort: 'nombre',
+          fields: 'id,nombre'
+        });
+
+        const conteo = {};
+        productosData.forEach(p => {
+          if (p.categoriaId) {
+            conteo[p.categoriaId] = (conteo[p.categoriaId] || 0) + 1;
+          }
+        });
+
+        let categoriasConConteo = todasCategorias
+          .map(cat => ({
+            id: cat.id,
+            nombre: cat.nombre,
+            slug: cat.nombre.toLowerCase().replace(/\s+/g, '-'),
+            count: conteo[cat.id] || 0
+          }))
+          .filter(cat => cat.count > 0)
+          .sort((a, b) => b.count - a.count);
+
+        // ─── AGREGAR "MÁS CATEGORÍAS" SI HAY MENOS DE 6 ──────────────
+        if (categoriasConConteo.length < 6) {
+          categoriasConConteo.push({
+            id: 'mas-categorias',
+            nombre: 'Más categorías',
+            slug: 'mas',
+            count: 0,
+            esMasCategorias: true // flag para identificar
+          });
+        }
+
+        setCategorias(categoriasConConteo);
+
       } catch (error) {
-        console.error('Error cargando productos:', error);
+        console.error('Error cargando datos:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    cargarProductos();
+    cargarDatos();
   }, []);
 
-  // Guardar favoritos en localStorage
+  // Favoritos
   const toggleFavorite = (productId) => {
     const newFavorites = favorites.includes(productId)
       ? favorites.filter(id => id !== productId)
@@ -83,20 +159,29 @@ export default function ProductosPage() {
     localStorage.setItem('favorites', JSON.stringify(newFavorites));
   };
 
-  // Navegación
   const navigateTo = (path) => {
     router.push(path);
   };
 
-  // Notificaciones dummy
   const notifications = [
     { id: 1, title: '¡Nueva colección!', description: 'Descubre la línea Otoño 2026', time: 'Hace 2 horas', read: false },
     { id: 2, title: '¡Bienvenido!', description: 'Completa tu registro para empezar', time: 'Hace 5 horas', read: false },
   ];
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // Filtrar productos por búsqueda
-  const filteredProducts = productos.filter(p =>
+  // ─── FILTRAR PRODUCTOS POR CATEGORÍAS VISIBLES ──────────────
+  // Obtener los IDs de las categorías que se están mostrando (excluyendo la ficticia)
+  const categoriaIds = categorias
+    .filter(cat => !cat.esMasCategorias)
+    .map(cat => cat.id);
+  
+  // Filtrar productos: solo los que pertenecen a las categorías mostradas
+  const productosFiltradosPorCategoria = productos.filter(p =>
+    p.categoriaId && categoriaIds.includes(p.categoriaId)
+  );
+
+  // Aplicar búsqueda adicional (por nombre)
+  const filteredProducts = productosFiltradosPorCategoria.filter(p =>
     p.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -107,7 +192,6 @@ export default function ProductosPage() {
         <meta name="description" content="Explora nuestros productos a crédito con pagos semanales." />
       </Head>
 
-      {/* HEADER SIMPLE (compartido) */}
       <HeaderSimple
         showNotifications={showNotifications}
         setShowNotifications={setShowNotifications}
@@ -117,16 +201,13 @@ export default function ProductosPage() {
         showLoginDropdown={showLoginDropdown}
         setShowLoginDropdown={setShowLoginDropdown}
         onLoginSuccess={() => {
-          // Opcional: actualizar estado de autenticación si lo necesitas
           const user = pb.authStore.model;
-          // Si necesitas que se refresque algo, hazlo aquí
         }}
       />
 
-      {/* ─── CONTENIDO PRINCIPAL ──────────────────────────────── */}
       <div className="max-w-[1400px] mx-auto w-full px-2 py-6 flex-1">
         <main className="flex flex-col gap-6">
-          {/* Hero Banner */}
+          {/* Hero Banner - SIN CAMBIOS */}
           <div className="bg-white rounded-[2rem] overflow-hidden shadow-sm relative min-h-[300px] flex items-center">
             <div className="absolute inset-0 z-0">
               <img
@@ -153,7 +234,7 @@ export default function ProductosPage() {
             </div>
           </div>
 
-          {/* Categorías populares (estáticas) */}
+          {/* ─── CATEGORÍAS POPULARES (con diseño de la primera imagen) ─── */}
           <section>
             <div className="flex items-center justify-between mb-4 px-2">
               <h2 className="text-xl font-extrabold text-gray-800">Categorías populares</h2>
@@ -161,30 +242,38 @@ export default function ProductosPage() {
                 Ver todas
               </Button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              {[
-                { name: 'Muebles', icon: Sofa },
-                { name: 'Electrodomésticos', icon: Waves },
-                { name: 'Línea Blanca', icon: Waves },
-                { name: 'Cocina', icon: CookingPot },
-                { name: 'Hogar', icon: Home },
-                { name: 'Más categorías', icon: Grid2X2 },
-              ].map((cat, i) => (
-                <Card
-                  key={i}
-                  className="border-none shadow-sm rounded-2xl p-5 flex flex-col items-center gap-3 cursor-pointer hover:bg-secondary/30 transition-colors group"
-                  onClick={() => navigateTo(`/categoria/${cat.name.toLowerCase()}`)}
-                >
-                  <div className="bg-secondary p-3 rounded-2xl group-hover:bg-primary transition-colors">
-                    <cat.icon className="w-6 h-6 text-primary group-hover:text-white transition-colors" />
-                  </div>
-                  <span className="text-xs font-bold text-gray-600 text-center">{cat.name}</span>
-                </Card>
-              ))}
-            </div>
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : categorias.length === 0 ? (
+              <p className="text-center text-gray-400 py-8">No hay categorías con productos disponibles.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                {categorias.map((cat) => {
+                  const IconComponent = getIcon(cat.nombre);
+                  // Si es la categoría ficticia "Más categorías", usamos Grid2X2 y redirigimos a /categorias
+                  const handleClick = cat.esMasCategorias
+                    ? () => navigateTo('/categorias')
+                    : () => navigateTo(`/productos/categoria/${cat.slug}`);
+                  return (
+                    <Card
+                      key={cat.id}
+                      className="border-none shadow-sm rounded-2xl p-5 flex flex-col items-center gap-3 cursor-pointer hover:bg-secondary/30 transition-colors group"
+                      onClick={handleClick}
+                    >
+                      <div className="bg-secondary p-3 rounded-2xl group-hover:bg-primary transition-colors">
+                        <IconComponent className="w-6 h-6 text-primary group-hover:text-white transition-colors" />
+                      </div>
+                      <span className="text-xs font-bold text-gray-600 text-center">{cat.nombre}</span>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
-          {/* ─── GRID DE PRODUCTOS (enganche al 25%) ──────── */}
+          {/* ─── GRID DE PRODUCTOS (filtrado por categorías visibles) ─── */}
           <section>
             <div className="flex items-center justify-between mb-4 px-2">
               <h2 className="text-xl font-extrabold text-gray-800">Productos destacados</h2>
@@ -196,6 +285,8 @@ export default function ProductosPage() {
               <div className="flex justify-center py-12">
                 <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               </div>
+            ) : filteredProducts.length === 0 ? (
+              <p className="text-center text-gray-400 py-8">No hay productos en estas categorías.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {filteredProducts.slice(0, 8).map((producto) => (
@@ -239,7 +330,7 @@ export default function ProductosPage() {
                         <div className="mt-1 text-xs text-gray-500">
                           Enganche{' '}
                           <span className="font-semibold text-[#6C3BFF]">
-                            {formatMoney(Math.round(producto.precio * 0.25))}
+                            {formatMoney(producto.enganche)}
                           </span>
                           <span className="text-gray-400"> (25%)</span>
                         </div>
@@ -251,7 +342,7 @@ export default function ProductosPage() {
             )}
           </section>
 
-          {/* Banner de visita */}
+          {/* Banner de visita - SIN CAMBIOS */}
           <Card className="border-none shadow-sm rounded-[2rem] p-6 flex items-center justify-between bg-white mt-2">
             <div className="flex items-center gap-5">
               <div className="bg-secondary rounded-[1.25rem] p-4">
@@ -267,7 +358,7 @@ export default function ProductosPage() {
             </Button>
           </Card>
 
-          {/* Footer */}
+          {/* Footer - SIN CAMBIOS */}
           <footer className="bg-white border-t mt-8">
             <div className="max-w-[1400px] mx-auto px-6 py-12">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-8">

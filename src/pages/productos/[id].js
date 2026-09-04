@@ -31,17 +31,17 @@ const formatMoney = (amount) =>
 // ─── Función para obtener categoría desde estática ────────────
 function getCategoriaInfoFromStatic(categoriaTexto) {
   if (!categoriaTexto) return null;
-  
+
   for (const [key, categoria] of Object.entries(CATEGORIAS)) {
     if (categoria.nombre?.toLowerCase() === categoriaTexto.toLowerCase() ||
-        categoria.slug?.toLowerCase() === categoriaTexto.toLowerCase()) {
+      categoria.slug?.toLowerCase() === categoriaTexto.toLowerCase()) {
       return { nombre: categoria.nombre, slug: categoria.slug };
     }
     if (categoria.sections) {
       for (const section of categoria.sections) {
         for (const cat of section.categories) {
           if (cat.name?.toLowerCase() === categoriaTexto.toLowerCase() ||
-              cat.name?.toLowerCase().replace(/\s+/g, '-') === categoriaTexto.toLowerCase()) {
+            cat.name?.toLowerCase().replace(/\s+/g, '-') === categoriaTexto.toLowerCase()) {
             return { nombre: cat.name, slug: cat.name.toLowerCase().replace(/\s+/g, '-') };
           }
         }
@@ -53,13 +53,13 @@ function getCategoriaInfoFromStatic(categoriaTexto) {
 
 function getSubcategoriaInfoFromStatic(categoriaTexto, subcategoriaTexto) {
   if (!subcategoriaTexto) return null;
-  
+
   for (const [key, categoria] of Object.entries(CATEGORIAS)) {
     if (categoria.sections) {
       for (const section of categoria.sections) {
         for (const cat of section.categories) {
           if (cat.name?.toLowerCase() === categoriaTexto?.toLowerCase() ||
-              cat.name?.toLowerCase().replace(/\s+/g, '-') === categoriaTexto?.toLowerCase()) {
+            cat.name?.toLowerCase().replace(/\s+/g, '-') === categoriaTexto?.toLowerCase()) {
             return { nombre: cat.name, slug: cat.name.toLowerCase().replace(/\s+/g, '-') };
           }
         }
@@ -134,6 +134,11 @@ export default function ProductoDetalle() {
   // ─── Estado para el dropdown de login ──────────────────────
   const [showLoginDropdown, setShowLoginDropdown] = useState(false);
 
+  // ─── Estados para el formulario de reseña ─────────────────────
+  const [newRating, setNewRating] = useState(0);
+  const [newComment, setNewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+
   // ─── Memoización de opciones de pago ────────────────────────
   const getOpcionesPago = useMemo(() => {
     if (!producto) return [50, 100, 150, 200, 250, 300, 400, 500];
@@ -169,7 +174,7 @@ export default function ProductoDetalle() {
   // 3. Cargar reviews (mock)
   useEffect(() => {
     if (producto) {
-      cargarReviewsMock(producto.id);
+      cargarReviews(producto.id);
     }
   }, [producto]);
 
@@ -201,7 +206,9 @@ export default function ProductoDetalle() {
         }
       }
 
-      const record = await pb.collection('products').getOne(id);
+      const record = await pb.collection('products').getOne(id, {
+        expand: 'categoriaId'
+      });
 
       if (!record.activo) {
         setError('Este producto no está disponible actualmente.');
@@ -217,7 +224,7 @@ export default function ProductoDetalle() {
         enganche: record.enganche || 0,
         pagoSemanal: record.pagoSemanal || 0,
         semanas: record.semanas || 12,
-        categoria: record.categoria || 'General',
+        categoria: record.expand?.categoriaId?.nombre || 'General',
         stock: record.stock || 0,
         agotado: record.stock === 0,
         nuevo: record.nuevo || false,
@@ -226,6 +233,7 @@ export default function ProductoDetalle() {
         visitas: (record.visitas || 0) + 1,
         destacado: record.destacado || false,
         creado: record.created,
+        categoriaId: record.categoriaId || null,
         actualizado: record.updated
       };
 
@@ -242,7 +250,7 @@ export default function ProductoDetalle() {
         productoData.imagen = '/images/placeholder.png';
       }
 
-      productoData.precioContado = Math.round(productoData.precioTotal * 2 / 3);
+      productoData.precioContado = Math.round(productoData.precioTotal * 0.9);
 
       if (productoData.stock === 0) {
         setStockLevel('agotado');
@@ -258,8 +266,8 @@ export default function ProductoDetalle() {
 
       await procesarCategoria(productoData);
 
-      if (productoData.categoria) {
-        cargarProductosRelacionados(productoData.categoria, id);
+      if (productoData.categoriaId) {
+        cargarProductosRelacionados(productoData.categoriaId, id);
       }
 
       // Actualizar visitas solo si el producto existe y tenemos permisos
@@ -290,7 +298,7 @@ export default function ProductoDetalle() {
       try {
         const cat = await pb.collection('categorias').getOne(productoData.categoriaId);
         catInfo = { id: cat.id, nombre: cat.nombre, slug: cat.slug };
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!catInfo && productoData.categoria) {
@@ -311,7 +319,7 @@ export default function ProductoDetalle() {
       try {
         const subcat = await pb.collection('subcategorias').getOne(productoData.subcategoriaId);
         subInfo = { id: subcat.id, nombre: subcat.nombre, slug: subcat.slug };
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!subInfo && productoData.categoria) {
@@ -322,24 +330,25 @@ export default function ProductoDetalle() {
   };
 
   // ─── Productos relacionados ──────────────────────────────────
-  const cargarProductosRelacionados = async (categoria, productoId) => {
-    if (!categoria) return;
+  const cargarProductosRelacionados = async (categoriaId, productoId) => {
+    if (!categoriaId) return;
     try {
       setLoadingRelacionados(true);
       const relacionados = await pb.collection('products').getFullList({
-        filter: `categoria = "${categoria}" && id != "${productoId}" && activo = true && stock > 0`,
+        filter: `categoriaId = "${categoriaId}" && id != "${productoId}" && activo = true && stock > 0`,
         sort: '-created',
-        limit: 6
+        limit: 6,
+        expand: 'categoriaId'  // ✅ Agregamos expand
       });
 
       const relacionadosFormateados = relacionados.map(prod => ({
         id: prod.id,
         nombre: prod.nombre,
         precio: prod.precio,
-        precioContado: Math.round(prod.precio * 2 / 3),
+        precioContado: Math.round(prod.precio * 0.9),
         pagoSemanal: prod.pagoSemanal || Math.round(prod.precio * 0.05),
         imagen: prod.imagen ? pb.files.getURL(prod, prod.imagen) : '/images/placeholder.png',
-        categoria: prod.categoria,
+        categoria: prod.expand?.categoriaId?.nombre || 'General', // ✅ Usamos expand
         stock: prod.stock,
         agotado: prod.stock === 0
       }));
@@ -353,22 +362,43 @@ export default function ProductoDetalle() {
   };
 
   // ─── Reviews (mock) ──────────────────────────────────────────
-  const cargarReviewsMock = async (productId) => {
-    setLoadingReviews(true);
-    const mockReviews = [
-      { id: 1, usuario: 'María G.', calificacion: 5, comentario: 'Excelente producto, llegó en perfectas condiciones.', fecha: '2024-12-15' },
-      { id: 2, usuario: 'Juan P.', calificacion: 4, comentario: 'Buen producto, relación calidad-precio excelente.', fecha: '2024-12-10' },
-      { id: 3, usuario: 'Ana R.', calificacion: 5, comentario: 'Muy satisfecha con mi compra. Recomendado.', fecha: '2024-12-05' },
-      { id: 4, usuario: 'Carlos L.', calificacion: 3, comentario: 'Producto cumple, aunque el empaque llegó un poco dañado.', fecha: '2024-11-28' },
-    ];
-    setReviews(mockReviews);
-    const total = mockReviews.length;
-    const avg = mockReviews.reduce((acc, r) => acc + r.calificacion, 0) / total;
-    setAverageRating(avg);
-    setTotalReviews(total);
-    setLoadingReviews(false);
-  };
+  // ─── Cargar reseñas reales desde PocketBase ──────────────────
+  const cargarReviews = async (productId) => {
+    if (!productId) return;
+    try {
+      setLoadingReviews(true);
+      const reviewsData = await pb.collection('reviews').getFullList({
+        filter: `productId = "${productId}" && activo = true`,
+        sort: '-created',
+        expand: 'userId'
+      });
 
+      const formattedReviews = reviewsData.map(r => ({
+        id: r.id,
+        usuario: r.expand?.userId?.name || r.expand?.userId?.username || 'Usuario anónimo',
+        calificacion: r.calificacion || 0,
+        comentario: r.comentario || '',
+        fecha: r.created
+      }));
+
+      setReviews(formattedReviews);
+      const total = formattedReviews.length;
+      if (total > 0) {
+        const avg = formattedReviews.reduce((acc, r) => acc + r.calificacion, 0) / total;
+        setAverageRating(Math.round(avg * 10) / 10);
+      } else {
+        setAverageRating(0);
+      }
+      setTotalReviews(total);
+    } catch (error) {
+      console.error('Error cargando reseñas:', error);
+      setReviews([]);
+      setAverageRating(0);
+      setTotalReviews(0);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
   // ─── Vistos recientemente ────────────────────────────────────
   const registrarVista = (productId) => {
     if (!productId) return;
@@ -456,6 +486,51 @@ export default function ProductoDetalle() {
     setShowToast(true);
     setShowNotifyStock(false);
     setTimeout(() => setShowToast(false), 3000);
+  };
+
+  // ─── Función para publicar reseña ─────────────────────────────
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!isAuthenticated) {
+      setToastMessage('Debes iniciar sesión para dejar una reseña.');
+      setToastType('error');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+      return;
+    }
+    if (newRating === 0 || !newComment.trim()) {
+      setToastMessage('Califica y escribe un comentario.');
+      setToastType('error');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      await pb.collection('reviews').create({
+        productId: producto.id,
+        userId: pb.authStore.model.id,
+        calificacion: newRating,
+        comentario: newComment.trim(),
+        activo: true
+      });
+      setToastMessage('¡Gracias por tu reseña!');
+      setToastType('success');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+      setNewRating(0);
+      setNewComment('');
+      await cargarReviews(producto.id);
+    } catch (error) {
+      console.error('Error al publicar reseña:', error);
+      setToastMessage('Error al publicar la reseña. Intenta de nuevo.');
+      setToastType('error');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   // ─── Navegación de imágenes ──────────────────────────────────
@@ -762,9 +837,8 @@ export default function ProductoDetalle() {
                       <button
                         key={index}
                         onClick={() => setCurrentImageIndex(index)}
-                        className={`shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${
-                          currentImageIndex === index ? 'border-[#6C3BFF] shadow-sm' : 'border-gray-100 opacity-60 hover:opacity-100'
-                        }`}
+                        className={`shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${currentImageIndex === index ? 'border-[#6C3BFF] shadow-sm' : 'border-gray-100 opacity-60 hover:opacity-100'
+                          }`}
                       >
                         <img src={url} alt={`Vista ${index + 1}`} className="w-full h-full object-cover" loading="lazy" />
                       </button>
@@ -840,9 +914,8 @@ export default function ProductoDetalle() {
                       <button
                         key={porcentaje}
                         onClick={() => handleCambiarEnganche(porcentaje)}
-                        className={`py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                          enganchePorcentaje === porcentaje ? 'bg-[#6C3BFF] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
-                        }`}
+                        className={`py-2.5 rounded-xl text-sm font-semibold transition-all ${enganchePorcentaje === porcentaje ? 'bg-[#6C3BFF] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
+                          }`}
                       >
                         {porcentaje}% · {formatMoney(Math.round(producto.precioTotal * porcentaje / 100))}
                       </button>
@@ -863,9 +936,8 @@ export default function ProductoDetalle() {
                           setFrecuenciaPago(val);
                           calcularPlan(enganchePorcentaje, pagoSemanal, val);
                         }}
-                        className={`py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                          frecuenciaPago === val ? 'bg-[#6C3BFF] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
-                        }`}
+                        className={`py-2.5 rounded-xl text-sm font-semibold transition-all ${frecuenciaPago === val ? 'bg-[#6C3BFF] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
+                          }`}
                       >
                         {label}
                       </button>
@@ -881,9 +953,8 @@ export default function ProductoDetalle() {
                       <button
                         key={monto}
                         onClick={() => handleCambiarPago(monto)}
-                        className={`py-2 rounded-xl text-sm font-semibold transition-all ${
-                          pagoSemanal === monto ? 'bg-[#6C3BFF] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
-                        }`}
+                        className={`py-2 rounded-xl text-sm font-semibold transition-all ${pagoSemanal === monto ? 'bg-[#6C3BFF] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
+                          }`}
                       >
                         ${monto}
                       </button>
@@ -926,18 +997,16 @@ export default function ProductoDetalle() {
                   <button
                     onClick={agregarAlCarrito}
                     disabled={producto.agotado}
-                    className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-all border ${
-                      producto.agotado ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-100' : 'bg-white border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
-                    }`}
+                    className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-all border ${producto.agotado ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-100' : 'bg-white border-gray-200 text-gray-700 hover:border-[#6C3BFF] hover:text-[#6C3BFF]'
+                      }`}
                   >
                     <ShoppingCart size={17} /> Agregar al carrito
                   </button>
                   <button
                     onClick={handleApartarProducto}
                     disabled={producto.agotado}
-                    className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-all ${
-                      producto.agotado ? 'bg-gray-300 text-gray-400 cursor-not-allowed' : 'bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white shadow-sm'
-                    }`}
+                    className={`flex items-center justify-center gap-2 py-3.5 rounded-xl font-semibold text-sm transition-all ${producto.agotado ? 'bg-gray-300 text-gray-400 cursor-not-allowed' : 'bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white shadow-sm'
+                      }`}
                   >
                     <Zap size={17} /> Apartar producto
                   </button>
@@ -966,12 +1035,29 @@ export default function ProductoDetalle() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900">Opiniones de clientes</h2>
-                  <p className="text-sm text-gray-500 mt-1">{totalReviews} opiniones · {averageRating.toFixed(1)} de 5 estrellas</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {totalReviews} {totalReviews === 1 ? 'opinión' : 'opiniones'} · {averageRating.toFixed(1)} de 5 estrellas
+                  </p>
                 </div>
-                {isAuthenticated && <button className="text-sm text-[#6C3BFF] hover:underline transition">Escribir una opinión</button>}
+                {isAuthenticated && (
+                  <button
+                    onClick={() => document.getElementById('review-form')?.scrollIntoView({ behavior: 'smooth' })}
+                    className="text-sm text-[#6C3BFF] hover:underline transition"
+                  >
+                    Escribir una opinión
+                  </button>
+                )}
               </div>
+
               {loadingReviews ? (
-                <div className="flex justify-center py-8"><div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" /></div>
+                <div className="flex justify-center py-8">
+                  <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : totalReviews === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <p className="text-sm">No hay opiniones para este producto.</p>
+                  <p className="text-xs mt-1">Sé el primero en dejar tu reseña.</p>
+                </div>
               ) : (
                 <div className="space-y-4">
                   {reviews.map((review) => (
@@ -993,6 +1079,43 @@ export default function ProductoDetalle() {
                       <p className="text-xs text-gray-400 mt-1">{new Date(review.fecha).toLocaleDateString('es-MX')}</p>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Formulario para escribir reseña (solo autenticado) */}
+              {isAuthenticated && (
+                <div id="review-form" className="mt-6 pt-6 border-t border-gray-200">
+                  <h4 className="font-semibold text-gray-800 mb-3">Deja tu opinión</h4>
+                  <form onSubmit={handleSubmitReview} className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setNewRating(star)}
+                          className="text-2xl focus:outline-none transition-transform hover:scale-110"
+                        >
+                          <Star
+                            className={`w-8 h-8 ${star <= newRating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      placeholder="Escribe tu comentario..."
+                      className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent text-sm resize-none"
+                      rows="3"
+                    />
+                    <button
+                      type="submit"
+                      disabled={submittingReview}
+                      className="bg-[#6C3BFF] text-white px-6 py-2 rounded-xl text-sm font-semibold hover:bg-[#5a2ee6] transition disabled:opacity-50"
+                    >
+                      {submittingReview ? 'Enviando...' : 'Publicar reseña'}
+                    </button>
+                  </form>
                 </div>
               )}
             </div>

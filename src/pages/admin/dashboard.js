@@ -1,9 +1,9 @@
-// src/pages/admin/dashboard.js
+// pages/admin/dashboard.js
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import Link from 'next/link';
 import {
-  LayoutDashboard,
   Users,
   Package,
   ShoppingBag,
@@ -20,18 +20,17 @@ import {
   Store,
   CalendarDays,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Crown,
+  LogOut,
+  User,
+  ChevronRight
 } from 'lucide-react';
-import AdminLayout from '../../layouts/AdminLayout';
 import pb from '../../lib/pocketbase';
 import { formatMoney } from '../../lib/utils';
 
 // ─── Servicio interno para el dashboard ──────────────────────────────────
 const dashboardService = {
-  /**
-   * Obtiene estadísticas del dashboard de forma eficiente
-   * incluyendo tendencias comparando con el día anterior.
-   */
   async getStats() {
     try {
       const hoy = new Date();
@@ -39,9 +38,8 @@ const dashboardService = {
       const finHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1);
       const inicioAyer = new Date(inicioHoy);
       inicioAyer.setDate(inicioAyer.getDate() - 1);
-      const finAyer = new Date(inicioHoy); // fin de ayer = inicio de hoy
+      const finAyer = new Date(inicioHoy);
 
-      // ── Función auxiliar para contar con filtro de fecha ──
       const contarConFiltro = async (collection, filterExtra = '', fields = 'id') => {
         try {
           const result = await pb.collection(collection).getList(1, 1, {
@@ -54,7 +52,6 @@ const dashboardService = {
         }
       };
 
-      // ── 1. CLIENTES (totales acumulados) ──
       const clientesHoy = await contarConFiltro(
         'users',
         'role = "cliente" || role = "user"'
@@ -64,7 +61,6 @@ const dashboardService = {
         `role = "cliente" || role = "user" && created < "${inicioHoy.toISOString()}"`
       );
 
-      // ── 2. PRODUCTOS ACTIVOS (totales acumulados) ──
       const productosHoy = await contarConFiltro(
         'products',
         'activo = true'
@@ -74,14 +70,12 @@ const dashboardService = {
         `activo = true && created < "${inicioHoy.toISOString()}"`
       );
 
-      // ── 3. ÓRDENES (totales acumulados) ──
       const ordenesHoy = await contarConFiltro('orders', '');
       const ordenesAyer = await contarConFiltro(
         'orders',
         `created < "${inicioHoy.toISOString()}"`
       );
 
-      // ── 4. VENDEDORES ACTIVOS (totales acumulados) ──
       let vendedoresHoy = 0;
       let vendedoresAyer = 0;
       try {
@@ -93,24 +87,19 @@ const dashboardService = {
           'vendedores',
           `activo = true && created < "${inicioHoy.toISOString()}"`
         );
-      } catch (e) {
-        console.warn('Colección vendedores no encontrada');
-      }
+      } catch (e) { /* silencioso */ }
 
-      // ── 5. PAGOS PENDIENTES DE HOY (diario) ──
       const pagosHoyResult = await pb.collection('payments').getList(1, 50, {
         filter: `estado = "pendiente" && fechaVencimiento >= "${inicioHoy.toISOString()}" && fechaVencimiento < "${finHoy.toISOString()}"`,
         expand: 'userId',
         sort: 'fechaVencimiento'
       });
 
-      // Pagos pendientes de ayer (para comparar)
       const pagosAyerResult = await pb.collection('payments').getList(1, 1, {
         filter: `estado = "pendiente" && fechaVencimiento >= "${inicioAyer.toISOString()}" && fechaVencimiento < "${finAyer.toISOString()}"`,
         fields: 'id'
       });
 
-      // ── 6. DEUDA TOTAL (acumulada) ──
       const deudaPagos = await pb.collection('payments').getFullList({
         filter: 'estado = "pendiente" || estado = "atrasado"',
         fields: 'montoProgramado,monto,created'
@@ -119,7 +108,6 @@ const dashboardService = {
         (sum, p) => sum + (p.montoProgramado || p.monto || 0),
         0
       );
-      // Deuda de ayer (pagos pendientes/atrasados creados antes de hoy)
       const deudaAyerPagos = await pb.collection('payments').getFullList({
         filter: `estado = "pendiente" || estado = "atrasado" && created < "${inicioHoy.toISOString()}"`,
         fields: 'montoProgramado,monto'
@@ -129,13 +117,11 @@ const dashboardService = {
         0
       );
 
-      // ── Formatear pagos de hoy con nombre de cliente ──
       const pagosHoyConCliente = pagosHoyResult.items.map((pago) => ({
         ...pago,
         clienteNombre: pago.expand?.userId?.nombre || pago.expand?.userId?.email || 'Cliente'
       }));
 
-      // ── Construir objeto de estadísticas con tendencias ──
       const calcularTendencia = (actual, anterior) => {
         if (anterior === 0) return { diferencia: actual, porcentaje: actual > 0 ? 100 : 0 };
         const diff = actual - anterior;
@@ -180,9 +166,6 @@ const dashboardService = {
     }
   },
 
-  /**
-   * Registrar cobro de un pago
-   */
   async registrarCobro(pagoId, monto, orderId) {
     await pb.collection('payments').update(pagoId, {
       estado: 'pagado',
@@ -203,11 +186,67 @@ const dashboardService = {
   }
 };
 
+// ─── Componente LogoMark (igual que en la página principal) ────────────
+const LogoMark = ({ size = 72 }) => (
+  <div className="flex items-center gap-3">
+    <span className="font-logo font-bold text-4xl text-primary tracking-tight">
+      ʃƪʃƪ
+    </span>
+    <div className="flex flex-col">
+      <span className="font-bold text-xl text-textMain tracking-tight leading-none">
+        Market<span className="text-primary">Desliz</span>
+      </span>
+      <span className="text-[10px] text-textMuted tracking-[0.2em] uppercase font-medium">
+        Desliza • Descubre • Conecta
+      </span>
+    </div>
+  </div>
+);
+
+// ─── Action Card (para opciones de admin) ──────────────────────────────
+function AdminActionCard({ icon: Icon, title, subtitle, onClick, color = 'from-blue-500 to-blue-600' }) {
+  return (
+    <div
+      onClick={onClick}
+      className="flex items-center justify-between bg-white rounded-[20px] px-[22px] py-5 shadow-card border border-white/90 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 hover:shadow-card-hover"
+    >
+      <div className="flex items-center gap-4">
+        <div className={`w-12 h-12 rounded-[14px] bg-gradient-to-r ${color} flex items-center justify-center shrink-0`}>
+          <Icon size={22} className="text-white" />
+        </div>
+        <div>
+          <p className="text-[15px] font-bold text-textMain mb-0.5 tracking-tight">{title}</p>
+          <p className="text-[13px] text-textMuted font-normal">{subtitle}</p>
+        </div>
+      </div>
+      <div className="w-8 h-8 rounded-full bg-[#F5F4FA] flex items-center justify-center shrink-0">
+        <ChevronRight size={16} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Feature Item ─────────────────────────────────────────────────────
+function FeatureItem({ icon, title, subtitle }) {
+  return (
+    <div className="flex items-start gap-3.5">
+      <div className="w-[38px] h-[38px] bg-bgPage rounded-[10px] flex items-center justify-center shrink-0">
+        {icon}
+      </div>
+      <div>
+        <p className="text-[14px] font-semibold text-textMain mb-0.5 tracking-tight">{title}</p>
+        <p className="text-[12px] text-textMuted font-normal">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Página principal ────────────────────────────────────────────────────
 export default function AdminDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [user, setUser] = useState(null);
+  const [adminUser, setAdminUser] = useState(null);
   const [stats, setStats] = useState({
     clientes: { valor: 0, tendencia: { diferencia: 0, porcentaje: 0 } },
     productos: { valor: 0, tendencia: { diferencia: 0, porcentaje: 0 } },
@@ -218,31 +257,43 @@ export default function AdminDashboard() {
   });
   const [pagosPendientes, setPagosPendientes] = useState([]);
   const [error, setError] = useState(null);
-  const [mounted, setMounted] = useState(false);
 
-  // ─── Carga de datos ──────────────────────────────────────────────────
+  // ─── Verificar autenticación y cargar datos ──────────────────────────
+  useEffect(() => {
+    const checkAuthAndLoad = async () => {
+      try {
+        // Verificar sesión de admin
+        if (!pb.authStore.isValid) {
+          router.replace('/admin/login');
+          return;
+        }
+        const user = pb.authStore.model;
+        if (user?.role !== 'admin') {
+          pb.authStore.clear();
+          router.replace('/admin/login');
+          return;
+        }
+        setAdminUser(user);
+        await cargarDatos();
+      } catch (err) {
+        console.error('Error:', err);
+        setError('Error al cargar datos');
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkAuthAndLoad();
+  }, []);
+
   const cargarDatos = useCallback(async (showRefreshing = false) => {
     try {
       if (showRefreshing) setRefreshing(true);
       else setLoading(true);
       setError(null);
 
-      if (!pb.authStore.isValid) {
-        router.push('/admin/login');
-        return;
-      }
-
-      const currentUser = pb.authStore.model;
-      if (currentUser?.role !== 'admin') {
-        router.push('/admin/login');
-        return;
-      }
-      setUser(currentUser);
-
       const data = await dashboardService.getStats();
       setStats(data.stats);
       setPagosPendientes(data.pagosHoy);
-
     } catch (err) {
       console.error('Error cargando dashboard:', err);
       setError('No se pudieron cargar los datos. Intenta de nuevo.');
@@ -250,23 +301,13 @@ export default function AdminDashboard() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [router]);
+  }, []);
 
-  // ─── Efecto de montaje ──────────────────────────────────────────────
-  useEffect(() => {
-    setMounted(true);
-    cargarDatos();
+  const handleLogout = () => {
+    pb.authStore.clear();
+    router.push('/admin/login');
+  };
 
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        cargarDatos(true);
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [cargarDatos]);
-
-  // ─── Manejar cobro ──────────────────────────────────────────────────
   const handleCobrar = useCallback(async (pago) => {
     const monto = pago.montoProgramado || pago.monto || 0;
     if (!confirm(`¿Confirmar cobro de $${monto.toLocaleString()} para ${pago.clienteNombre}?`)) return;
@@ -280,42 +321,38 @@ export default function AdminDashboard() {
     }
   }, [cargarDatos]);
 
-  // ─── Acciones rápidas ──────────────────────────────────────────────────
-  const accionesRapidas = useMemo(() => [
-    { nombre: 'Clientes', icono: Users, ruta: '/admin/clientes', color: 'from-blue-500 to-blue-600' },
-    { nombre: 'Productos', icono: Package, ruta: '/admin/productos', color: 'from-purple-500 to-purple-600' },
-    { nombre: 'Órdenes', icono: ShoppingBag, ruta: '/admin/ordenes', color: 'from-orange-500 to-orange-600' },
-    { nombre: 'Vendedores', icono: Store, ruta: '/admin/vendedores', color: 'from-green-500 to-green-600' },
-    { nombre: 'Pagos', icono: CreditCard, ruta: '/admin/pagos', color: 'from-teal-500 to-teal-600' },
-    { nombre: 'Tandas', icono: Target, ruta: '/admin/tandas', color: 'from-pink-500 to-pink-600' },
-    { nombre: 'KYC', icono: ShieldCheck, ruta: '/admin/kyc', color: 'from-indigo-500 to-indigo-600' },
-    { nombre: 'Bolsa Trabajo', icono: Briefcase, ruta: '/admin/bolsa-trabajo', color: 'from-yellow-500 to-yellow-600' },
-    { nombre: 'Reportes', icono: BarChart3, ruta: '/admin/reportes', color: 'from-red-500 to-red-600' },
+  // ─── Menú de administración (opciones) ──────────────────────────────
+  const adminMenu = useMemo(() => [
+    { name: 'KYC Pendientes', icon: ShieldCheck, path: '/admin/kyc', color: 'from-blue-500 to-blue-600' },
+    { name: 'Tandas', icon: Target, path: '/admin/tandas', color: 'from-pink-500 to-pink-600' },
+    { name: 'Clientes', icon: Users, path: '/admin/clientes', color: 'from-blue-500 to-blue-600' },
+    { name: 'Tarjetas', icon: CreditCard, path: '/admin/tarjetas', color: 'from-teal-500 to-teal-600' },
+    { name: 'Productos', icon: Package, path: '/admin/productos', color: 'from-purple-500 to-purple-600' },
+    { name: 'Negocios Aliados', icon: Store, path: '/admin/negocios', color: 'from-green-500 to-green-600' },
+    { name: 'Órdenes', icon: ShoppingBag, path: '/admin/ordenes', color: 'from-orange-500 to-orange-600' },
+    { name: 'Pagos', icon: DollarSign, path: '/admin/pagos', color: 'from-red-500 to-red-600' },
+    { name: 'Vendedores', icon: Briefcase, path: '/admin/vendedores', color: 'from-yellow-500 to-yellow-600' },
+    { name: 'Cobradores', icon: Users, path: '/admin/cobradores', color: 'from-indigo-500 to-indigo-600' },
+    { name: 'Cobranza en campo', icon: CalendarDays, path: '/admin/collector', color: 'from-emerald-500 to-emerald-600' },
+    { name: 'Reportes', icon: BarChart3, path: '/admin/reportes', color: 'from-red-500 to-red-600' },
+    { name: 'Configuración', icon: Crown, path: '/admin/configuracion', color: 'from-gray-500 to-gray-600' },
   ], []);
 
-  // ─── Renderizado ────────────────────────────────────────────────────
-  if (!mounted) return null;
+  // ─── Obtener estadísticas rápidas para mostrar en la derecha ──────
+  const quickStats = useMemo(() => [
+    { label: 'Clientes', value: stats.clientes.valor, icon: Users },
+    { label: 'Productos', value: stats.productos.valor, icon: Package },
+    { label: 'Vendedores', value: stats.vendedores.valor, icon: Briefcase },
+  ], [stats]);
 
   if (loading) {
     return (
-      <AdminLayout>
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm animate-pulse">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="w-5 h-5 bg-gray-200 rounded-full" />
-                  <div className="w-12 h-6 bg-gray-200 rounded" />
-                </div>
-                <div className="w-16 h-3 bg-gray-200 rounded" />
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-center items-center h-32">
-            <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
-          </div>
+      <div className="min-h-screen bg-[#ECEAF5] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-[#6C3BFF] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-sm text-gray-500">Cargando panel...</p>
         </div>
-      </AdminLayout>
+      </div>
     );
   }
 
@@ -323,98 +360,223 @@ export default function AdminDashboard() {
     <>
       <Head>
         <title>Dashboard | MarketDesliz Admin</title>
+        <meta name="description" content="Panel de administración de MarketDesliz" />
       </Head>
 
-      <AdminLayout>
-        <div className="space-y-6">
+      <div className="min-h-screen bg-[#ECEAF5] font-sans">
+        {/* ─── HEADER MINIMALISTA ───────────────────────────────────── */}
+        <header className="px-6 md:px-12 py-6">
+          <div className="flex items-center justify-between max-w-7xl mx-auto">
+            <LogoMark size={56} />
 
-          {/* ─── Cabecera con botón de recarga ─────────────────── */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <LayoutDashboard size={20} className="text-[#6C3BFF]" />
-              <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
-            </div>
-            <button
-              onClick={() => cargarDatos(true)}
-              disabled={refreshing}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-500 hover:text-[#6C3BFF] transition-colors disabled:opacity-50"
-            >
-              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-              {refreshing ? 'Actualizando...' : 'Actualizar'}
-            </button>
-          </div>
-
-          {/* ─── Error ────────────────────────────────────────────── */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 text-red-700">
-              <AlertCircle size={18} className="shrink-0" />
-              <span className="text-sm">{error}</span>
+            <div className="flex items-center gap-6">
+              <div className="hidden md:flex items-center gap-2">
+                <div className="w-8 h-8 bg-[#6C3BFF]/10 rounded-full flex items-center justify-center">
+                  <Crown size={16} className="text-[#6C3BFF]" />
+                </div>
+                <span className="text-sm font-medium text-gray-700">
+                  {adminUser?.nombre || adminUser?.email?.split('@')[0] || 'Admin'}
+                </span>
+              </div>
               <button
-                onClick={() => cargarDatos()}
-                className="ml-auto text-sm font-medium hover:underline"
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-xl transition-colors font-medium"
               >
-                Reintentar
+                <LogOut size={18} />
+                <span className="hidden md:inline">Cerrar sesión</span>
+              </button>
+              <button
+                onClick={() => cargarDatos(true)}
+                disabled={refreshing}
+                className="p-2 text-gray-400 hover:text-[#6C3BFF] transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
               </button>
             </div>
-          )}
+          </div>
+        </header>
 
-          {/* ─── Stats Grid con Tendencias ────────────────────────── */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {[
-              { key: 'clientes', label: 'Clientes', icon: Users, color: 'text-blue-500' },
-              { key: 'productos', label: 'Productos activos', icon: Package, color: 'text-purple-500' },
-              { key: 'ordenes', label: 'Órdenes totales', icon: ShoppingBag, color: 'text-orange-500' },
-              { key: 'vendedores', label: 'Vendedores activos', icon: Store, color: 'text-green-500' },
-              { key: 'pagosHoy', label: 'Pagos pendientes hoy', icon: Clock, color: 'text-yellow-500' },
-              { key: 'deudaTotal', label: 'Deuda total', icon: DollarSign, color: 'text-red-500' }
-            ].map(({ key, label, icon: Icon, color }) => {
-              const stat = stats[key];
-              const valor = stat?.valor ?? 0;
-              const tendencia = stat?.tendencia ?? { diferencia: 0, porcentaje: 0 };
-              const esPositivo = tendencia.diferencia >= 0;
-              // Para deuda, un cambio negativo es bueno (baja la deuda)
-              const esPositivoBueno = key === 'deudaTotal' ? !esPositivo : esPositivo;
+        {/* ─── CONTENIDO PRINCIPAL (tres columnas) ────────────────── */}
+        <main className="max-w-7xl mx-auto px-6 md:px-12 pt-0">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 min-h-[600px] items-start">
+            {/* ─── IZQUIERDA: Menú de administración ────────────────── */}
+            <div className="lg:col-span-5 pt-7">
+              <div className="mb-9">
+                <h1 className="text-4xl md:text-5xl font-extrabold text-textMain leading-[1.1] tracking-[-0.03em] mb-2">
+                  Hola, Adm. Alan.
+                </h1>
+                <p className="text-xl text-textSub font-normal">
+                  ¿Qué quieres hacer hoy?
+                </p>
+              </div>
 
-              return (
-                <div key={key} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition">
-                  <div className="flex items-center justify-between mb-2">
-                    <Icon size={20} className={color} />
-                    <div className="flex items-center gap-1">
-                      <span className="text-2xl font-bold text-gray-900">
-                        {key === 'deudaTotal' ? formatMoney(valor) : valor}
-                      </span>
-                      {tendencia.diferencia !== 0 && (
-                        <span className={`text-xs font-medium flex items-center gap-0.5 ${
-                          esPositivoBueno ? 'text-green-600' : 'text-red-500'
-                        }`}>
-                          {esPositivoBueno ? (
-                            <TrendingUp size={12} />
-                          ) : (
-                            <TrendingDown size={12} />
-                          )}
-                          {Math.abs(tendencia.porcentaje)}%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-gray-500">{label}</p>
-                    {tendencia.diferencia !== 0 && (
-                      <span className={`text-[10px] font-medium ${
-                        esPositivoBueno ? 'text-green-600' : 'text-red-500'
-                      }`}>
-                        {esPositivoBueno ? '+' : ''}{tendencia.diferencia}
-                      </span>
-                    )}
+              <div className="flex flex-col gap-3">
+                {adminMenu.map((item) => (
+                  <AdminActionCard
+                    key={item.path}
+                    icon={item.icon}
+                    title={item.name}
+                    subtitle={`Gestionar ${item.name.toLowerCase()}`}
+                    color={item.color}
+                    onClick={() => router.push(item.path)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* ─── CENTRO: Glass Card con logo ───────────────────────── */}
+            <div className="lg:col-span-4 flex items-center justify-center relative min-h-[420px]">
+              {/* Burbujas flotantes */}
+              {[
+                { w: 16, h: 16, top: 80, left: 60 },
+                { w: 10, h: 10, top: 160, left: 30 },
+                { w: 20, h: 20, bottom: 120, right: 50 },
+                { w: 11, h: 11, bottom: 180, right: 30 },
+                { w: 8, h: 8, top: 240, left: 80 },
+              ].map((b, i) => (
+                <div
+                  key={i}
+                  className="absolute rounded-full bg-white/60 border border-white/80 backdrop-blur-sm"
+                  style={{
+                    width: b.w,
+                    height: b.h,
+                    top: b.top,
+                    left: b.left,
+                    bottom: b.bottom,
+                    right: b.right,
+                    boxShadow: "0 2px 8px rgba(130,90,220,0.10)",
+                  }}
+                />
+              ))}
+
+              <div className="relative inline-flex flex-col items-center">
+                {/* Glass Card */}
+                <div
+                  className="w-[300px] h-[320px] md:w-[360px] md:h-[380px] rounded-[44px] flex flex-col items-center justify-center relative z-10 transition-all duration-500 hover:scale-105 cursor-pointer mt-16 md:mt-20"
+                  style={{
+                    background: "linear-gradient(145deg, rgba(255,255,255,0.85) 0%, rgba(235,228,255,0.60) 100%)",
+                    boxShadow: "30px 30px 80px rgba(130,90,220,0.18), -15px -15px 40px rgba(255,255,255,0.85), inset 0 1px 1px rgba(255,255,255,0.9)",
+                    backdropFilter: "blur(18px)",
+                    WebkitBackdropFilter: "blur(18px)",
+                    border: "1.5px solid rgba(255,255,255,0.75)",
+                  }}
+                  onClick={() => router.push('/admin/dashboard')}
+                >
+                  <div className="flex flex-col items-center">
+                    <span
+                      className="font-logo font-bold text-7xl md:text-8xl tracking-tight"
+                      style={{
+                        background: 'linear-gradient(135deg, #5B2BE0, #9B5AFF)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                      }}
+                    >
+                      ʃƪʃƪ
+                    </span>
+                    <span className="mt-2 text-sm font-medium text-gray-500">Administración</span>
                   </div>
                 </div>
-              );
-            })}
+
+                {/* Anillos inferiores */}
+                <div
+                  className="absolute -bottom-9 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 mt-4"
+                  style={{ width: 320 }}
+                >
+                  <div
+                    className="rounded-full"
+                    style={{
+                      width: 320, height: 30,
+                      marginTop: -8,
+                      border: "1.5px solid rgba(180,160,240,0.35)",
+                    }}
+                  />
+                  <div
+                    className="rounded-full"
+                    style={{
+                      width: 290, height: 22,
+                      marginTop: -18, opacity: 0.7,
+                      border: "1.5px solid rgba(180,160,240,0.35)",
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: 300, height: 22,
+                      background: "radial-gradient(ellipse at center, rgba(185,160,255,0.38) 0%, rgba(180,155,255,0.10) 70%, transparent 100%)",
+                      borderRadius: "50%",
+                      filter: "blur(4px)",
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ─── DERECHA: Información rápida ──────────────────────── */}
+            <div className="lg:col-span-3 pt-12 flex flex-col gap-6">
+              <div className="bg-white rounded-2xl p-6 shadow-card border border-white/90">
+                <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <BarChart3 size={18} className="text-[#6C3BFF]" />
+                  Resumen rápido
+                </h3>
+                <div className="space-y-4">
+                  {quickStats.map((stat) => {
+                    const Icon = stat.icon;
+                    return (
+                      <div key={stat.label} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Icon size={16} className="text-gray-400" />
+                          <span className="text-sm text-gray-600">{stat.label}</span>
+                        </div>
+                        <span className="font-bold text-gray-900">{stat.value}</span>
+                      </div>
+                    );
+                  })}
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <span className="text-sm text-gray-600">Deuda total</span>
+                    <span className="font-bold text-red-500">{formatMoney(stats.deudaTotal.valor)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Pagos pendientes</span>
+                    <span className="font-bold text-yellow-600">{stats.pagosHoy.valor}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl p-6 shadow-card border border-white/90">
+                <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <ShieldCheck size={18} className="text-[#6C3BFF]" />
+                  Acciones rápidas
+                </h3>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => router.push('/admin/kyc')}
+                    className="w-full text-left px-4 py-2 bg-gray-50 rounded-xl hover:bg-gray-100 transition text-sm text-gray-700"
+                  >
+                    ⚡ Revisar KYC pendientes
+                  </button>
+                  <button
+                    onClick={() => router.push('/admin/pagos')}
+                    className="w-full text-left px-4 py-2 bg-gray-50 rounded-xl hover:bg-gray-100 transition text-sm text-gray-700"
+                  >
+                    💰 Ver pagos del día
+                  </button>
+                  <button
+                    onClick={() => router.push('/admin/tandas')}
+                    className="w-full text-left px-4 py-2 bg-gray-50 rounded-xl hover:bg-gray-100 transition text-sm text-gray-700"
+                  >
+                    🎯 Gestionar tandas
+                  </button>
+                </div>
+              </div>
+
+              <div className="text-center text-xs text-gray-400">
+                MarketDesliz v1.0 · {new Date().getFullYear()}
+              </div>
+            </div>
           </div>
 
-          {/* ─── Pagos pendientes hoy ────────────────────────────── */}
-          {pagosPendientes.length > 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+          {/* ─── SECCIÓN DE PAGOS PENDIENTES (debajo de las columnas) ── */}
+          {pagosPendientes.length > 0 && (
+            <div className="mt-12 bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
               <div className="border-b border-gray-100 px-6 py-4 bg-yellow-50">
                 <div className="flex items-center gap-2">
                   <CalendarDays size={18} className="text-yellow-600" />
@@ -453,54 +615,19 @@ export default function AdminDashboard() {
                 ))}
               </div>
             </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center shadow-sm">
-              <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <CheckCircle size={32} className="text-green-500" />
-              </div>
-              <h3 className="font-semibold text-gray-900 mb-1">No hay pagos pendientes hoy</h3>
-              <p className="text-sm text-gray-500">Todos los pagos del día están al día</p>
-            </div>
           )}
+        </main>
+      </div>
 
-          {/* ─── Acciones rápidas ────────────────────────────────── */}
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-            <div className="border-b border-gray-100 px-6 py-4">
-              <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-                <TrendingUp size={18} className="text-[#6C3BFF]" />
-                Acciones rápidas
-              </h2>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                {accionesRapidas.map((accion) => {
-                  const Icono = accion.icono;
-                  return (
-                    <button
-                      key={accion.nombre}
-                      onClick={() => window.location.href = accion.ruta}
-                      className="flex flex-col items-center gap-2 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition group"
-                    >
-                      <div className={`w-10 h-10 bg-gradient-to-r ${accion.color} rounded-xl flex items-center justify-center shadow-sm group-hover:scale-105 transition`}>
-                        <Icono size={18} className="text-white" />
-                      </div>
-                      <span className="text-xs font-medium text-gray-600">{accion.nombre}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* ─── Estado del sistema ────────────────────────────────── */}
-          <div className="flex items-center justify-center gap-2 text-xs text-gray-400 bg-white rounded-xl px-4 py-3 border border-gray-100">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            Sistema funcionando correctamente
-            <span className="mx-1">·</span>
-            Última actualización: {new Date().toLocaleTimeString()}
-          </div>
-        </div>
-      </AdminLayout>
+      <style jsx global>{`
+        @keyframes scroll-dot {
+          0% { transform: translateY(0); opacity: 1; }
+          100% { transform: translateY(16px); opacity: 0; }
+        }
+        .animate-scroll-dot {
+          animation: scroll-dot 1.5s ease-in-out infinite;
+        }
+      `}</style>
     </>
   );
 }

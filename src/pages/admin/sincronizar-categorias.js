@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import AdminLayout from '../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../layouts/AdminLayoutMinimal';
 import { sincronizarTodasCategorias } from '../../lib/categorias';
 import { RefreshCw, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 
@@ -51,7 +51,7 @@ export default function SincronizarCategoriasPage() {
         <title>Sincronizar Categorías | Admin</title>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-2xl mx-auto py-8">
           <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
             <h1 className="text-xl font-bold text-gray-900 mb-2">
@@ -117,7 +117,7 @@ export default function SincronizarCategoriasPage() {
             </div>
           </div>
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     </>
   );
 }

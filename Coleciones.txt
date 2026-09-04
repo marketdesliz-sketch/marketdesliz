@@ -1088,7 +1088,7 @@ DeleteRule: @request.auth.role = "admin"
 | 2 | blog | ✅ |
   3   bolsa_trabajo
 | 4 | carrusel | ✅ |
-  5  categorias
+  5  categorías ✅
 | 6 | categorias_negocios | ✅ |
 | 7 | clients | ✅ |
 | 8 | cobradores | ✅ |
@@ -1098,21 +1098,21 @@ DeleteRule: @request.auth.role = "admin"
 | 12 | config_niveles | ✅ |
 | 13 | config_sistema | ✅ |
   14   contacto          ✅
-  15   estados
+  15   estados✅
 | 16 | favoritos | ✅ |
 | 17 | invitaciones_negocios | ✅ |
   18   invitaciones_tandas
 | 19 | kyc_verifications | ✅ |
-  20   localidades
+  20   localidades  ✅
 | 21 | log_actividad | ✅ |
-  22   municipios
+  22   municipios  ✅
 | 23 | negocios | ✅ |
 | 24 | notificaciones | ✅|
 | 25 | orders | ✅ | 
 | 26 | payments | ✅ |
 | 27 | products | ✅ | 
   28   recordatorios_pagos ✅
-  29  sectores
+  29  sectores  ✅
 | 30 | solicitudes | ✅  |
   31    subcategorías   ✅
 | 32 | tandas | ✅ |

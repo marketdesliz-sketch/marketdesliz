@@ -22,7 +22,7 @@ import {
   ChevronRight,
   RefreshCw
 } from 'lucide-react';
-import AdminLayout from '../../../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../../../layouts/AdminLayoutMinimal';
 import {
   getVentasVendedorPaginated,
   getEstadisticasVentasVendedor
@@ -167,17 +167,17 @@ export default function VentasVendedorPage() {
   // ─── Renderizado ──────────────────────────────────────────────────────
   if (loading && !refreshing) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="flex justify-center items-center h-64">
           <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
   if (error && !vendedor) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center">
             <AlertCircle size={32} className="text-red-500 mx-auto mb-4" />
@@ -188,7 +188,7 @@ export default function VentasVendedorPage() {
             </Link>
           </div>
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
@@ -198,7 +198,7 @@ export default function VentasVendedorPage() {
         <title>Ventas de {vendedor?.nombre || 'Vendedor'} | Admin</title>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-6xl mx-auto">
 
           {/* ─── Header ─────────────────────────────────────────────────── */}
@@ -499,7 +499,7 @@ export default function VentasVendedorPage() {
             </div>
           </div>
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     </>
   );
 }

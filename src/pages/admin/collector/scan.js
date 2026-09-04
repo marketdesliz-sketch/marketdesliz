@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import AdminLayout from '../../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../../layouts/AdminLayoutMinimal';
 import { withAuth } from '../../../lib/withAuth';
 import { getTodayRoute } from '../../../lib/collectorService';
 
@@ -57,7 +57,7 @@ function ScanPage() {
         <title>Cobranza en Campo - Escáner | Admin</title>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="bg-gradient-to-r from-[#6C3BFF] to-[#9A7BFF] text-white p-6 rounded-lg mb-6">

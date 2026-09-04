@@ -29,7 +29,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import AdminLayout from '../../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../../layouts/AdminLayoutMinimal';
 import { getVendedoresPaginated, getVendedoresStats } from '../../../lib/vendedorService';
 import pb from '../../../lib/pocketbase';
 
@@ -191,11 +191,11 @@ export default function AdminVendedoresPage() {
   // ─── Renderizado ──────────────────────────────────────────────────────
   if (loading && vendedores.length === 0 && !refreshing) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="flex justify-center items-center h-64">
           <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
@@ -205,7 +205,7 @@ export default function AdminVendedoresPage() {
         <title>Vendedores | MarketDesliz Admin</title>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-7xl mx-auto">
 
           {/* ─── Header ─────────────────────────────────────────────────── */}
@@ -498,7 +498,7 @@ export default function AdminVendedoresPage() {
             </div>
           </div>
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     </>
   );
 }

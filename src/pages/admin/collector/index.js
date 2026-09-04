@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import AdminLayout from '../../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../../layouts/AdminLayoutMinimal';
 import { withAuth } from '../../../lib/withAuth';
 
 function CollectorPage() {
@@ -48,7 +48,7 @@ function CollectorPage() {
         `}</style>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-4xl mx-auto">
           <div className="bg-gradient-to-r from-[#6C3BFF] to-[#9A7BFF] text-white p-6 rounded-lg mb-6">
             <h1 className="text-2xl font-bold mb-2">📱 Cobranza en Campo</h1>
@@ -104,7 +104,7 @@ function CollectorPage() {
             </div>
           </div>
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     </>
   );
 }

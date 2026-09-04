@@ -25,7 +25,7 @@ import {
   ChevronRight,
   Printer
 } from 'lucide-react';
-import AdminLayout from '../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../layouts/AdminLayoutMinimal';
 import pb from '../../lib/pocketbase';
 import * as XLSX from 'xlsx';
 
@@ -199,11 +199,11 @@ export default function AdminPagosPage() {
 
   if (loading) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="flex justify-center items-center h-64">
           <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
@@ -213,7 +213,7 @@ export default function AdminPagosPage() {
         <title>Gestión de Pagos | Admin</title>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-7xl mx-auto">
           
           {/* Header */}
@@ -431,7 +431,7 @@ export default function AdminPagosPage() {
             </div>
           )}
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
 
       {/* Modal de cobro */}
       {showModal && selectedPago && (

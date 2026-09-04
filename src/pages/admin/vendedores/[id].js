@@ -27,7 +27,7 @@ import {
   TrendingUp,
   Download
 } from 'lucide-react';
-import AdminLayout from '../../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../../layouts/AdminLayoutMinimal';
 import { getVendedorCompleto } from '../../../lib/vendedorService';
 import pb from '../../../lib/pocketbase';
 
@@ -147,17 +147,17 @@ export default function DetalleVendedorPage() {
   // ─── Renderizado ──────────────────────────────────────────────────────
   if (loading && !refreshing) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="flex justify-center items-center h-64">
           <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
   if (error && !vendedor) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center">
             <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -173,7 +173,7 @@ export default function DetalleVendedorPage() {
             </Link>
           </div>
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
@@ -183,7 +183,7 @@ export default function DetalleVendedorPage() {
         <title>{vendedor?.nombre || 'Vendedor'} | MarketDesliz Admin</title>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-5xl mx-auto">
 
           {/* ─── Header ─────────────────────────────────────────────────── */}
@@ -427,7 +427,7 @@ export default function DetalleVendedorPage() {
             </div>
           )}
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     </>
   );
 }

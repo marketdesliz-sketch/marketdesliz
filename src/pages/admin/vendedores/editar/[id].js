@@ -16,7 +16,7 @@ import {
   Smartphone,
   UserCheck
 } from 'lucide-react';
-import AdminLayout from '../../../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../../../layouts/AdminLayoutMinimal';
 import { getVendedorCompleto, updateVendedor } from '../../../../lib/vendedorService';
 import pb from '../../../../lib/pocketbase';
 
@@ -150,17 +150,17 @@ export default function EditarVendedorPage() {
 
   if (loading) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="flex justify-center items-center h-64">
           <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
   if (error && !vendedor) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center">
             <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -176,7 +176,7 @@ export default function EditarVendedorPage() {
             </Link>
           </div>
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
@@ -186,7 +186,7 @@ export default function EditarVendedorPage() {
         <title>Editar Vendedor | Admin MarketDesliz</title>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-3xl mx-auto">
 
           {/* ─── Header ─────────────────────────────────────────────────── */}
@@ -374,7 +374,7 @@ export default function EditarVendedorPage() {
             </form>
           </div>
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     </>
   );
 }

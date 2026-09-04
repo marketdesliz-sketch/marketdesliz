@@ -29,7 +29,7 @@ import {
   ChevronRight,
   RefreshCw
 } from 'lucide-react';
-import AdminLayout from '../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../layouts/AdminLayoutMinimal';
 import {
   getProductsPaginated,
   getProductCategories,
@@ -80,7 +80,7 @@ export default function AdminProductosPage() {
     enganche: '',
     pagoSemanal: '',
     semanas: '12',
-    categoria: '',
+    categoriaId: '',
     stock: '',
     costo: '',
     diasEntrega: '1',
@@ -216,7 +216,7 @@ export default function AdminProductosPage() {
       enganche: '',
       pagoSemanal: '',
       semanas: '12',
-      categoria: '',
+      categoriaId: '',
       stock: '',
       costo: '',
       diasEntrega: '1',
@@ -239,7 +239,7 @@ export default function AdminProductosPage() {
       enganche: producto.enganche || '',
       pagoSemanal: producto.pagoSemanal || '',
       semanas: producto.semanas || '12',
-      categoria: producto.categoria || '',
+      categoriaId: producto.categoriaId || '',
       stock: producto.stock || '',
       costo: producto.costo || '',
       diasEntrega: producto.diasEntrega || '1',
@@ -286,7 +286,7 @@ export default function AdminProductosPage() {
       setError('El número de semanas debe ser al menos 1');
       return;
     }
-    if (!formData.categoria) {
+    if (!formData.categoriaId) {
       setError('Selecciona una categoría');
       return;
     }
@@ -300,7 +300,7 @@ export default function AdminProductosPage() {
         enganche: parseFloat(formData.enganche),
         pagoSemanal: parseFloat(formData.pagoSemanal),
         semanas: parseInt(formData.semanas),
-        categoria: formData.categoria,
+        categoriaId: formData.categoriaId,
         stock: parseInt(formData.stock) || 0,
         costo: parseFloat(formData.costo) || 0,
         diasEntrega: parseInt(formData.diasEntrega) || 1,
@@ -344,11 +344,11 @@ export default function AdminProductosPage() {
   // ─── Renderizado ──────────────────────────────────────────────────────
   if (loading && !refreshing) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="flex justify-center items-center h-64">
           <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
@@ -358,7 +358,7 @@ export default function AdminProductosPage() {
         <title>Gestión de Productos | Admin</title>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-7xl mx-auto">
 
           {/* ─── Header ─────────────────────────────────────────────────── */}
@@ -453,7 +453,7 @@ export default function AdminProductosPage() {
                 >
                   <option value="todos">Todas las categorías</option>
                   {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
+                    <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                   ))}
                 </select>
               </div>
@@ -810,15 +810,15 @@ export default function AdminProductosPage() {
                       <div className="relative">
                         <Tag size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <select
-                          name="categoria"
-                          value={formData.categoria}
+                          name="categoriaId"
+                          value={formData.categoriaId}
                           onChange={handleInputChange}
                           required
                           className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-[#6C3BFF] appearance-none"
                         >
                           <option value="">Selecciona una categoría</option>
                           {categories.map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
+                            <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                           ))}
                         </select>
                       </div>
@@ -931,7 +931,7 @@ export default function AdminProductosPage() {
             </div>
           </div>
         )}
-      </AdminLayout>
+      </AdminLayoutMinimal>
     </>
   );
 }

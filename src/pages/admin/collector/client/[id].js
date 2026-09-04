@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import AdminLayout from '../../../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../../../layouts/AdminLayoutMinimal';
 import { withAuth } from '../../../../lib/withAuth';
 import pb from '../../../../lib/pocketbase';
 import { formatMoney } from '../../../../lib/utils';
@@ -240,17 +240,17 @@ function ClientView() {
 
   if (loading) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="flex flex-col items-center justify-center min-h-[400px]">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-[#6C3BFF] border-t-transparent mb-4" />
           <p className="text-gray-600">Cargando información del cliente...</p>
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
   return (
-    <AdminLayout>
+    <AdminLayoutMinimal>
       <Head>
         <title>Cliente: {client?.nombre || 'Sin nombre'} | Admin</title>
       </Head>
@@ -520,7 +520,7 @@ function ClientView() {
           </div>
         )}
       </div>
-    </AdminLayout>
+    </AdminLayoutMinimal>
   );
 }
 

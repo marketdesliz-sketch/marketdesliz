@@ -19,7 +19,7 @@ import {
   MessageCircle
 } from 'lucide-react';
 import pb from '../../lib/pocketbase';
-import AdminLayout from '../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../layouts/AdminLayoutMinimal';
 import {
   getNegocios,
   getCategoriasConConteo,
@@ -611,11 +611,11 @@ export default function AdminNegociosPage() {
   // ─── Renderizado ──────────────────────────────────────────────────────
   if (loading) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="flex justify-center items-center min-h-[60vh]">
           <div className="loading-spinner"></div>
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
@@ -625,7 +625,7 @@ export default function AdminNegociosPage() {
         <title>Gestión de Negocios Aliados | Admin MarketDesliz</title>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-7xl mx-auto">
           {/* Header con métricas */}
           <div className="mb-8">
@@ -888,7 +888,7 @@ export default function AdminNegociosPage() {
             </div>
           )}
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
 
       {/* Modal de estadísticas */}
       {showStatsModal && selectedNegocio && estadisticas && (

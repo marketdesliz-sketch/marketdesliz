@@ -36,7 +36,7 @@ import {
   Search,        // ✅ NUEVO
   Filter         // ✅ NUEVO
 } from 'lucide-react';
-import AdminLayout from '../../layouts/AdminLayout';
+import AdminLayoutMinimal from '../../layouts/AdminLayoutMinimal';
 import { 
   getTandasPaginated,   // ✅ NUEVO
   getTandasStats,       // ✅ NUEVO
@@ -349,11 +349,11 @@ export default function AdminTandasPage() {
   // ─── Renderizado ──────────────────────────────────────────────────────
   if (loading && tandas.length === 0 && !refreshing) {
     return (
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="flex justify-center items-center h-64">
           <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     );
   }
 
@@ -363,7 +363,7 @@ export default function AdminTandasPage() {
         <title>Gestión de Tandas | Admin</title>
       </Head>
 
-      <AdminLayout>
+      <AdminLayoutMinimal>
         <div className="max-w-7xl mx-auto">
 
           {/* ─── Header ─────────────────────────────────────────────────── */}
@@ -865,7 +865,7 @@ export default function AdminTandasPage() {
             </div>
           </div>
         )}
-      </AdminLayout>
+      </AdminLayoutMinimal>
     </>
   );
 }

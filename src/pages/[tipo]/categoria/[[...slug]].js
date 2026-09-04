@@ -19,7 +19,7 @@ const formatMoney = (amount) =>
     minimumFractionDigits: 0, maximumFractionDigits: 0
   }).format(amount);
 
-// ─── Helpers (sin cambios) ────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────
 function getCategoriaInfoFromStatic(nombreOSlug) {
   if (!nombreOSlug) return null;
   const search = nombreOSlug.toLowerCase().trim();
@@ -97,14 +97,16 @@ function normalizeItem(item, tipo) {
     enganche: item.enganche || 0,
     paga: item.pagoSemanal || 0,
     semanas: item.semanas || 12,
-    categoria: item.categoria || '',
+    categoriaId: item.categoriaId || '', // ✅ Guardar el ID
     subcategoria: item.subcategoria || '',
+    subcategoriaId: item.subcategoriaId || '',
     imagen: item.imagen ? pb.files.getURL(item, item.imagen) : null,
     agotado: item.stock === 0 || false,
     nuevo: item.nuevo || false,
     tipo,
     created: item.created,
-    sku: item.sku || item.id?.substring(0, 6).toUpperCase()
+    sku: item.sku || item.id?.substring(0, 6).toUpperCase(),
+    expand: item.expand || {} // ✅ Guardar expand para obtener el nombre
   };
   if (tipo === 'uso-personal') { base.talla = item.size; base.color = item.color; }
   else if (tipo === 'ganado') { base.raza = item.breed; base.edad = item.age; base.peso = item.weight; base.salud = item.healthStatus; }
@@ -122,44 +124,35 @@ function normalizeItem(item, tipo) {
   return base;
 }
 
-const filterItems = (items, tipo, categoriaSlug, subcategoriaSlug, activeFilters = {}) => {
+// ✅ NUEVO: Filtrar items usando categoriaId (relación)
+const filterItems = (items, categoriaId, subcategoriaId, activeFilters = {}) => {
   if (!items.length) return [];
   let filtered = [...items];
 
-  if (categoriaSlug && categoriaSlug !== 'todos') {
-    const searchTerm = categoriaSlug.toLowerCase().replace(/-/g, ' ');
-    filtered = filtered.filter(item => {
-      const s = (item.subcategoria || '').toLowerCase();
-      const c = (item.categoria || '').toLowerCase();
-      const n = (item.nombre || '').toLowerCase();
-      return s.includes(searchTerm) || c.includes(searchTerm) || n.includes(searchTerm);
-    });
+  // Filtrar por categoriaId (si existe)
+  if (categoriaId) {
+    filtered = filtered.filter(item => item.categoriaId === categoriaId);
   }
 
-  if (categoriaSlug && subcategoriaSlug) {
-    const sc = categoriaSlug.toLowerCase().replace(/-/g, ' ');
-    const ss = subcategoriaSlug.toLowerCase().replace(/-/g, ' ');
-    filtered = filtered.filter(i => (i.categoria || '').toLowerCase().includes(sc));
-    filtered = filtered.filter(i =>
-      (i.subcategoria || '').toLowerCase().includes(ss) ||
-      (i.nombre || '').toLowerCase().includes(ss)
-    );
+  // Filtrar por subcategoriaId (si existe)
+  if (subcategoriaId) {
+    filtered = filtered.filter(item => item.subcategoriaId === subcategoriaId);
   }
 
+  // Filtros activos (checkboxes) - ahora usan nombres pero los comparamos con categoríaId
   if (Object.keys(activeFilters).length > 0) {
     Object.entries(activeFilters).forEach(([, filterItemsArr]) => {
       if (filterItemsArr.length > 0) {
-        filtered = filtered.filter(item =>
-          filterItemsArr.some(fi => {
+        filtered = filtered.filter(item => {
+          // Obtener nombre de categoría desde expand o desde el campo categoria
+          const categoriaNombre = item.expand?.categoriaId?.nombre || '';
+          return filterItemsArr.some(fi => {
             const s = fi.toLowerCase().trim();
-            const sub = (item.subcategoria || '').toLowerCase().trim();
-            const nom = (item.nombre || '').toLowerCase().trim();
-            const desc = (item.descripcion || '').toLowerCase().trim();
-            const ss = s.endsWith('s') ? s.slice(0, -1) : s;
-            const subS = sub.endsWith('s') ? sub.slice(0, -1) : sub;
-            return sub.includes(s) || subS.includes(s) || sub.includes(ss) || nom.includes(s) || desc.includes(s);
-          })
-        );
+            return categoriaNombre.toLowerCase().includes(s) ||
+              item.nombre.toLowerCase().includes(s) ||
+              item.descripcion.toLowerCase().includes(s);
+          });
+        });
       }
     });
   }
@@ -172,10 +165,18 @@ const getNombreFromSlug = (slug) => {
   return slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 };
 
-// ─── Breadcrumb (sin cambios) ────────────────────────────────
-function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaInfo }) {
+// ─── Breadcrumb ────────────────────────────────────────────────
+function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaInfo, categoriaId, categoriasMap }) {
   const router = useRouter();
   const displayTipo = tipoNombres[tipo] || tipo?.replace(/-/g, ' ') || '';
+
+  // Obtener nombre de categoría desde el mapa (PocketBase) o desde estática
+  const getCategoriaNombre = (id) => {
+    if (categoriasMap && id) {
+      return categoriasMap[id] || id;
+    }
+    return null;
+  };
 
   return (
     <div className="bg-white border-b border-gray-100 mb-6">
@@ -199,6 +200,13 @@ function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaI
               const href = `/${tipo}/categoria/${slugs.slice(0, idx + 1).join('/')}`;
               const isLast = idx === slugs.length - 1;
               let nombreMostrado = getNombreFromSlug(slug);
+
+              // Si tenemos el ID de categoría y el mapa, obtener nombre real
+              if (idx === 0 && categoriaId && categoriasMap) {
+                const realNombre = getCategoriaNombre(categoriaId);
+                if (realNombre) nombreMostrado = realNombre;
+              }
+
               if (categoriaInfo && idx === 0) {
                 nombreMostrado = categoriaInfo.nombre || nombreMostrado;
               }
@@ -241,8 +249,8 @@ function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaI
   );
 }
 
-// ─── CategoryFilters (sin cambios) ──────────────────────────
-function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll, items }) {
+// ─── CategoryFilters (adaptado para usar IDs) ──────────────
+function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll, items, categoriasMap }) {
   const [expanded, setExpanded] = useState({});
 
   useEffect(() => {
@@ -258,14 +266,14 @@ function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll, item
 
   const secciones = useMemo(() => getFiltroSecciones(tipo), [tipo]);
 
+  // ✅ Contar usando categoriaId
   const counts = useMemo(() => {
     const countsMap = {};
     if (!items) return countsMap;
     items.forEach(item => {
-      const cat = item.categoria?.trim() || '';
-      const sub = item.subcategoria?.trim() || '';
-      if (cat) countsMap[cat] = (countsMap[cat] || 0) + 1;
-      if (sub) countsMap[sub] = (countsMap[sub] || 0) + 1;
+      // Obtener nombre de categoría desde expand o desde el campo categoria
+      const catName = item.expand?.categoriaId?.nombre || '';
+      if (catName) countsMap[catName] = (countsMap[catName] || 0) + 1;
     });
     return countsMap;
   }, [items]);
@@ -353,9 +361,11 @@ function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll, item
   );
 }
 
-// ─── NUEVO ProductCard (estilo igual a /productos) ────────────
+// ─── ProductCard (sin cambios, usa item.categoria para mostrar) ──
 function ProductCard({ item, tipo, onSelect, favorites, toggleFavorite }) {
   const router = useRouter();
+  // Obtener nombre de categoría desde expand o fallback
+  const categoriaNombre = item.expand?.categoriaId?.nombre || '';
 
   return (
     <div
@@ -387,8 +397,19 @@ function ProductCard({ item, tipo, onSelect, favorites, toggleFavorite }) {
             />
           </button>
         </div>
+        {item.nuevo && !item.agotado && (
+          <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">Nuevo</div>
+        )}
+        {item.agotado && (
+          <div className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">Agotado</div>
+        )}
       </div>
       <div className="p-3">
+        {categoriaNombre && (
+          <span className="text-[9px] font-semibold text-[#6C3BFF] bg-[#6C3BFF]/8 px-2 py-0.5 rounded-full uppercase tracking-wide inline-block mb-1">
+            {categoriaNombre}
+          </span>
+        )}
         <h3 className="font-bold text-sm text-gray-800 line-clamp-1">{item.nombre}</h3>
         <p className="text-base font-black text-gray-900 mt-1">
           {formatMoney(item.paga)} / semana
@@ -433,16 +454,17 @@ export default function CategoriaPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
   const [categoriaInfo, setCategoriaInfo] = useState(null);
+  const [categoriaId, setCategoriaId] = useState(null);
+  const [categoriasMap, setCategoriasMap] = useState({});
 
-  // ─── Estados de autenticación ──────────────────────────────
+  // ─── Estados de autenticación y favoritos ──────────────────────
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
   const [showLoginDropdown, setShowLoginDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-
-  // ─── Favoritos (igual que en productos.js) ─────────────────
   const [favorites, setFavorites] = useState([]);
 
+  // ─── Cargar favoritos ─────────────────────────────────────────
   useEffect(() => {
     const saved = localStorage.getItem('favorites');
     if (saved) setFavorites(JSON.parse(saved));
@@ -462,7 +484,7 @@ export default function CategoriaPage() {
   ];
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // ─── Efecto de autenticación ──────────────────────────────
+  // ─── Efecto de autenticación ──────────────────────────────────
   useEffect(() => {
     const checkAuth = () => {
       const currentUser = pb.authStore.model;
@@ -474,31 +496,100 @@ export default function CategoriaPage() {
     return () => unsubscribe();
   }, []);
 
-  // ─── Navegación ─────────────────────────────────────────────
+  // ─── Navegación ────────────────────────────────────────────────
   const navigateTo = (path) => router.push(path);
 
-  // ─── Cargar items ──────────────────────────────────────────
+  // ─── Cargar categorías y productos ────────────────────────────
   useEffect(() => {
-    const cargarItems = async () => {
+    const cargarDatos = async () => {
       try {
         setLoading(true);
         const busqueda = router.query.busqueda;
 
+        // 1. Obtener mapa de categorías (id → nombre)
+        let categoriasMapLocal = {};
+        try {
+          const categoriasList = await pb.collection('categorias').getFullList({
+            filter: 'activo = true',
+            fields: 'id,nombre'
+          });
+          categoriasList.forEach(c => {
+            categoriasMapLocal[c.id] = c.nombre;
+          });
+          setCategoriasMap(categoriasMapLocal);
+        } catch (e) {
+          console.warn('No se pudieron cargar categorías desde PocketBase:', e);
+        }
+
+        // 2. Obtener ID de categoría desde el slug (usando CATEGORIAS estática o buscando en PocketBase)
+        // 2. Obtener ID de categoría desde el slug (usando CATEGORIAS estática o buscando en PocketBase)
+        let catId = null;
         let catInfo = null;
-        if (categoriaSlug) {
+        let catNombre = '';
+
+        if (categoriaSlug && categoriaSlug !== 'todos') {
+          // Primero buscar en CATEGORIAS estática
           const staticInfo = getCategoriaInfoFromStatic(categoriaSlug);
           if (staticInfo) {
             catInfo = staticInfo;
-            if (tipo) {
-              const subs = getSubcategoriasFromStatic(tipo);
-              catInfo.subcategorias = subs;
+            catNombre = staticInfo.nombre;
+            // Buscar el ID en PocketBase por nombre (insensible a mayúsculas)
+            try {
+              // Usamos ~ para búsqueda case-insensitive y coincidencia parcial
+              const catRecord = await pb.collection('categorias').getFirstListItem(
+                `nombre ~ "${staticInfo.nombre}" && activo = true`,
+                { fields: 'id,nombre' }
+              );
+              if (catRecord) {
+                catId = catRecord.id;
+                catNombre = catRecord.nombre;
+              }
+            } catch (e) {
+              // Si no se encuentra por nombre, intentar por slug (si existe)
+              try {
+                const catRecord = await pb.collection('categorias').getFirstListItem(
+                  `slug = "${categoriaSlug}" && activo = true`,
+                  { fields: 'id,nombre' }
+                );
+                if (catRecord) {
+                  catId = catRecord.id;
+                  catNombre = catRecord.nombre;
+                }
+              } catch (e2) {
+                console.warn(`⚠️ Categoría no encontrada para slug: ${categoriaSlug}`);
+              }
+            }
+          } else {
+            // Si no está en CATEGORIAS estática, buscar directamente en PocketBase
+            try {
+              const catRecord = await pb.collection('categorias').getFirstListItem(
+                `nombre ~ "${categoriaSlug}" && activo = true`,
+                { fields: 'id,nombre' }
+              );
+              if (catRecord) {
+                catId = catRecord.id;
+                catNombre = catRecord.nombre;
+                catInfo = { nombre: catNombre, slug: categoriaSlug };
+              }
+            } catch (e) {
+              console.warn(`⚠️ Categoría no encontrada en PocketBase: ${categoriaSlug}`);
             }
           }
         }
+
+        // ✅ Si no se encontró la categoría, redirigir a la página de productos
+        if (!catId && categoriaSlug && categoriaSlug !== 'todos') {
+          console.warn(`⚠️ No se encontró categoría para slug: ${categoriaSlug}, redirigiendo a /${tipo}`);
+          router.push(`/${tipo}`);
+          return;
+        }
+
+        setCategoriaId(catId);
+        setCategoriaNombre(catNombre);
         setCategoriaInfo(catInfo);
-        setCategoriaNombre(catInfo?.nombre || getNombreFromSlug(categoriaSlug));
         setSubcategoriaNombre(getNombreFromSlug(subcategoriaSlug));
 
+        // 3. Cargar productos usando categoriaId
         let records = [];
         if (tipo === 'tandas') {
           records = await pb.collection('tandas').getFullList({
@@ -507,36 +598,58 @@ export default function CategoriaPage() {
           });
         } else {
           let filter = 'activo = true';
+
+          // Búsqueda por texto
           if (busqueda?.trim()) {
             const term = busqueda.trim();
             filter += ` && (nombre ~ "${term}" || descripcion ~ "${term}" || sku ~ "${term}")`;
           }
-          if (categoriaSlug && categoriaSlug !== 'todos') {
-            const catName = catInfo?.nombre || getNombreFromSlug(categoriaSlug);
-            if (catName) {
-              filter += ` && (categoria ~ "${catName}" || categoriaId != "")`;
-            }
+
+          // ✅ Filtrar por categoriaId (relación)
+          if (catId) {
+            filter += ` && categoriaId = "${catId}"`;
           }
-          records = await pb.collection('products').getFullList({ filter, sort: '-created' });
+
+          // Si no hay categoría específica, traer todos los activos
+          records = await pb.collection('products').getFullList({
+            filter: filter,
+            sort: '-created',
+            expand: 'categoriaId,subcategoriaId' // ✅ Expandir relaciones
+          });
         }
 
         const itemsData = records.map(item => normalizeItem(item, tipo));
         setItems(itemsData);
+
       } catch (error) {
-        console.error('Error cargando items:', error);
+        console.error('Error cargando datos:', error);
       } finally {
         setLoading(false);
       }
     };
-    if (tipo) cargarItems();
+    if (tipo) cargarDatos();
   }, [tipo, categoriaSlug, router.query.busqueda]);
 
-  // ─── Filtrar y ordenar ─────────────────────────────────────
+  // ─── Filtrar y ordenar ────────────────────────────────────────
   const itemsFiltrados = useMemo(() => {
     if (items.length === 0) return [];
 
-    let filtered = filterItems(items, tipo, categoriaSlug, subcategoriaSlug, activeFilters);
+    // Obtener subcategoriaId desde el slug
+    let subcategoriaId = null;
+    if (subcategoriaSlug && categoriaInfo?.subcategorias) {
+      const sub = categoriaInfo.subcategorias.find(s => s.slug === subcategoriaSlug);
+      if (sub) {
+        // Buscar en los items para obtener el ID real desde expand
+        const itemWithSub = items.find(i => i.subcategoria === sub.nombre || i.subcategoriaId);
+        if (itemWithSub) {
+          subcategoriaId = itemWithSub.subcategoriaId;
+        }
+      }
+    }
 
+    let filtered = filterItems(items, categoriaId, subcategoriaId, activeFilters);
+
+    // Búsqueda por texto (adicional)
     const busqueda = router.query.busqueda;
     if (busqueda?.trim()) {
       const t = busqueda.trim().toLowerCase();
@@ -544,25 +657,25 @@ export default function CategoriaPage() {
         (item.nombre || '').toLowerCase().includes(t) ||
         (item.descripcion || '').toLowerCase().includes(t) ||
         (item.sku || '').toLowerCase().includes(t) ||
-        (item.subcategoria || '').toLowerCase().includes(t) ||
-        (item.categoria || '').toLowerCase().includes(t)
+        (item.expand?.categoriaId?.nombre || '').toLowerCase().includes(t)
       );
     }
 
+    // Ordenar
     if (sortBy === 'price_asc') filtered.sort((a, b) => a.precio - b.precio);
     else if (sortBy === 'price_desc') filtered.sort((a, b) => b.precio - a.precio);
     else if (sortBy === 'newest') filtered.sort((a, b) => new Date(b.created) - new Date(a.created));
     else if (sortBy === 'popular') filtered.sort((a, b) => (b.visitas || 0) - (a.visitas || 0));
 
     return filtered;
-  }, [items, tipo, categoriaSlug, subcategoriaSlug, activeFilters, sortBy, router.query.busqueda]);
+  }, [items, categoriaId, subcategoriaSlug, activeFilters, sortBy, router.query.busqueda, categoriaInfo]);
 
   useEffect(() => {
     setFilteredItems(itemsFiltrados);
     setCurrentPage(1);
   }, [itemsFiltrados]);
 
-  // ─── Handlers ──────────────────────────────────────────────
+  // ─── Handlers ──────────────────────────────────────────────────
   const handleFilterChange = useCallback((section, item, isChecked) => {
     setActiveFilters(prev => {
       const n = { ...prev };
@@ -592,7 +705,7 @@ export default function CategoriaPage() {
   const esInstrumento = tipo === 'instrumentos';
   const tipoLabel = esServicio ? 'servicios' : esInstrumento ? 'instrumentos' : 'productos';
 
-  // ─── Renderizado ────────────────────────────────────────────
+  // ─── Renderizado ──────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -620,7 +733,7 @@ export default function CategoriaPage() {
   return (
     <>
       <Head>
-        <title>{subcategoriaNombre || categoriaNombre || 'Categoría'} | MarketDesliz</title>
+        <title>{categoriaNombre || subcategoriaNombre || 'Categoría'} | MarketDesliz</title>
         <meta name="description" content={`Explora ${tipoLabel} en ${categoriaNombre || 'categoría'}`} />
       </Head>
 
@@ -650,6 +763,8 @@ export default function CategoriaPage() {
               sortBy={sortBy}
               setSortBy={setSortBy}
               categoriaInfo={categoriaInfo}
+              categoriaId={categoriaId}
+              categoriasMap={categoriasMap}
             />
 
             <div className="flex gap-7">
@@ -660,6 +775,7 @@ export default function CategoriaPage() {
                 tipo={tipo}
                 onClearAll={handleClearAllFilters}
                 items={items}
+                categoriasMap={categoriasMap}
               />
 
               {/* Resultados */}
