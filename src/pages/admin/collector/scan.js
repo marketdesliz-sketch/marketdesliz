@@ -164,7 +164,7 @@ function ScanPage() {
             )}
           </div>
         </div>
-      </AdminLayout>
+      </AdminLayoutMinimal>
     </>
   );
 }
