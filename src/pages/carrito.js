@@ -10,7 +10,7 @@ import {
 import { Button } from '../../components/ui/button';
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
-import HeaderSimple from '../components/HeaderSimple';
+import HeaderSimple from '../components/Header';
 import { useAuth } from '../contexts/AuthContext';
 import pb from '../lib/pocketbase';
 import ConfirmModal from '../components/ConfirmModal';

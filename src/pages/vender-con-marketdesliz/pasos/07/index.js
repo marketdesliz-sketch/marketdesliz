@@ -3,13 +3,13 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import {
-  Calendar, Clock, MapPin, User, Navigation, PlusCircle, Briefcase,
+  Calendar, Clock, MapPin, User, Users, Navigation, PlusCircle, Briefcase,
   DollarSign, Shirt, BookOpen, Info, Brain, Tag, Activity, Heart,
   Headset, FileText, Shield, CheckCircle, RotateCcw, Trophy, Lock,
   ArrowRight, QrCode, AlertCircle, Check, ClipboardList, CalendarDays,
   CircleCheck, GraduationCap, UserCog, UserPlus
 } from 'lucide-react';
-import HeaderSimple from '../../../../components/HeaderSimple';
+import HeaderSimple from '../../../../components/Header';
 import pb from '../../../../lib/pocketbase';
 import { getMiSolicitud, guardarProgreso } from '../../../../lib/vendedoresService';
 

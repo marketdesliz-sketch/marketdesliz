@@ -7,7 +7,7 @@ import {
   ClipboardList, CalendarDays, Users, CircleCheck, FileText,
   GraduationCap, UserCog, UserPlus
 } from 'lucide-react';
-import HeaderSimple from '../../../../components/HeaderSimple';
+import HeaderSimple from '../../../../components/Header';
 import pb from '../../../../lib/pocketbase';
 import { getMiSolicitud, guardarProgreso } from '../../../../lib/vendedoresService';
 
