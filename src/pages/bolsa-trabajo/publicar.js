@@ -1,56 +1,180 @@
 // src/pages/bolsa-trabajo/publicar.js
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import {
   Briefcase, CheckCircle, ChevronLeft, AlertTriangle,
-  Eye, X
+  Eye, X, MapPin, Clock, Phone, Mail, LogIn,
 } from 'lucide-react';
-import StoreLayout from '../../layouts/StoreLayout';
+import { useAuth } from '../../contexts/AuthContext';
 import pb from '../../lib/pocketbase';
+import { T } from '../../lib/tokens';
+import TerminalBar from '../../components/TerminalBar';
+import Header from '../../components/Header';
+import Footer from '../../components/Footer';
+import BackButton from '../../components/BackButton';
 
+// ─────────────────────────────────────────────────────────────────────────
+// Sub-componentes de formulario
+// ─────────────────────────────────────────────────────────────────────────
 function FieldLabel({ children, required }) {
   return (
-    <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-      {children}{required && <span className="text-red-400 ml-0.5">*</span>}
+    <label
+      className="block text-[10px] uppercase tracking-[0.22em] mb-2"
+      style={{
+        color: T.inkFaint,
+        fontWeight: 500,
+        fontFeatureSettings: '"ss01"',
+      }}
+    >
+      {children}
+      {required && (
+        <span style={{ color: T.red, marginLeft: '3px' }}>*</span>
+      )}
     </label>
   );
 }
 
-function Input({ className = '', ...props }) {
+function FieldInput({ error = false, className = '', ...props }) {
+  const [focus, setFocus] = useState(false);
+
   return (
     <input
-      className={`w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6C3BFF]/25 focus:border-[#6C3BFF] transition-all bg-white ${className}`}
       {...props}
+      className={`w-full outline-none transition-colors ${className}`}
+      onFocus={(e) => {
+        setFocus(true);
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setFocus(false);
+        props.onBlur?.(e);
+      }}
+      style={{
+        height: '42px',
+        padding: '0 14px',
+        background: 'transparent',
+        border: `1px solid ${
+          error ? T.red : focus ? 'rgba(15,15,15,0.24)' : T.line
+        }`,
+        borderRadius: '6px',
+        color: T.ink,
+        fontSize: '13.5px',
+        fontWeight: 450,
+        letterSpacing: '-0.005em',
+        WebkitTapHighlightColor: 'transparent',
+        transitionTimingFunction: T.ease,
+        fontFamily: 'inherit',
+      }}
     />
   );
 }
 
-function Textarea({ className = '', ...props }) {
+function FieldTextarea({ error = false, className = '', ...props }) {
+  const [focus, setFocus] = useState(false);
+
   return (
     <textarea
-      className={`w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6C3BFF]/25 focus:border-[#6C3BFF] transition-all resize-none bg-white ${className}`}
       {...props}
+      className={`w-full outline-none transition-colors resize-none ${className}`}
+      onFocus={(e) => {
+        setFocus(true);
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setFocus(false);
+        props.onBlur?.(e);
+      }}
+      style={{
+        padding: '12px 14px',
+        background: 'transparent',
+        border: `1px solid ${
+          error ? T.red : focus ? 'rgba(15,15,15,0.24)' : T.line
+        }`,
+        borderRadius: '6px',
+        color: T.ink,
+        fontSize: '13.5px',
+        fontWeight: 450,
+        letterSpacing: '-0.005em',
+        lineHeight: 1.55,
+        WebkitTapHighlightColor: 'transparent',
+        transitionTimingFunction: T.ease,
+        fontFamily: 'inherit',
+      }}
     />
   );
 }
 
-function Select({ children, className = '', ...props }) {
+function FieldSelect({ error = false, className = '', children, ...props }) {
+  const [focus, setFocus] = useState(false);
+
   return (
     <select
-      className={`w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6C3BFF]/25 focus:border-[#6C3BFF] transition-all bg-white ${className}`}
       {...props}
+      className={`w-full outline-none appearance-none transition-colors ${className}`}
+      onFocus={(e) => {
+        setFocus(true);
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setFocus(false);
+        props.onBlur?.(e);
+      }}
+      style={{
+        height: '42px',
+        padding: '0 14px',
+        background: 'transparent',
+        border: `1px solid ${
+          error ? T.red : focus ? 'rgba(15,15,15,0.24)' : T.line
+        }`,
+        borderRadius: '6px',
+        color: T.ink,
+        fontSize: '13.5px',
+        fontWeight: 450,
+        letterSpacing: '-0.005em',
+        cursor: 'pointer',
+        WebkitTapHighlightColor: 'transparent',
+        transitionTimingFunction: T.ease,
+        fontFamily: 'inherit',
+      }}
     >
       {children}
     </select>
   );
 }
 
+function ErrorText({ children }) {
+  return (
+    <p
+      className="text-[11.5px] mt-1.5"
+      style={{ color: T.red, fontWeight: 450 }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function CounterText({ children }) {
+  return (
+    <p
+      className="text-[10.5px] mt-1.5 tabular-nums"
+      style={{
+        color: T.inkFaint,
+        fontWeight: 450,
+        fontFeatureSettings: '"tnum"',
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+// ─── Categorías · SIN CAMBIOS ────────────────────────────────────────────
 const CATEGORIAS_BOLSA = [
   'ventas', 'atencion_cliente', 'administracion', 'tecnologia',
   'oficios', 'construccion', 'limpieza', 'cocina',
-  'chofer', 'repartidor', 'informal', 'otro'
+  'chofer', 'repartidor', 'informal', 'otro',
 ];
 
 const getNombreCategoria = (cat) => {
@@ -66,14 +190,22 @@ const getNombreCategoria = (cat) => {
     chofer: 'Chofer',
     repartidor: 'Repartidor',
     informal: 'Informal',
-    otro: 'Otro'
+    otro: 'Otro',
   };
-  return map[cat] || cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  return (
+    map[cat] || cat.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+  );
 };
 
+// ─────────────────────────────────────────────────────────────────────────
+// Página — lógica SIN CAMBIOS
+// ─────────────────────────────────────────────────────────────────────────
 export default function PublicarOfertaPage() {
   const router = useRouter();
-  const [user, setUser] = useState(null);
+
+  // Auth desde el contexto
+  const { user, loading: authLoading, openLogin } = useAuth();
+
   const [loading, setLoading] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [error, setError] = useState('');
@@ -88,47 +220,78 @@ export default function PublicarOfertaPage() {
     horario: '',
     ubicacion: '',
     telefono: '',
-    email: ''
+    email: '',
   });
 
   const [errors, setErrors] = useState({});
 
+  // Ref para limpiar el timeout de redirección
+  const redirectTimeoutRef = useRef(null);
+
+  // Notificaciones (vacías, requeridas por Header)
+  const notifications = [];
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // ─── Cleanup: evitar redirect fantasma al desmontar ─────
   useEffect(() => {
-    if (!pb.authStore.isValid) {
-      router.push('/solicitar?redirect=/bolsa-trabajo/publicar');
+    return () => {
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // ─── Verificar auth y pre-llenar datos ──────────────────
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      openLogin();
       return;
     }
-    const currentUser = pb.authStore.model;
-    setUser(currentUser);
-    setFormData(prev => ({
+
+    // Pre-llenar teléfono y email desde el perfil
+    setFormData((prev) => ({
       ...prev,
-      telefono: currentUser.telefono || '',
-      email: currentUser.email || ''
+      telefono: user.telefono || '',
+      email: user.email || '',
     }));
-  }, []);
+  }, [authLoading, user, openLogin]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    // Limpiar error del campo al escribir
+    setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
+      setErrors((prev) => ({ ...prev, [name]: '' }));
     }
   };
 
   const validarFormulario = () => {
     const newErrors = {};
     if (!formData.titulo.trim()) newErrors.titulo = 'El título es obligatorio';
-    if (!formData.descripcion.trim()) newErrors.descripcion = 'La descripción es obligatoria';
-    if (!formData.categoria) newErrors.categoria = 'Selecciona una categoría';
-    if (!formData.telefono.trim()) newErrors.telefono = 'El teléfono es obligatorio';
-    if (formData.telefono.trim() && !/^\d{10,15}$/.test(formData.telefono.replace(/\D/g, ''))) {
-      newErrors.telefono = 'Ingresa un número de teléfono válido (10-15 dígitos)';
+    if (!formData.descripcion.trim())
+      newErrors.descripcion = 'La descripción es obligatoria';
+    if (!formData.categoria)
+      newErrors.categoria = 'Selecciona una categoría';
+    if (!formData.telefono.trim())
+      newErrors.telefono = 'El teléfono es obligatorio';
+    if (
+      formData.telefono.trim() &&
+      !/^\d{10,15}$/.test(formData.telefono.replace(/\D/g, ''))
+    ) {
+      newErrors.telefono =
+        'Ingresa un número de teléfono válido (10-15 dígitos)';
     }
-    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    if (
+      formData.email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)
+    ) {
       newErrors.email = 'Ingresa un correo electrónico válido';
     }
-    if (formData.salario && !/^\$?\s*\d+(\.\d{2})?$/.test(formData.salario.replace(/,/g, ''))) {
+    if (
+      formData.salario &&
+      !/^\$?\s*\d+(\.\d{2})?$/.test(formData.salario.replace(/,/g, ''))
+    ) {
       newErrors.salario = 'Ingresa un monto válido (ej: $8,000)';
     }
     setErrors(newErrors);
@@ -137,8 +300,13 @@ export default function PublicarOfertaPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!user) {
+      openLogin();
+      return;
+    }
+
     if (!validarFormulario()) {
-      // Scroll al primer error
       const firstError = document.querySelector('.border-red-300');
       if (firstError) firstError.focus();
       return;
@@ -160,10 +328,14 @@ export default function PublicarOfertaPage() {
         telefono: formData.telefono.trim(),
         email: formData.email.trim(),
         estado: 'pendiente',
-        activo: true
+        activo: true,
       });
       setEnviado(true);
-      setTimeout(() => router.push('/bolsa-trabajo'), 3000);
+      // Guardamos el ID para poder limpiarlo si el componente se desmonta
+      redirectTimeoutRef.current = setTimeout(
+        () => router.push('/bolsa-trabajo'),
+        3000
+      );
     } catch (err) {
       console.error('Error al publicar:', err);
       setError('Ocurrió un error al publicar. Intenta de nuevo.');
@@ -174,248 +346,780 @@ export default function PublicarOfertaPage() {
 
   const handlePreview = (e) => {
     e.preventDefault();
+    if (!user) {
+      openLogin();
+      return;
+    }
     if (!validarFormulario()) return;
     setShowPreview(true);
   };
 
-  if (enviado) {
+  // ─── Pantalla: cargando auth ────────────────────────────
+  if (authLoading) {
     return (
-      <StoreLayout>
-        <div className="max-w-md mx-auto px-4 py-20 text-center">
-          <div className="w-16 h-16 bg-[#10b981] rounded-full flex items-center justify-center mx-auto mb-5 shadow-lg shadow-[#10b981]/25">
-            <CheckCircle size={32} className="text-white" />
+      <>
+        <Head><title>Cargando | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <TerminalBar mode="rotating" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <span
+                className="font-serif text-[32px] block mb-5 select-none"
+                style={{ color: T.inkGhost }}
+              >
+                ʃƪʃƪ
+              </span>
+              <p
+                className="text-[11px] uppercase tracking-[0.28em]"
+                style={{ color: T.inkFaint, fontWeight: 500 }}
+              >
+                Cargando
+              </p>
+            </div>
           </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">¡Oferta enviada a revisión!</h1>
-          <p className="text-sm text-gray-500">El administrador la revisará y la publicará pronto.</p>
-          <p className="text-xs text-gray-400 mt-3">Redirigiendo...</p>
         </div>
-      </StoreLayout>
+      </>
     );
   }
 
-  return (
-    <>
-      <Head><title>Publicar en Bolsa de Trabajo | MarketDesliz</title></Head>
-      <StoreLayout>
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-10">
-
-          {/* Header */}
-          <div className="flex items-center gap-3 mb-7">
-            <Link href="/bolsa-trabajo" className="w-9 h-9 flex items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:text-[#6C3BFF] hover:border-[#6C3BFF] transition-colors">
-              <ChevronLeft size={18} />
-            </Link>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Publicar oferta</h1>
-              <p className="text-xs text-gray-400 mt-0.5">Bolsa de Trabajo · MarketDesliz</p>
-            </div>
-          </div>
-
-          {/* ── Modal de vista previa ────────────────────────────── */}
-          {showPreview && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-              <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
-                <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center rounded-t-2xl">
-                  <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                    <Eye size={16} className="text-[#6C3BFF]" /> Vista previa
-                  </h3>
-                  <button
-                    onClick={() => setShowPreview(false)}
-                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 text-xl transition-colors"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
-                      formData.tipo === 'ofrezco_trabajo'
-                        ? 'bg-[#6C3BFF]/8 text-[#6C3BFF]'
-                        : 'bg-[#10b981]/10 text-[#10b981]'
-                    }`}>
-                      {formData.tipo === 'ofrezco_trabajo' ? 'Ofrezco trabajo' : 'Busco trabajo'}
-                    </span>
-                    <span className="text-xs text-gray-400">· {getNombreCategoria(formData.categoria) || 'Sin categoría'}</span>
-                  </div>
-                  <h2 className="text-xl font-bold text-gray-900">{formData.titulo || 'Título'}</h2>
-                  <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
-                    {formData.descripcion || 'Descripción'}
-                  </p>
-                  <div className="space-y-1.5 text-sm">
-                    {formData.salario && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-[#10b981]">{formData.salario}</span>
-                      </div>
-                    )}
-                    {formData.ubicacion && (
-                      <div className="text-gray-500">📍 {formData.ubicacion}</div>
-                    )}
-                    {formData.horario && (
-                      <div className="text-gray-500">🕐 {formData.horario}</div>
-                    )}
-                  </div>
-                  <div className="pt-4 border-t border-gray-100 space-y-1.5">
-                    <div className="text-sm text-gray-500">📞 {formData.telefono || 'Sin teléfono'}</div>
-                    {formData.email && <div className="text-sm text-gray-500">📧 {formData.email}</div>}
-                  </div>
-                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700">
-                    ⚠️ Esta es una vista previa. Revisa que todos los datos sean correctos antes de publicar.
-                  </div>
-                </div>
-                <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 flex gap-3 rounded-b-2xl">
-                  <button
-                    onClick={() => setShowPreview(false)}
-                    className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-50 transition"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    onClick={handleSubmit}
-                    disabled={loading}
-                    className="flex-1 py-2.5 bg-[#6C3BFF] text-white rounded-xl font-semibold text-sm hover:bg-[#5b2ee6] transition disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {loading ? 'Publicando...' : 'Publicar'}
-                  </button>
-                </div>
+  // ─── Pantalla: éxito ────────────────────────────────────
+  if (enviado) {
+    return (
+      <>
+        <Head>
+          <title>Publicar en Bolsa de Trabajo | MarketDesliz</title>
+          <meta name="theme-color" content="#0F0F0F" />
+        </Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <BackButton fallback="/bolsa-trabajo" />
+          <TerminalBar mode="rotating" />
+          <Header notifications={notifications} unreadCount={unreadCount} />
+          <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-20 w-full">
+            <div className="text-center">
+              <div
+                className="inline-flex items-center justify-center mb-6"
+                style={{
+                  width: '72px',
+                  height: '72px',
+                  background: 'rgba(26, 127, 75, 0.08)',
+                  borderRadius: '14px',
+                }}
+              >
+                <CheckCircle
+                  size={32}
+                  strokeWidth={1.5}
+                  style={{ color: T.green }}
+                />
               </div>
-            </div>
-          )}
-
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-
-            {/* Aviso */}
-            <div className="flex items-start gap-3 bg-amber-50 border border-amber-100 rounded-xl p-4 mb-6">
-              <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700 leading-relaxed">
-                Tu publicación será revisada por el administrador antes de aparecer en la lista.
+              <p
+                className="text-[10px] uppercase tracking-[0.28em] mb-4"
+                style={{
+                  color: T.green,
+                  fontWeight: 500,
+                  fontFeatureSettings: '"ss01"',
+                }}
+              >
+                Oferta enviada
+              </p>
+              <h1
+                className="text-[32px] md:text-[44px] leading-[1.05] tracking-[-0.03em] mb-4"
+                style={{ color: T.ink, fontWeight: 400 }}
+              >
+                En revisión
+                <br />
+                <span className="font-serif italic" style={{ color: T.inkMid }}>
+                  por el administrador.
+                </span>
+              </h1>
+              <p
+                className="text-[14.5px] leading-[1.6] mb-3 max-w-sm mx-auto"
+                style={{ color: T.inkSoft, fontWeight: 450 }}
+              >
+                El administrador la revisará y la publicará pronto.
+              </p>
+              <p
+                className="text-[11px] uppercase tracking-[0.24em] mt-8"
+                style={{ color: T.inkFaint, fontWeight: 500 }}
+              >
+                Redirigiendo…
               </p>
             </div>
+          </main>
+          <Footer variant="minimal" />
+        </div>
+      </>
+    );
+  }
 
-            <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+  // ─── Pantalla: sin sesión ───────────────────────────────
+  if (!user) {
+    return (
+      <>
+        <Head>
+          <title>Publicar en Bolsa de Trabajo | MarketDesliz</title>
+          <meta name="theme-color" content="#0F0F0F" />
+        </Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <BackButton fallback="/bolsa-trabajo" />
+          <TerminalBar mode="rotating" />
+          <Header notifications={notifications} unreadCount={unreadCount} />
+          <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-20 w-full">
+            <div className="text-center">
+              <div
+                className="inline-flex items-center justify-center mb-6"
+                style={{
+                  width: '64px',
+                  height: '64px',
+                  background: 'rgba(79, 46, 232, 0.06)',
+                  borderRadius: '12px',
+                }}
+              >
+                <LogIn
+                  size={28}
+                  strokeWidth={1.5}
+                  style={{ color: T.accent }}
+                />
+              </div>
+              <h1
+                className="text-[32px] md:text-[40px] leading-tight tracking-[-0.03em] mb-3"
+                style={{ color: T.ink, fontWeight: 400 }}
+              >
+                Inicia sesión
+                <br />
+                <span className="font-serif italic" style={{ color: T.inkMid }}>
+                  para publicar.
+                </span>
+              </h1>
+              <p
+                className="text-[15px] leading-[1.6] mb-8 max-w-sm mx-auto"
+                style={{ color: T.inkSoft, fontWeight: 450 }}
+              >
+                Necesitas iniciar sesión para publicar una oferta en la Bolsa
+                de Trabajo.
+              </p>
+              <button
+                onClick={openLogin}
+                className="h-11 px-6 text-white text-[13.5px]"
+                style={{
+                  background: T.accent,
+                  borderRadius: '6px',
+                  fontWeight: 500,
+                  border: 'none',
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = T.accentDeep)
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = T.accent)
+                }
+              >
+                Iniciar sesión
+              </button>
+            </div>
+          </main>
+          <Footer variant="minimal" />
+        </div>
+      </>
+    );
+  }
 
+  // ─── Pantalla: formulario ───────────────────────────────
+  return (
+    <>
+      <Head>
+        <title>Publicar en Bolsa de Trabajo | MarketDesliz</title>
+        <meta name="theme-color" content="#0F0F0F" />
+      </Head>
+
+      <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+        <BackButton fallback="/bolsa-trabajo" />
+        <TerminalBar mode="rotating" />
+        <Header notifications={notifications} unreadCount={unreadCount} />
+
+        <main className="flex-1 max-w-[760px] mx-auto px-6 md:px-14 py-12 md:py-16 w-full">
+
+          {/* ─── Hero editorial ──────────────────────────── */}
+          <section className="mb-10">
+            <p
+              className="text-[10px] uppercase tracking-[0.28em] mb-6"
+              style={{
+                color: T.inkFaint,
+                fontWeight: 500,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              Bolsa de trabajo · Publicar
+            </p>
+
+            <h1
+              className="text-[36px] md:text-[52px] leading-[1.02] tracking-[-0.035em] max-w-2xl"
+              style={{
+                color: T.ink,
+                fontWeight: 400,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              Publica una oferta,
+              <br />
+              <span className="font-serif italic" style={{ color: T.inkMid }}>
+                en tu comunidad.
+              </span>
+            </h1>
+
+            <p
+              className="text-[15px] md:text-[17px] leading-[1.55] mt-5 max-w-xl"
+              style={{ color: T.inkSoft, fontWeight: 450 }}
+            >
+              Completa el formulario. Tu publicación será revisada antes de
+              aparecer en la lista.
+            </p>
+          </section>
+
+          {/* ─── Formulario ──────────────────────────────── */}
+          <section
+            className="p-6 md:p-8"
+            style={{
+              background: T.bg,
+              border: `1px solid ${T.line}`,
+              borderRadius: '8px',
+            }}
+          >
+            <form
+              onSubmit={handleSubmit}
+              className="flex flex-col gap-6"
+              noValidate
+            >
               {/* Tipo */}
               <div>
                 <FieldLabel required>Tipo de publicación</FieldLabel>
-                <Select name="tipo" value={formData.tipo} onChange={handleChange}>
+                <FieldSelect
+                  name="tipo"
+                  value={formData.tipo}
+                  onChange={handleChange}
+                >
                   <option value="busco_trabajo">Busco trabajo</option>
                   <option value="ofrezco_trabajo">Ofrezco trabajo</option>
-                </Select>
+                </FieldSelect>
               </div>
 
               {/* Título */}
               <div>
                 <FieldLabel required>Título</FieldLabel>
-                <Input
-                  type="text" name="titulo" value={formData.titulo} onChange={handleChange}
+                <FieldInput
+                  type="text"
+                  name="titulo"
+                  value={formData.titulo}
+                  onChange={handleChange}
                   placeholder="Ej: Se solicita ayudante de cocina"
                   maxLength="100"
-                  className={errors.titulo ? 'border-red-300 focus:ring-red-200' : ''}
+                  error={!!errors.titulo}
+                  className={errors.titulo ? 'border-red-300' : ''}
                 />
-                {errors.titulo && <p className="text-xs text-red-500 mt-1">{errors.titulo}</p>}
-                <p className="text-xs text-gray-400 mt-1">{formData.titulo.length}/100</p>
+                {errors.titulo && <ErrorText>{errors.titulo}</ErrorText>}
+                <CounterText>{formData.titulo.length}/100</CounterText>
               </div>
 
               {/* Categoría */}
               <div>
                 <FieldLabel required>Categoría</FieldLabel>
-                <Select name="categoria" value={formData.categoria} onChange={handleChange} className={errors.categoria ? 'border-red-300' : ''}>
+                <FieldSelect
+                  name="categoria"
+                  value={formData.categoria}
+                  onChange={handleChange}
+                  error={!!errors.categoria}
+                  className={errors.categoria ? 'border-red-300' : ''}
+                >
                   <option value="">Selecciona una categoría</option>
-                  {CATEGORIAS_BOLSA.map(cat => (
+                  {CATEGORIAS_BOLSA.map((cat) => (
                     <option key={cat} value={cat}>
                       {getNombreCategoria(cat)}
                     </option>
                   ))}
-                </Select>
-                {errors.categoria && <p className="text-xs text-red-500 mt-1">{errors.categoria}</p>}
+                </FieldSelect>
+                {errors.categoria && <ErrorText>{errors.categoria}</ErrorText>}
               </div>
 
               {/* Descripción */}
               <div>
                 <FieldLabel required>Descripción</FieldLabel>
-                <Textarea
-                  name="descripcion" value={formData.descripcion} onChange={handleChange}
+                <FieldTextarea
+                  name="descripcion"
+                  value={formData.descripcion}
+                  onChange={handleChange}
                   rows="4"
                   placeholder="Describe el puesto, requisitos, responsabilidades..."
                   maxLength="1000"
+                  error={!!errors.descripcion}
                   className={errors.descripcion ? 'border-red-300' : ''}
                 />
-                {errors.descripcion && <p className="text-xs text-red-500 mt-1">{errors.descripcion}</p>}
-                <p className="text-xs text-gray-400 mt-1">{formData.descripcion.length}/1000</p>
+                {errors.descripcion && (
+                  <ErrorText>{errors.descripcion}</ErrorText>
+                )}
+                <CounterText>{formData.descripcion.length}/1000</CounterText>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* Salario + Horario */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <FieldLabel>Salario</FieldLabel>
-                  <Input
-                    type="text" name="salario" value={formData.salario} onChange={handleChange}
+                  <FieldInput
+                    type="text"
+                    name="salario"
+                    value={formData.salario}
+                    onChange={handleChange}
                     placeholder="Ej: $8,000 mensual"
+                    error={!!errors.salario}
                     className={errors.salario ? 'border-red-300' : ''}
                   />
-                  {errors.salario && <p className="text-xs text-red-500 mt-1">{errors.salario}</p>}
+                  {errors.salario && <ErrorText>{errors.salario}</ErrorText>}
                 </div>
                 <div>
                   <FieldLabel>Horario</FieldLabel>
-                  <Input
-                    type="text" name="horario" value={formData.horario} onChange={handleChange}
+                  <FieldInput
+                    type="text"
+                    name="horario"
+                    value={formData.horario}
+                    onChange={handleChange}
                     placeholder="Ej: L-V 9am-6pm"
                   />
                 </div>
               </div>
 
+              {/* Ubicación */}
               <div>
                 <FieldLabel>Ubicación</FieldLabel>
-                <Input
-                  type="text" name="ubicacion" value={formData.ubicacion} onChange={handleChange}
+                <FieldInput
+                  type="text"
+                  name="ubicacion"
+                  value={formData.ubicacion}
+                  onChange={handleChange}
                   placeholder="Ej: Col. Centro, CDMX"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              {/* Teléfono + Email */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <FieldLabel required>Teléfono de contacto</FieldLabel>
-                  <Input
-                    type="tel" name="telefono" value={formData.telefono} onChange={handleChange}
+                  <FieldInput
+                    type="tel"
+                    name="telefono"
+                    value={formData.telefono}
+                    onChange={handleChange}
                     placeholder="5512345678"
+                    error={!!errors.telefono}
                     className={errors.telefono ? 'border-red-300' : ''}
                   />
-                  {errors.telefono && <p className="text-xs text-red-500 mt-1">{errors.telefono}</p>}
+                  {errors.telefono && <ErrorText>{errors.telefono}</ErrorText>}
                 </div>
                 <div>
                   <FieldLabel>Correo electrónico</FieldLabel>
-                  <Input
-                    type="email" name="email" value={formData.email} onChange={handleChange}
+                  <FieldInput
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
                     placeholder="correo@ejemplo.com"
+                    error={!!errors.email}
                     className={errors.email ? 'border-red-300' : ''}
                   />
-                  {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+                  {errors.email && <ErrorText>{errors.email}</ErrorText>}
                 </div>
               </div>
 
+              {/* Error general */}
               {error && (
-                <div className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-xl text-sm">
-                  <AlertTriangle size={15} className="shrink-0" /> {error}
+                <div
+                  className="flex items-start gap-2.5 px-4 py-3"
+                  style={{
+                    background: 'rgba(197, 48, 48, 0.06)',
+                    border: `1px solid rgba(197, 48, 48, 0.15)`,
+                    borderLeft: `2px solid ${T.red}`,
+                    borderRadius: '6px',
+                  }}
+                >
+                  <AlertTriangle
+                    size={14}
+                    strokeWidth={1.75}
+                    style={{ color: T.red, flexShrink: 0, marginTop: 2 }}
+                  />
+                  <p
+                    className="text-[12.5px] leading-[1.55]"
+                    style={{ color: T.red, fontWeight: 450 }}
+                  >
+                    {error}
+                  </p>
                 </div>
               )}
 
-              <div className="flex gap-3">
+              {/* Botones */}
+              <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
                 <button
                   type="button"
                   onClick={handlePreview}
-                  className="flex-1 flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-bold text-sm transition-colors"
+                  className="flex-1 flex items-center justify-center gap-2 h-11 text-[13px] transition-colors"
+                  style={{
+                    background: 'transparent',
+                    border: `1px solid ${T.line}`,
+                    borderRadius: '6px',
+                    color: T.inkMid,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    WebkitTapHighlightColor: 'transparent',
+                    transitionTimingFunction: T.ease,
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = 'rgba(15,15,15,0.03)')
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = 'transparent')
+                  }
                 >
-                  <Eye size={16} /> Vista previa
+                  <Eye size={14} strokeWidth={1.75} /> Vista previa
                 </button>
                 <button
-                  type="submit" disabled={loading}
-                  className="flex-1 flex items-center justify-center gap-2 bg-[#6C3BFF] hover:bg-[#5b2ee6] disabled:bg-gray-300 text-white py-3 rounded-xl font-bold text-sm transition-colors"
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 flex items-center justify-center gap-2 h-11 text-white text-[13px] disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    background: T.accent,
+                    borderRadius: '6px',
+                    fontWeight: 500,
+                    border: 'none',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    WebkitTapHighlightColor: 'transparent',
+                    transitionTimingFunction: T.ease,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!loading) e.currentTarget.style.background = T.accentDeep;
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!loading) e.currentTarget.style.background = T.accent;
+                  }}
                 >
-                  <Briefcase size={16} />
+                  <Briefcase size={14} strokeWidth={1.75} />
                   {loading ? 'Enviando...' : 'Publicar oferta'}
                 </button>
               </div>
             </form>
+          </section>
+        </main>
+
+        <Footer variant="minimal" />
+      </div>
+
+      {/* ─── Modal de vista previa ─────────────────────── */}
+      {showPreview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(15,15,15,0.7)' }}
+          onClick={() => setShowPreview(false)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col"
+            style={{
+              background: T.bg,
+              border: `1px solid ${T.line}`,
+              borderRadius: '10px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header modal */}
+            <div
+              className="sticky top-0 flex justify-between items-start gap-4 px-6 py-5"
+              style={{
+                background: T.bg,
+                borderBottom: `1px solid ${T.line}`,
+              }}
+            >
+              <div>
+                <p
+                  className="text-[10px] uppercase tracking-[0.28em] mb-2"
+                  style={{
+                    color: T.inkFaint,
+                    fontWeight: 500,
+                    fontFeatureSettings: '"ss01"',
+                  }}
+                >
+                  Vista previa
+                </p>
+                <h3
+                  className="text-[20px] leading-tight tracking-[-0.02em]"
+                  style={{ color: T.ink, fontWeight: 400 }}
+                >
+                  Así se verá
+                  <span className="font-serif italic" style={{ color: T.inkMid }}>
+                    {' '}tu oferta.
+                  </span>
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowPreview(false)}
+                className="flex items-center justify-center shrink-0"
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  background: 'rgba(15,15,15,0.03)',
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '6px',
+                  color: T.inkMid,
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+                aria-label="Cerrar"
+              >
+                <X size={14} strokeWidth={1.75} />
+              </button>
+            </div>
+
+            {/* Body modal */}
+            <div className="p-6 flex flex-col gap-5">
+              {/* Tipo + categoría */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1"
+                  style={{
+                    background:
+                      formData.tipo === 'ofrezco_trabajo'
+                        ? 'rgba(79, 46, 232, 0.08)'
+                        : 'rgba(26, 127, 75, 0.08)',
+                    color:
+                      formData.tipo === 'ofrezco_trabajo' ? T.accent : T.green,
+                    borderRadius: '4px',
+                    fontSize: '10px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.12em',
+                    fontWeight: 600,
+                  }}
+                >
+                  {formData.tipo === 'ofrezco_trabajo'
+                    ? 'Ofrezco trabajo'
+                    : 'Busco trabajo'}
+                </span>
+                <span
+                  className="text-[10px] uppercase tracking-[0.15em]"
+                  style={{ color: T.inkFaint, fontWeight: 500 }}
+                >
+                  · {getNombreCategoria(formData.categoria) || 'Sin categoría'}
+                </span>
+              </div>
+
+              {/* Título */}
+              <h2
+                className="text-[22px] leading-tight tracking-[-0.02em]"
+                style={{ color: T.ink, fontWeight: 500 }}
+              >
+                {formData.titulo || 'Título'}
+              </h2>
+
+              {/* Descripción */}
+              <p
+                className="text-[13px] leading-[1.6] whitespace-pre-wrap"
+                style={{ color: T.inkSoft, fontWeight: 450 }}
+              >
+                {formData.descripcion || 'Descripción'}
+              </p>
+
+              {/* Meta */}
+              {(formData.salario ||
+                formData.ubicacion ||
+                formData.horario) && (
+                <div className="flex flex-col gap-1.5">
+                  {formData.salario && (
+                    <span
+                      className="text-[13px] tabular-nums"
+                      style={{
+                        color: T.green,
+                        fontWeight: 500,
+                        fontFeatureSettings: '"tnum"',
+                      }}
+                    >
+                      {formData.salario}
+                    </span>
+                  )}
+                  {formData.ubicacion && (
+                    <div className="flex items-center gap-2">
+                      <MapPin
+                        size={12}
+                        strokeWidth={1.75}
+                        style={{ color: T.inkFaint, flexShrink: 0 }}
+                      />
+                      <span
+                        className="text-[12.5px]"
+                        style={{ color: T.inkSoft, fontWeight: 450 }}
+                      >
+                        {formData.ubicacion}
+                      </span>
+                    </div>
+                  )}
+                  {formData.horario && (
+                    <div className="flex items-center gap-2">
+                      <Clock
+                        size={12}
+                        strokeWidth={1.75}
+                        style={{ color: T.inkFaint, flexShrink: 0 }}
+                      />
+                      <span
+                        className="text-[12.5px]"
+                        style={{ color: T.inkSoft, fontWeight: 450 }}
+                      >
+                        {formData.horario}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Contacto */}
+              <div
+                className="pt-4 flex flex-col gap-1.5"
+                style={{ borderTop: `1px solid ${T.line}` }}
+              >
+                <div className="flex items-center gap-2">
+                  <Phone
+                    size={12}
+                    strokeWidth={1.75}
+                    style={{ color: T.inkFaint, flexShrink: 0 }}
+                  />
+                  <span
+                    className="text-[12.5px] tabular-nums"
+                    style={{
+                      color: T.inkSoft,
+                      fontWeight: 450,
+                      fontFeatureSettings: '"tnum"',
+                    }}
+                  >
+                    {formData.telefono || 'Sin teléfono'}
+                  </span>
+                </div>
+                {formData.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail
+                      size={12}
+                      strokeWidth={1.75}
+                      style={{ color: T.inkFaint, flexShrink: 0 }}
+                    />
+                    <span
+                      className="text-[12.5px]"
+                      style={{ color: T.inkSoft, fontWeight: 450 }}
+                    >
+                      {formData.email}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Aviso */}
+              <div
+                className="flex items-start gap-2.5 px-3.5 py-3"
+                style={{
+                  background: 'rgba(184, 130, 14, 0.06)',
+                  border: `1px solid rgba(184, 130, 14, 0.15)`,
+                  borderRadius: '6px',
+                }}
+              >
+                <AlertTriangle
+                  size={13}
+                  strokeWidth={1.75}
+                  style={{ color: '#B8820E', flexShrink: 0, marginTop: 2 }}
+                />
+                <span
+                  className="text-[11.5px] leading-[1.5]"
+                  style={{ color: '#8A6109', fontWeight: 450 }}
+                >
+                  Esta es una vista previa. Revisa que todos los datos sean
+                  correctos antes de publicar.
+                </span>
+              </div>
+            </div>
+
+            {/* Footer modal */}
+            <div
+              className="sticky bottom-0 flex gap-2.5 px-6 py-4"
+              style={{
+                background: T.bg,
+                borderTop: `1px solid ${T.line}`,
+              }}
+            >
+              <button
+                onClick={() => setShowPreview(false)}
+                className="flex-1 h-11 text-[13px] transition-colors"
+                style={{
+                  background: 'transparent',
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '6px',
+                  color: T.inkMid,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                  transitionTimingFunction: T.ease,
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = 'rgba(15,15,15,0.03)')
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = 'transparent')
+                }
+              >
+                Editar
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={loading}
+                className="flex-1 h-11 text-white text-[13px] flex items-center justify-center gap-2 disabled:opacity-50"
+                style={{
+                  background: T.accent,
+                  borderRadius: '6px',
+                  fontWeight: 500,
+                  border: 'none',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                  transitionTimingFunction: T.ease,
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading) e.currentTarget.style.background = T.accentDeep;
+                }}
+                onMouseLeave={(e) => {
+                  if (!loading) e.currentTarget.style.background = T.accent;
+                }}
+              >
+                {loading ? 'Publicando...' : 'Publicar'}
+              </button>
+            </div>
           </div>
         </div>
-      </StoreLayout>
+      )}
+
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
+        }
+        .animate-blink { animation: blink 1s step-end infinite; }
+        body {
+          font-family:
+            -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display',
+            'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
+        }
+        .font-serif {
+          font-family:
+            ui-serif, 'Iowan Old Style', 'Apple Garamond', 'Palatino',
+            Georgia, 'Times New Roman', serif;
+        }
+        ::selection {
+          background: rgba(79, 46, 232, 0.12);
+          color: #0F0F0F;
+        }
+        * {
+          -webkit-tap-highlight-color: transparent;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
+        }
+      `}</style>
     </>
   );
 }

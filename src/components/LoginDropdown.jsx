@@ -22,7 +22,6 @@ export default function LoginDropdown({ onClose, onSuccess }) {
   const [showPhoneInput, setShowPhoneInput] = useState(false);
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
-  const [generatedCode, setGeneratedCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -35,7 +34,6 @@ export default function LoginDropdown({ onClose, onSuccess }) {
       setShowPhoneInput(false);
       setPhone('');
       setCode('');
-      setGeneratedCode('');
       setError('');
       setLoading(false);
       setResendCooldown(0);
@@ -62,22 +60,40 @@ export default function LoginDropdown({ onClose, onSuccess }) {
   const handlePhoneSubmit = async (e) => {
     e.preventDefault();
     const cleanPhone = phone.replace(/\D/g, '');
+
     if (cleanPhone.length !== 10) {
       setError('Ingresa un número válido de 10 dígitos');
       return;
     }
+
     setLoading(true);
     setError('');
+
     try {
-      const newCode = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedCode(newCode);
-      await sendSMSCode(cleanPhone, newCode);
-      console.log(`📱 Código: ${newCode}`);
+      const res = await fetch('/api/send-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telefono: cleanPhone }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Error al enviar el código');
+        return;
+      }
+
       setStep('code');
       setShowPhoneInput(false);
       setResendCooldown(50);
       const interval = setInterval(() => {
-        setResendCooldown(prev => { if (prev <= 1) { clearInterval(interval); return 0; } return prev - 1; });
+        setResendCooldown((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
     } catch (err) {
       setError('Error al enviar el código.');
@@ -87,17 +103,38 @@ export default function LoginDropdown({ onClose, onSuccess }) {
   };
 
   const handleResendCode = async () => {
-    if (resendCooldown > 0) { setError(`Espera ${resendCooldown}s`); return; }
+    if (resendCooldown > 0) {
+      setError(`Espera ${resendCooldown}s`);
+      return;
+    }
+
     setLoading(true);
     setError('');
+
     try {
       const cleanPhone = phone.replace(/\D/g, '');
-      const newCode = Math.floor(100000 + Math.random() * 900000).toString();
-      setGeneratedCode(newCode);
-      await sendSMSCode(cleanPhone, newCode);
+      const res = await fetch('/api/send-sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telefono: cleanPhone }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Error al reenviar');
+        return;
+      }
+
       setResendCooldown(50);
       const interval = setInterval(() => {
-        setResendCooldown(prev => { if (prev <= 1) { clearInterval(interval); return 0; } return prev - 1; });
+        setResendCooldown((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
     } catch (err) {
       setError('Error al reenviar.');
@@ -108,106 +145,59 @@ export default function LoginDropdown({ onClose, onSuccess }) {
 
   const handleCodeSubmit = async (e) => {
     e.preventDefault();
-    if (code.length !== 6) { setError('Ingresa el código de 6 dígitos'); return; }
-    if (code !== generatedCode) { setError('Código incorrecto'); return; }
+
+    if (code.length !== 6) {
+      setError('Ingresa el código de 6 dígitos');
+      return;
+    }
 
     setStep('loading');
     setError('');
 
     try {
       const cleanPhone = phone.replace(/\D/g, '');
-      const tempEmail = `user_${cleanPhone}@marketdesliz.com`;
+      const tempPassword = generarPasswordTemporal();
 
-      let existingUser = null;
-      try {
-        const phoneRes = await fetch('/api/get-user-by-phone', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ telefono: cleanPhone })
-        });
-        const phoneData = await phoneRes.json();
-        if (phoneData.exists) existingUser = phoneData.user;
-      } catch (e) {}
+      // 1. Verificar OTP en el servidor
+      const res = await fetch('/api/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telefono: cleanPhone,
+          code,
+          newPassword: tempPassword,
+        }),
+      });
 
-      if (existingUser) {
-        const tempPassword = generarPasswordTemporal();
-        const updatePassRes = await fetch('/api/update-user-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: existingUser.id, newPassword: tempPassword })
-        });
-        if (!updatePassRes.ok) {
-          const errorData = await updatePassRes.json();
-          throw new Error(errorData.error || 'No se pudo actualizar la contraseña');
-        }
-        await pb.collection('users').authWithPassword(existingUser.email, tempPassword);
-        if (!existingUser.telefono) {
-          await fetch('/api/update-user-phone', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: existingUser.id, phone: cleanPhone })
-          });
-        }
-        setStep('success');
-        if (onSuccess) onSuccess();
-        setTimeout(onClose, 1000);
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        const errorMap = {
+          no_code: 'No hay código activo. Solicita uno nuevo.',
+          expired: 'El código expiró. Solicita uno nuevo.',
+          max_attempts: 'Demasiados intentos. Solicita uno nuevo.',
+          invalid: 'Código incorrecto.',
+        };
+        setError(errorMap[data.error] || data.error || 'Error al verificar');
+        setStep('code');
         return;
       }
 
-      const tempPassword = generarPasswordTemporal();
-      const newUser = await pb.collection('users').create({
-        email: tempEmail,
-        password: tempPassword,
-        passwordConfirm: tempPassword,
-        emailVisibility: false,
-        verified: false,
-        role: 'cliente',
-        nombre: `Usuario ${cleanPhone.slice(-4)}`,
-        activo: true,
-        telefono: cleanPhone,
-        tokenKey: generarTokenKey()
-      });
+      // 2. Autenticar con la contraseña temporal
+      await pb.collection('users').authWithPassword(data.email, tempPassword);
 
-      await pb.collection('users').authWithPassword(tempEmail, tempPassword);
-
-      await pb.collection('clients').create({
-        userId: newUser.id,
-        telefono: cleanPhone,
-        nombre: newUser.nombre,
-        nivel: 0,
-        productosComprados: 0,
-        productosPagados: 0,
-        productosEnCurso: 0,
-        deudaActual: 0,
-        limiteDeuda: 5000,
-        estadoKyc: 'pendiente',
-        trustScore: 0,
-        datosCompletos: false,
-        totalGastado: 0,
-        diaPago: 'lunes',
-        telefonoAlternativo: ''
-      });
-
-      await pb.collection('user_providers').create({
-        userId: newUser.id,
-        provider: 'phone',
-        telefono: cleanPhone
-      });
-
-      localStorage.setItem('primerIngreso', 'true');
-      localStorage.setItem('userIdCompletarDatos', newUser.id);
+      // 3. Si es usuario nuevo, marcar primer ingreso
+      if (data.isNewUser) {
+        localStorage.setItem('primerIngreso', 'true');
+        localStorage.setItem('userIdCompletarDatos', data.userId);
+      }
 
       setStep('success');
       if (onSuccess) onSuccess();
       setTimeout(onClose, 1000);
-
     } catch (err) {
-      console.error('❌ ERROR:', err);
-      if (err.message?.includes('validation_not_unique')) {
-        setError('Ya tienes una cuenta con este número. Intenta iniciar sesión.');
-      } else {
-        setError(err.message || 'Error al procesar tu cuenta. Intenta de nuevo.');
-      }
+      console.error('❌ Error:', err);
+      setError(err.message || 'Error al procesar tu cuenta');
       setStep('code');
     }
   };
@@ -372,7 +362,7 @@ export default function LoginDropdown({ onClose, onSuccess }) {
             size="large"
             text="continue_with"
             shape="rectangular"
-            width="100%"
+            width="320"
           />
         </div>
 

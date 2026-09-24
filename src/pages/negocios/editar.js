@@ -3,26 +3,250 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import StoreLayout from '../../layouts/StoreLayout';
+import {
+  Store, CheckCircle, AlertCircle, X,
+} from 'lucide-react';
 import pb from '../../lib/pocketbase';
 import {
   getEstados,
   getMunicipios,
   getLocalidades,
-  getSectores
+  getSectores,
 } from '../../lib/negociosService';
+import { useAuth } from '../../contexts/AuthContext';
+import { T } from '../../lib/tokens';
+import TerminalBar from '../../components/TerminalBar';
+import Header from '../../components/Header';
+import Footer from '../../components/Footer';
+import BackButton from '../../components/BackButton';
 
+// ─────────────────────────────────────────────────────────────────────────
+// Sub-componentes de formulario (idénticos a registro.js)
+// ─────────────────────────────────────────────────────────────────────────
+function FieldLabel({ children, required = false }) {
+  return (
+    <label
+      className="block text-[10px] uppercase tracking-[0.22em] mb-2"
+      style={{ color: T.inkFaint, fontWeight: 500, fontFeatureSettings: '"ss01"' }}
+    >
+      {children}
+      {required && <span style={{ color: T.accent, marginLeft: 4 }}>*</span>}
+    </label>
+  );
+}
+
+function TextField({
+  name, value, onChange, placeholder, type = 'text', required = false,
+  autoFocus = false, multiline = false, rows = 3, hint = null,
+}) {
+  const [focus, setFocus] = useState(false);
+
+  const baseStyle = {
+    width: '100%',
+    background: 'transparent',
+    border: `1px solid ${focus ? T.accent : T.line}`,
+    borderRadius: '6px',
+    color: T.ink,
+    fontSize: '14px',
+    fontWeight: 450,
+    letterSpacing: '-0.005em',
+    padding: multiline ? '12px 14px' : '0 14px',
+    height: multiline ? 'auto' : '42px',
+    fontFamily: 'inherit',
+    outline: 'none',
+    transition: `border-color 0.2s ${T.ease}`,
+    resize: multiline ? 'none' : undefined,
+  };
+
+  return (
+    <div>
+      {multiline ? (
+        <textarea
+          name={name}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          required={required}
+          rows={rows}
+          style={baseStyle}
+          onFocus={() => setFocus(true)}
+          onBlur={() => setFocus(false)}
+        />
+      ) : (
+        <input
+          type={type}
+          name={name}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          required={required}
+          autoFocus={autoFocus}
+          step={type === 'number' ? 'any' : undefined}
+          style={baseStyle}
+          onFocus={() => setFocus(true)}
+          onBlur={() => setFocus(false)}
+        />
+      )}
+      {hint && (
+        <p className="text-[11px] mt-1.5" style={{ color: T.inkFaint, fontWeight: 450 }}>
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SelectField({ name, value, onChange, children, disabled = false }) {
+  const [focus, setFocus] = useState(false);
+
+  return (
+    <select
+      name={name}
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      className="w-full appearance-none outline-none disabled:opacity-40"
+      style={{
+        height: '42px',
+        padding: '0 14px',
+        background: 'transparent',
+        border: `1px solid ${focus ? T.accent : T.line}`,
+        borderRadius: '6px',
+        color: value ? T.ink : T.inkFaint,
+        fontSize: '14px',
+        fontWeight: 450,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transition: `border-color 0.2s ${T.ease}`,
+      }}
+      onFocus={() => setFocus(true)}
+      onBlur={() => setFocus(false)}
+    >
+      {children}
+    </select>
+  );
+}
+
+function FormSection({ title, children }) {
+  return (
+    <div>
+      <div
+        className="flex items-center gap-3 mb-5 pb-3"
+        style={{ borderBottom: `1px solid ${T.line}` }}
+      >
+        <span
+          className="text-[10px] uppercase tracking-[0.22em]"
+          style={{ color: T.inkFaint, fontWeight: 500, fontFeatureSettings: '"ss01"' }}
+        >
+          {title}
+        </span>
+        <div className="flex-1" />
+      </div>
+      <div className="flex flex-col gap-4">{children}</div>
+    </div>
+  );
+}
+
+function CheckboxField({ name, checked, onChange, label }) {
+  return (
+    <label
+      className="flex items-center gap-3 cursor-pointer"
+      style={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      <input
+        type="checkbox"
+        name={name}
+        checked={checked}
+        onChange={onChange}
+        style={{
+          width: '16px',
+          height: '16px',
+          accentColor: T.accent,
+          cursor: 'pointer',
+        }}
+      />
+      <span
+        className="text-[13.5px]"
+        style={{ color: T.inkMid, fontWeight: 450 }}
+      >
+        {label}
+      </span>
+    </label>
+  );
+}
+
+function PrimaryButton({ children, onClick, disabled, type = 'button', loading = false }) {
+  const [hover, setHover] = useState(false);
+
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled || loading}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="w-full flex items-center justify-center gap-2.5 text-white transition-all duration-200 disabled:cursor-not-allowed"
+      style={{
+        height: '44px',
+        background: hover && !disabled ? T.accentDeep : T.accent,
+        borderRadius: '6px',
+        fontSize: '13.5px',
+        fontWeight: 500,
+        letterSpacing: '0.01em',
+        opacity: disabled ? 0.4 : 1,
+        transitionTimingFunction: T.ease,
+        WebkitTapHighlightColor: 'transparent',
+        border: 'none',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+    >
+      {loading && (
+        <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+      )}
+      {children}
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// File input reutilizable
+// ─────────────────────────────────────────────────────────────────────────
+function FileInput({ onChange, multiple = false, accept = 'image/*' }) {
+  return (
+    <input
+      type="file"
+      accept={accept}
+      multiple={multiple}
+      onChange={onChange}
+      className="w-full outline-none"
+      style={{
+        padding: '10px 14px',
+        background: 'transparent',
+        border: `1px solid ${T.line}`,
+        borderRadius: '6px',
+        color: T.inkMid,
+        fontSize: '13px',
+        fontWeight: 450,
+        cursor: 'pointer',
+      }}
+    />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Página · lógica SIN CAMBIOS
+// ─────────────────────────────────────────────────────────────────────────
 export default function EditarNegocioPage() {
   const router = useRouter();
   const { id } = router.query;
-  
+
+  const { user, loading: authLoading, openLogin } = useAuth();
+
   const [negocio, setNegocio] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
-  // Campos básicos + nuevos
+
   const [formData, setFormData] = useState({
     nombre: '',
     categoria: '',
@@ -47,9 +271,9 @@ export default function EditarNegocioPage() {
     servicios: '',
     atencionWhatsapp: true,
     citasPrevias: false,
-    domicilio: false
+    domicilio: false,
   });
-  
+
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
   const [imagenesFiles, setImagenesFiles] = useState([]);
@@ -57,7 +281,6 @@ export default function EditarNegocioPage() {
   const [imagenesExistentes, setImagenesExistentes] = useState([]);
   const [imagenesAEliminar, setImagenesAEliminar] = useState([]);
 
-  // Listas para selects geográficos
   const [estadosList, setEstadosList] = useState([]);
   const [municipiosList, setMunicipiosList] = useState([]);
   const [localidadesList, setLocalidadesList] = useState([]);
@@ -73,30 +296,38 @@ export default function EditarNegocioPage() {
     'Panadería', 'Pastelería', 'Peluquería', 'Pescadería', 'Pollería',
     'Refaccionaria (auto partes)', 'Restaurante', 'Taquería', 'Taller mecánico',
     'Taller de costura', 'Tienda de ropa', 'Tienda de electrónicos',
-    'Tortillería', 'Veterinaria', 'Zapatería'
+    'Tortillería', 'Veterinaria', 'Zapatería',
   ];
 
+  // Carga inicial con id
   useEffect(() => {
-    if (id) {
-      cargarNegocio();
-      cargarDatosGeograficos();
-    } else {
-      verificarNegocioUsuario();
+    if (authLoading || !id) return;
+    cargarNegocio();
+    cargarDatosGeograficos();
+  }, [id, authLoading]);
+
+  // Sin id → verificar negocio del usuario
+  useEffect(() => {
+    if (authLoading || id) return;
+
+    if (!user) {
+      openLogin();
+      return;
     }
-  }, [id]);
+
+    verificarNegocioUsuario();
+  }, [authLoading, id, user]);
 
   const cargarDatosGeograficos = async () => {
     try {
       const estados = await getEstados();
       setEstadosList(estados);
-      // Si el negocio ya tiene estadoId, cargar sus municipios
-      // (se hará en el useEffect que vigila estadoId)
     } catch (err) {
       console.error('Error cargando datos geográficos:', err);
     }
   };
 
-  // Carga dinámica de municipios/localidades/sectores
+  // Cargas dinámicas de la cascada geográfica
   useEffect(() => {
     if (formData.estadoId) {
       getMunicipios(formData.estadoId).then(setMunicipiosList).catch(() => setMunicipiosList([]));
@@ -123,16 +354,10 @@ export default function EditarNegocioPage() {
 
   const verificarNegocioUsuario = async () => {
     try {
-      const user = pb.authStore.model;
-      if (!user) {
-        router.push('/solicitar?redirect=/negocios/editar');
-        return;
-      }
-      
       const negocios = await pb.collection('negocios').getFullList({
-        filter: `usuarioId = "${user.id}"`
+        filter: `usuarioId = "${user.id}"`,
       });
-      
+
       if (negocios.length > 0) {
         router.push(`/negocios/editar?id=${negocios[0].id}`);
       } else {
@@ -151,7 +376,7 @@ export default function EditarNegocioPage() {
       setLoading(true);
       const negocioData = await pb.collection('negocios').getOne(id);
       setNegocio(negocioData);
-      
+
       setFormData({
         nombre: negocioData.nombre || '',
         categoria: negocioData.categoria || '',
@@ -176,20 +401,19 @@ export default function EditarNegocioPage() {
         servicios: negocioData.servicios || '',
         atencionWhatsapp: negocioData.atencionWhatsapp !== false,
         citasPrevias: negocioData.citasPrevias === true,
-        domicilio: negocioData.domicilio === true
+        domicilio: negocioData.domicilio === true,
       });
-      
+
       if (negocioData.logo) {
         setLogoPreview(pb.files.getURL(negocioData, negocioData.logo));
       }
-      
+
       if (negocioData.imagenes) {
-        const imagenes = Array.isArray(negocioData.imagenes) 
-          ? negocioData.imagenes 
+        const imagenes = Array.isArray(negocioData.imagenes)
+          ? negocioData.imagenes
           : [negocioData.imagenes];
-        setImagenesExistentes(imagenes.filter(img => img));
+        setImagenesExistentes(imagenes.filter((img) => img));
       }
-      
     } catch (error) {
       console.error('Error cargando negocio:', error);
       setError('Error al cargar la información del negocio');
@@ -217,9 +441,9 @@ export default function EditarNegocioPage() {
     if (e.target.files) {
       const files = Array.from(e.target.files);
       setImagenesFiles(files);
-      
+
       const previews = [];
-      files.forEach(file => {
+      files.forEach((file) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           previews.push(reader.result);
@@ -232,7 +456,7 @@ export default function EditarNegocioPage() {
 
   const eliminarImagenExistente = (imagen) => {
     setImagenesAEliminar([...imagenesAEliminar, imagen]);
-    setImagenesExistentes(imagenesExistentes.filter(img => img !== imagen));
+    setImagenesExistentes(imagenesExistentes.filter((img) => img !== imagen));
   };
 
   const guardarCambios = async () => {
@@ -247,10 +471,9 @@ export default function EditarNegocioPage() {
 
     try {
       const formDataToSend = new FormData();
-      
-      Object.keys(formData).forEach(key => {
+
+      Object.keys(formData).forEach((key) => {
         if (key !== 'logo' && key !== 'imagenes') {
-          // Convertir valores booleanos a string para FormData
           const value = formData[key];
           if (typeof value === 'boolean') {
             formDataToSend.append(key, value ? 'true' : 'false');
@@ -259,25 +482,24 @@ export default function EditarNegocioPage() {
           }
         }
       });
-      
+
       if (logoFile) formDataToSend.append('logo', logoFile);
-      
-      imagenesFiles.forEach(file => formDataToSend.append('imagenes', file));
-      
+
+      imagenesFiles.forEach((file) => formDataToSend.append('imagenes', file));
+
       if (imagenesAEliminar.length > 0) {
         formDataToSend.append('imagenesEliminar', JSON.stringify(imagenesAEliminar));
       }
 
       await pb.collection('negocios').update(id, formDataToSend);
-      setSuccess('✅ Perfil actualizado correctamente');
-      
+      setSuccess('Perfil actualizado correctamente');
+
       setTimeout(() => {
         cargarNegocio();
         setImagenesFiles([]);
         setImagenesPreviews([]);
         setImagenesAEliminar([]);
       }, 1000);
-      
     } catch (error) {
       console.error('Error:', error);
       setError('Error al guardar los cambios');
@@ -286,13 +508,31 @@ export default function EditarNegocioPage() {
     }
   };
 
-  if (loading) {
+  // ─── Loading ───────────────────────────────────────────────
+  if (loading || authLoading) {
     return (
-      <StoreLayout>
-        <div className="flex justify-center items-center min-h-[60vh]">
-          <div className="loading-spinner"></div>
+      <>
+        <Head><title>Cargando | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <TerminalBar mode="rotating" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <span
+                className="font-serif text-[32px] block mb-5 select-none"
+                style={{ color: T.inkGhost }}
+              >
+                ʃƪʃƪ
+              </span>
+              <p
+                className="text-[11px] uppercase tracking-[0.28em]"
+                style={{ color: T.inkFaint, fontWeight: 500 }}
+              >
+                Cargando
+              </p>
+            </div>
+          </div>
         </div>
-      </StoreLayout>
+      </>
     );
   }
 
@@ -300,346 +540,530 @@ export default function EditarNegocioPage() {
     <>
       <Head>
         <title>Editar mi negocio | MarketDesliz</title>
+        <meta name="description" content="Actualiza la información de tu negocio en MarketDesliz." />
+        <meta name="theme-color" content="#0F0F0F" />
       </Head>
 
-      <StoreLayout>
-        <div className="max-w-3xl mx-auto px-4 py-8 pt-24">
-          <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-8 text-white">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                  <span className="text-2xl">🏪</span>
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold">Editar mi negocio</h1>
-                  <p className="text-purple-100 text-sm">Actualiza la información de tu negocio</p>
-                </div>
+      <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+        <BackButton fallback={id ? `/negocios/${id}` : '/negocios'} />
+        <TerminalBar mode="rotating" />
+        <Header />
+
+        <main className="flex-1">
+          {/* ─── HEADER EDITORIAL ────────────────────────── */}
+          <section className="max-w-[820px] mx-auto px-6 md:px-14 pt-16 md:pt-24 pb-10">
+            <p
+              className="text-[10px] uppercase tracking-[0.28em] mb-6"
+              style={{ color: T.inkFaint, fontWeight: 500, fontFeatureSettings: '"ss01"' }}
+            >
+              Editor de perfil · Negocio aliado
+            </p>
+
+            <div className="flex items-start gap-4 flex-wrap">
+              <div
+                className="flex items-center justify-center shrink-0"
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  background: 'rgba(79, 46, 232, 0.06)',
+                  borderRadius: '8px',
+                }}
+              >
+                <Store size={22} strokeWidth={1.75} style={{ color: T.accent }} />
+              </div>
+
+              <div className="flex-1 min-w-[220px]">
+                <h1
+                  className="text-[32px] md:text-[44px] leading-[1.02] tracking-[-0.03em]"
+                  style={{ color: T.ink, fontWeight: 400, fontFeatureSettings: '"ss01"' }}
+                >
+                  Editar
+                  <span className="font-serif italic" style={{ color: T.inkMid }}>
+                    {' '}mi negocio.
+                  </span>
+                </h1>
+                {negocio && (
+                  <p
+                    className="text-[14px] mt-3 truncate"
+                    style={{ color: T.inkSoft, fontWeight: 450 }}
+                  >
+                    {negocio.nombre}
+                  </p>
+                )}
               </div>
             </div>
+          </section>
 
-            {/* Formulario */}
-            <div className="p-6">
+          {/* ─── MENSAJES ────────────────────────────────── */}
+          {(error || success) && (
+            <section className="max-w-[820px] mx-auto px-6 md:px-14 pb-4">
               {error && (
-                <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">
-                  {error}
+                <div
+                  className="flex items-start gap-2.5 px-4 py-3"
+                  style={{
+                    background: 'rgba(197, 48, 48, 0.06)',
+                    borderLeft: `2px solid ${T.red}`,
+                    borderRadius: '6px',
+                  }}
+                >
+                  <AlertCircle
+                    size={14}
+                    strokeWidth={1.75}
+                    style={{ color: T.red, flexShrink: 0, marginTop: 2 }}
+                  />
+                  <p
+                    className="text-[12.5px] leading-relaxed flex-1"
+                    style={{ color: T.red, fontWeight: 450 }}
+                  >
+                    {error}
+                  </p>
                 </div>
               )}
-              
+
               {success && (
-                <div className="mb-4 p-3 bg-green-50 text-green-600 rounded-lg text-sm">
-                  {success}
+                <div
+                  className="flex items-start gap-2.5 px-4 py-3"
+                  style={{
+                    background: 'rgba(26, 127, 75, 0.06)',
+                    borderLeft: `2px solid ${T.green}`,
+                    borderRadius: '6px',
+                  }}
+                >
+                  <CheckCircle
+                    size={14}
+                    strokeWidth={1.75}
+                    style={{ color: T.green, flexShrink: 0, marginTop: 2 }}
+                  />
+                  <p
+                    className="text-[12.5px] leading-relaxed flex-1"
+                    style={{ color: T.green, fontWeight: 450 }}
+                  >
+                    {success}
+                  </p>
                 </div>
               )}
+            </section>
+          )}
 
-              <div className="space-y-8">
-                {/* ── Información básica ─────────────────── */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Información básica</h3>
-                  
+          {/* ─── FORMULARIO ───────────────────────────────── */}
+          <section className="max-w-[820px] mx-auto px-6 md:px-14 pb-24">
+            <div className="flex flex-col gap-10">
+
+              {/* Información básica */}
+              <FormSection title="Información básica">
+                <div>
+                  <FieldLabel required>Nombre del negocio</FieldLabel>
+                  <TextField
+                    name="nombre"
+                    value={formData.nombre}
+                    onChange={handleInputChange}
+                    placeholder="Ej: Ferretería El Martillo"
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel required>Categoría</FieldLabel>
+                  <SelectField
+                    name="categoria"
+                    value={formData.categoria}
+                    onChange={handleInputChange}
+                  >
+                    <option value="">Selecciona una categoría</option>
+                    {categorias.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </SelectField>
+                </div>
+
+                <div>
+                  <FieldLabel required>Dirección</FieldLabel>
+                  <TextField
+                    name="direccion"
+                    value={formData.direccion}
+                    onChange={handleInputChange}
+                    placeholder="Calle, número, colonia, ciudad"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del negocio *</label>
-                    <input
-                      type="text"
-                      name="nombre"
-                      value={formData.nombre}
+                    <FieldLabel>Teléfono</FieldLabel>
+                    <TextField
+                      name="telefono"
+                      type="tel"
+                      value={formData.telefono}
                       onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500"
-                      placeholder="Ej: Ferretería El Martillo"
+                      placeholder="55 1234 5678"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Categoría *</label>
-                    <select
-                      name="categoria"
-                      value={formData.categoria}
+                    <FieldLabel>WhatsApp</FieldLabel>
+                    <TextField
+                      name="whatsapp"
+                      type="tel"
+                      value={formData.whatsapp}
                       onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500"
-                    >
-                      <option value="">Selecciona una categoría</option>
-                      {categorias.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
+                      placeholder="521234567890"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <FieldLabel>Descripción</FieldLabel>
+                  <TextField
+                    name="descripcion"
+                    value={formData.descripcion}
+                    onChange={handleInputChange}
+                    placeholder="Breve descripción de tu negocio…"
+                    multiline
+                    rows={3}
+                  />
+                </div>
+              </FormSection>
+
+              {/* Ubicación */}
+              <FormSection title="Ubicación geográfica (opcional)">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <FieldLabel>Estado</FieldLabel>
+                    <SelectField name="estadoId" value={formData.estadoId} onChange={handleInputChange}>
+                      <option value="">Seleccionar estado</option>
+                      {estadosList.map((est) => (
+                        <option key={est.id} value={est.id}>{est.nombre}</option>
                       ))}
-                    </select>
+                    </SelectField>
                   </div>
-
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Dirección *</label>
-                    <input
-                      type="text"
-                      name="direccion"
-                      value={formData.direccion}
+                    <FieldLabel>Municipio</FieldLabel>
+                    <SelectField
+                      name="municipioId"
+                      value={formData.municipioId}
                       onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500"
-                      placeholder="Calle, número, colonia, ciudad"
+                      disabled={!formData.estadoId}
+                    >
+                      <option value="">Seleccionar municipio</option>
+                      {municipiosList.map((mun) => (
+                        <option key={mun.id} value={mun.id}>{mun.nombre}</option>
+                      ))}
+                    </SelectField>
+                  </div>
+                  <div>
+                    <FieldLabel>Localidad</FieldLabel>
+                    <SelectField
+                      name="localidadId"
+                      value={formData.localidadId}
+                      onChange={handleInputChange}
+                      disabled={!formData.municipioId}
+                    >
+                      <option value="">Seleccionar localidad</option>
+                      {localidadesList.map((loc) => (
+                        <option key={loc.id} value={loc.id}>{loc.nombre}</option>
+                      ))}
+                    </SelectField>
+                  </div>
+                  <div>
+                    <FieldLabel>Sector / Colonia</FieldLabel>
+                    <SelectField
+                      name="sectorId"
+                      value={formData.sectorId}
+                      onChange={handleInputChange}
+                      disabled={!formData.localidadId}
+                    >
+                      <option value="">Seleccionar sector</option>
+                      {sectoresList.map((sec) => (
+                        <option key={sec.id} value={sec.id}>{sec.nombre}</option>
+                      ))}
+                    </SelectField>
+                  </div>
+                  <div>
+                    <FieldLabel>Código Postal</FieldLabel>
+                    <TextField
+                      name="codigoPostal"
+                      value={formData.codigoPostal}
+                      onChange={handleInputChange}
+                      placeholder="91000"
                     />
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-                      <input
-                        type="tel"
-                        name="telefono"
-                        value={formData.telefono}
-                        onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                        placeholder="55 1234 5678"
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <FieldLabel>Latitud</FieldLabel>
+                    <TextField
+                      name="latitud"
+                      type="number"
+                      value={formData.latitud}
+                      onChange={handleInputChange}
+                      placeholder="19.4326"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Longitud</FieldLabel>
+                    <TextField
+                      name="longitud"
+                      type="number"
+                      value={formData.longitud}
+                      onChange={handleInputChange}
+                      placeholder="-99.1332"
+                    />
+                  </div>
+                </div>
+              </FormSection>
+
+              {/* Presencia en línea */}
+              <FormSection title="Presencia en línea">
+                <div>
+                  <FieldLabel>Correo electrónico</FieldLabel>
+                  <TextField
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    placeholder="correo@negocio.com"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <FieldLabel>Sitio web</FieldLabel>
+                    <TextField
+                      name="sitioWeb"
+                      type="url"
+                      value={formData.sitioWeb}
+                      onChange={handleInputChange}
+                      placeholder="https://www.minegocio.com"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Facebook</FieldLabel>
+                    <TextField
+                      name="facebook"
+                      value={formData.facebook}
+                      onChange={handleInputChange}
+                      placeholder="URL de Facebook"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Instagram</FieldLabel>
+                    <TextField
+                      name="instagram"
+                      value={formData.instagram}
+                      onChange={handleInputChange}
+                      placeholder="URL de Instagram"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>TikTok</FieldLabel>
+                    <TextField
+                      name="tiktok"
+                      value={formData.tiktok}
+                      onChange={handleInputChange}
+                      placeholder="URL de TikTok"
+                    />
+                  </div>
+                </div>
+              </FormSection>
+
+              {/* Horario y servicios */}
+              <FormSection title="Horario y servicios">
+                <div>
+                  <FieldLabel>Horario de atención</FieldLabel>
+                  <TextField
+                    name="horario"
+                    value={formData.horario}
+                    onChange={handleInputChange}
+                    placeholder="Lun-Vie 9am-6pm, Sáb 9am-2pm"
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-5">
+                  <CheckboxField
+                    name="atencionWhatsapp"
+                    checked={formData.atencionWhatsapp}
+                    onChange={handleInputChange}
+                    label="Atención por WhatsApp"
+                  />
+                  <CheckboxField
+                    name="citasPrevias"
+                    checked={formData.citasPrevias}
+                    onChange={handleInputChange}
+                    label="Requiere cita previa"
+                  />
+                  <CheckboxField
+                    name="domicilio"
+                    checked={formData.domicilio}
+                    onChange={handleInputChange}
+                    label="Servicio a domicilio"
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel>Otros servicios</FieldLabel>
+                  <TextField
+                    name="servicios"
+                    value={formData.servicios}
+                    onChange={handleInputChange}
+                    placeholder="Estacionamiento, Wi-Fi, Pagos con tarjeta"
+                    hint="Separa múltiples servicios por coma."
+                  />
+                </div>
+              </FormSection>
+
+              {/* Imágenes */}
+              <FormSection title="Imágenes">
+                <div>
+                  <FieldLabel>Logo / Foto principal</FieldLabel>
+                  <FileInput onChange={handleLogoChange} />
+                  {logoPreview && (
+                    <div className="mt-3">
+                      <img
+                        src={logoPreview}
+                        alt="Logo"
+                        style={{
+                          width: '88px',
+                          height: '88px',
+                          objectFit: 'cover',
+                          border: `1px solid ${T.line}`,
+                          borderRadius: '8px',
+                        }}
                       />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label>
-                      <input
-                        type="tel"
-                        name="whatsapp"
-                        value={formData.whatsapp}
-                        onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                        placeholder="521234567890"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Horario de atención</label>
-                    <input
-                      type="text"
-                      name="horario"
-                      value={formData.horario}
-                      onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                      placeholder="Lun-Vie 9am-6pm, Sáb 9am-2pm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                    <textarea
-                      name="descripcion"
-                      value={formData.descripcion}
-                      onChange={handleInputChange}
-                      rows="3"
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                      placeholder="Breve descripción de tu negocio..."
-                    />
-                  </div>
-                </div>
-
-                {/* ── Ubicación geográfica ─────────────────── */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Ubicación (opcional)</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-                      <select name="estadoId" value={formData.estadoId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
-                        <option value="">Seleccionar estado</option>
-                        {estadosList.map(est => <option key={est.id} value={est.id}>{est.nombre}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Municipio</label>
-                      <select name="municipioId" value={formData.municipioId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
-                        <option value="">Seleccionar municipio</option>
-                        {municipiosList.map(mun => <option key={mun.id} value={mun.id}>{mun.nombre}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Localidad</label>
-                      <select name="localidadId" value={formData.localidadId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
-                        <option value="">Seleccionar localidad</option>
-                        {localidadesList.map(loc => <option key={loc.id} value={loc.id}>{loc.nombre}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Sector/Colonia</label>
-                      <select name="sectorId" value={formData.sectorId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
-                        <option value="">Seleccionar sector</option>
-                        {sectoresList.map(sec => <option key={sec.id} value={sec.id}>{sec.nombre}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Código Postal</label>
-                      <input type="text" name="codigoPostal" value={formData.codigoPostal} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="91000" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Latitud</label>
-                        <input type="number" step="any" name="latitud" value={formData.latitud} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="19.4326" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Longitud</label>
-                        <input type="number" step="any" name="longitud" value={formData.longitud} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="-99.1332" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── Presencia en línea ─────────────────── */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Presencia en línea</h3>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
-                    <input type="email" name="email" value={formData.email} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="correo@negocio.com" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Sitio Web</label>
-                      <input type="url" name="sitioWeb" value={formData.sitioWeb} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="https://www.minegocio.com" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Facebook</label>
-                      <input type="text" name="facebook" value={formData.facebook} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="URL de Facebook" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Instagram</label>
-                      <input type="text" name="instagram" value={formData.instagram} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="URL de Instagram" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">TikTok</label>
-                      <input type="text" name="tiktok" value={formData.tiktok} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="URL de TikTok" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── Horario y servicios ─────────────────── */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Horario y servicios</h3>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Horario (texto libre)</label>
-                    <input
-                      type="text"
-                      name="horario"
-                      value={formData.horario}
-                      onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                      placeholder="Lun-Vie 9am-6pm, Sáb 9am-2pm"
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-4">
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" name="atencionWhatsapp" checked={formData.atencionWhatsapp} onChange={handleInputChange} className="w-4 h-4" />
-                      <span className="text-sm">Atención por WhatsApp</span>
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" name="citasPrevias" checked={formData.citasPrevias} onChange={handleInputChange} className="w-4 h-4" />
-                      <span className="text-sm">Requiere cita previa</span>
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" name="domicilio" checked={formData.domicilio} onChange={handleInputChange} className="w-4 h-4" />
-                      <span className="text-sm">Servicio a domicilio</span>
-                    </label>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Otros servicios (separados por coma)</label>
-                    <input
-                      type="text"
-                      name="servicios"
-                      value={formData.servicios}
-                      onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                      placeholder="Estacionamiento, Wi-Fi, Pagos con tarjeta"
-                    />
-                  </div>
-                </div>
-
-                {/* ── Imágenes ────────────────────────────── */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Imágenes</h3>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Logo / Foto principal</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleLogoChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                    />
-                    {logoPreview && (
-                      <div className="mt-2">
-                        <p className="text-xs text-gray-500">Logo actual:</p>
-                        <img src={logoPreview} alt="Logo" className="w-24 h-24 object-cover rounded-lg mt-1" />
-                      </div>
-                    )}
-                  </div>
-
-                  {imagenesExistentes.length > 0 && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Fotos de tu local</label>
-                      <div className="flex gap-2 flex-wrap">
-                        {imagenesExistentes.map((img, idx) => (
-                          <div key={idx} className="relative group">
-                            <img
-                              src={pb.files.getURL(negocio, img)}
-                              alt={`Foto ${idx + 1}`}
-                              className="w-20 h-20 object-cover rounded-lg"
-                            />
-                            <button
-                              onClick={() => eliminarImagenExistente(img)}
-                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ))}
-                      </div>
                     </div>
                   )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Agregar nuevas fotos</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleImagenesChange}
-                      className="w-full border border-gray-300 rounded-lg px-4 py-2"
-                    />
-                    {imagenesPreviews.length > 0 && (
-                      <div className="mt-2 flex gap-2 flex-wrap">
-                        {imagenesPreviews.map((preview, idx) => (
-                          <img key={idx} src={preview} alt={`Nueva ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg" />
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-xs text-gray-500 mt-1">Puedes subir varias fotos de tu negocio</p>
-                  </div>
+                  <p
+                    className="text-[11.5px] mt-2"
+                    style={{ color: T.inkFaint, fontWeight: 450 }}
+                  >
+                    Recomendado: 500×500px, formato JPG o PNG.
+                  </p>
                 </div>
 
-                {/* ─── Botones ────────────────────────────── */}
-                <div className="flex gap-3 pt-4">
-                  <Link
-                    href={`/negocios/${id}`}
-                    className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-medium text-center hover:bg-gray-300 transition"
+                {imagenesExistentes.length > 0 && (
+                  <div>
+                    <FieldLabel>Fotos actuales de tu local</FieldLabel>
+                    <div className="flex gap-3 flex-wrap mt-2">
+                      {imagenesExistentes.map((img, idx) => (
+                        <div key={idx} className="relative">
+                          <img
+                            src={pb.files.getURL(negocio, img)}
+                            alt={`Foto ${idx + 1}`}
+                            style={{
+                              width: '80px',
+                              height: '80px',
+                              objectFit: 'cover',
+                              border: `1px solid ${T.line}`,
+                              borderRadius: '6px',
+                            }}
+                          />
+                          <button
+                            onClick={() => eliminarImagenExistente(img)}
+                            type="button"
+                            aria-label="Eliminar imagen"
+                            className="absolute flex items-center justify-center"
+                            style={{
+                              top: '-6px',
+                              right: '-6px',
+                              width: '22px',
+                              height: '22px',
+                              background: T.red,
+                              borderRadius: '50%',
+                              color: '#FFFFFF',
+                              border: '2px solid #FAFAF9',
+                              cursor: 'pointer',
+                              WebkitTapHighlightColor: 'transparent',
+                            }}
+                          >
+                            <X size={10} strokeWidth={2.5} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <p
+                      className="text-[11.5px] mt-2"
+                      style={{ color: T.inkFaint, fontWeight: 450 }}
+                    >
+                      Haz click en <strong style={{ color: T.red }}>×</strong> para eliminar una foto al guardar.
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <FieldLabel>Agregar nuevas fotos</FieldLabel>
+                  <FileInput onChange={handleImagenesChange} multiple />
+                  {imagenesPreviews.length > 0 && (
+                    <div className="mt-3 flex gap-2 flex-wrap">
+                      {imagenesPreviews.map((preview, idx) => (
+                        <img
+                          key={idx}
+                          src={preview}
+                          alt={`Nueva ${idx + 1}`}
+                          style={{
+                            width: '64px',
+                            height: '64px',
+                            objectFit: 'cover',
+                            border: `1px solid ${T.line}`,
+                            borderRadius: '6px',
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <p
+                    className="text-[11.5px] mt-2"
+                    style={{ color: T.inkFaint, fontWeight: 450 }}
                   >
-                    Cancelar
-                  </Link>
-                  <button
-                    onClick={guardarCambios}
-                    disabled={saving}
-                    className="flex-1 bg-[#6C3BFF] text-white py-2 rounded-lg font-bold hover:bg-purple-700 transition disabled:opacity-50"
-                  >
-                    {saving ? 'Guardando...' : 'Guardar cambios'}
-                  </button>
+                    Puedes subir varias fotos de tu negocio.
+                  </p>
+                </div>
+              </FormSection>
+
+              {/* Acciones */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-4">
+                <Link
+                  href={id ? `/negocios/${id}` : '/negocios'}
+                  className="flex items-center justify-center h-11 text-[13.5px] transition-colors"
+                  style={{
+                    background: 'transparent',
+                    border: `1px solid ${T.line}`,
+                    borderRadius: '6px',
+                    color: T.inkMid,
+                    fontWeight: 500,
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(15,15,15,0.03)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                >
+                  Cancelar
+                </Link>
+                <div className="md:col-span-2">
+                  <PrimaryButton onClick={guardarCambios} loading={saving} disabled={saving}>
+                    {saving ? 'Guardando…' : 'Guardar cambios'}
+                  </PrimaryButton>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </StoreLayout>
+          </section>
+        </main>
 
-      <style jsx>{`
-        .loading-spinner {
-          width: 50px;
-          height: 50px;
-          border: 3px solid #f3f3f3;
-          border-top: 3px solid #6C3BFF;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
+        <Footer variant="minimal" />
+      </div>
+
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
         }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
+        .animate-blink { animation: blink 1s step-end infinite; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
         }
+        .font-serif {
+          font-family: ui-serif, 'Iowan Old Style', 'Apple Garamond', 'Palatino', Georgia, 'Times New Roman', serif;
+        }
+        ::selection { background: rgba(79, 46, 232, 0.12); color: #0F0F0F; }
+        * { -webkit-tap-highlight-color: transparent; font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1; }
       `}</style>
     </>
   );

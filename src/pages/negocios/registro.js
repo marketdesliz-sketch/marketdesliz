@@ -3,18 +3,247 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import StoreLayout from '../../layouts/StoreLayout';
+import {
+  Key, CheckCircle, Store, PartyPopper, Bell, MessageCircle,
+  AlertCircle, MapPin, Zap,
+} from 'lucide-react';
 import pb from '../../lib/pocketbase';
 import {
   getEstados,
   getMunicipios,
   getLocalidades,
-  getSectores
+  getSectores,
 } from '../../lib/negociosService';
+import { useAuth } from '../../contexts/AuthContext';
+import { T } from '../../lib/tokens';
+import TerminalBar from '../../components/TerminalBar';
+import Header from '../../components/Header';
+import Footer from '../../components/Footer';
+import BackButton from '../../components/BackButton';
 
+// ─────────────────────────────────────────────────────────────────────────
+// Sub-componentes de formulario
+// ─────────────────────────────────────────────────────────────────────────
+function FieldLabel({ children, required = false }) {
+  return (
+    <label
+      className="block text-[10px] uppercase tracking-[0.22em] mb-2"
+      style={{ color: T.inkFaint, fontWeight: 500, fontFeatureSettings: '"ss01"' }}
+    >
+      {children}
+      {required && <span style={{ color: T.accent, marginLeft: 4 }}>*</span>}
+    </label>
+  );
+}
+
+function TextField({
+  name, value, onChange, placeholder, type = 'text', required = false,
+  autoFocus = false, multiline = false, rows = 3, hint = null,
+}) {
+  const [focus, setFocus] = useState(false);
+
+  const baseStyle = {
+    width: '100%',
+    background: 'transparent',
+    border: `1px solid ${focus ? T.accent : T.line}`,
+    borderRadius: '6px',
+    color: T.ink,
+    fontSize: '14px',
+    fontWeight: 450,
+    letterSpacing: '-0.005em',
+    padding: multiline ? '12px 14px' : '0 14px',
+    height: multiline ? 'auto' : '42px',
+    fontFamily: 'inherit',
+    outline: 'none',
+    transition: `border-color 0.2s ${T.ease}`,
+    resize: multiline ? 'none' : undefined,
+  };
+
+  return (
+    <div>
+      {multiline ? (
+        <textarea
+          name={name}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          required={required}
+          rows={rows}
+          style={baseStyle}
+          onFocus={() => setFocus(true)}
+          onBlur={() => setFocus(false)}
+        />
+      ) : (
+        <input
+          type={type}
+          name={name}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          required={required}
+          autoFocus={autoFocus}
+          style={baseStyle}
+          onFocus={() => setFocus(true)}
+          onBlur={() => setFocus(false)}
+        />
+      )}
+      {hint && (
+        <p className="text-[11px] mt-1.5" style={{ color: T.inkFaint, fontWeight: 450 }}>
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SelectField({ name, value, onChange, children, disabled = false }) {
+  const [focus, setFocus] = useState(false);
+
+  return (
+    <select
+      name={name}
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      className="w-full appearance-none outline-none disabled:opacity-40"
+      style={{
+        height: '42px',
+        padding: '0 14px',
+        background: 'transparent',
+        border: `1px solid ${focus ? T.accent : T.line}`,
+        borderRadius: '6px',
+        color: value ? T.ink : T.inkFaint,
+        fontSize: '14px',
+        fontWeight: 450,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transition: `border-color 0.2s ${T.ease}`,
+      }}
+      onFocus={() => setFocus(true)}
+      onBlur={() => setFocus(false)}
+    >
+      {children}
+    </select>
+  );
+}
+
+function FormSection({ title, children }) {
+  return (
+    <div>
+      <div
+        className="flex items-center gap-3 mb-5 pb-3"
+        style={{ borderBottom: `1px solid ${T.line}` }}
+      >
+        <span
+          className="text-[10px] uppercase tracking-[0.22em]"
+          style={{ color: T.inkFaint, fontWeight: 500, fontFeatureSettings: '"ss01"' }}
+        >
+          {title}
+        </span>
+        <div className="flex-1" />
+      </div>
+      <div className="flex flex-col gap-4">{children}</div>
+    </div>
+  );
+}
+
+function CheckboxField({ name, checked, onChange, label }) {
+  return (
+    <label
+      className="flex items-center gap-3 cursor-pointer"
+      style={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      <input
+        type="checkbox"
+        name={name}
+        checked={checked}
+        onChange={onChange}
+        style={{
+          width: '16px',
+          height: '16px',
+          accentColor: T.accent,
+          cursor: 'pointer',
+        }}
+      />
+      <span
+        className="text-[13.5px]"
+        style={{ color: T.inkMid, fontWeight: 450 }}
+      >
+        {label}
+      </span>
+    </label>
+  );
+}
+
+function PrimaryButton({ children, onClick, disabled, type = 'button', loading = false }) {
+  const [hover, setHover] = useState(false);
+
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled || loading}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="w-full flex items-center justify-center gap-2.5 text-white transition-all duration-200 disabled:cursor-not-allowed"
+      style={{
+        height: '44px',
+        background: hover && !disabled ? T.accentDeep : T.accent,
+        borderRadius: '6px',
+        fontSize: '13.5px',
+        fontWeight: 500,
+        letterSpacing: '0.01em',
+        opacity: disabled ? 0.4 : 1,
+        transitionTimingFunction: T.ease,
+        WebkitTapHighlightColor: 'transparent',
+        border: 'none',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+    >
+      {loading && (
+        <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+      )}
+      {children}
+    </button>
+  );
+}
+
+function SecondaryButton({ children, onClick, disabled }) {
+  const [hover, setHover] = useState(false);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="w-full flex items-center justify-center gap-2 text-[13.5px] transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40"
+      style={{
+        height: '44px',
+        background: hover ? 'rgba(15,15,15,0.05)' : 'transparent',
+        border: `1px solid ${T.line}`,
+        borderRadius: '6px',
+        color: T.inkMid,
+        fontWeight: 500,
+        transitionTimingFunction: T.ease,
+        WebkitTapHighlightColor: 'transparent',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Página · lógica SIN CAMBIOS
+// ─────────────────────────────────────────────────────────────────────────
 export default function RegistroNegocioPage() {
   const router = useRouter();
-  const [step, setStep] = useState('codigo'); // codigo, datos, completado
+
+  const { user, loading: authLoading, openLogin } = useAuth();
+
+  const [step, setStep] = useState('codigo');
   const [codigo, setCodigo] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -28,7 +257,6 @@ export default function RegistroNegocioPage() {
     whatsapp: '',
     horario: '',
     ubicacion: '',
-    // Nuevos campos
     estadoId: '',
     municipioId: '',
     localidadId: '',
@@ -44,41 +272,30 @@ export default function RegistroNegocioPage() {
     servicios: '',
     atencionWhatsapp: true,
     citasPrevias: false,
-    domicilio: false
+    domicilio: false,
   });
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
   const [imagenesFiles, setImagenesFiles] = useState([]);
   const [imagenesPreviews, setImagenesPreviews] = useState([]);
   const [saving, setSaving] = useState(false);
-  const [user, setUser] = useState(null);
 
-  // Datos geográficos para los selects
   const [estadosList, setEstadosList] = useState([]);
   const [municipiosList, setMunicipiosList] = useState([]);
   const [localidadesList, setLocalidadesList] = useState([]);
   const [sectoresList, setSectoresList] = useState([]);
 
-  // Verificar usuario autenticado
   useEffect(() => {
-    const checkUser = () => {
-      const currentUser = pb.authStore.model;
-      setUser(currentUser);
-      if (!currentUser) {
-        router.push('/solicitar?redirect=' + encodeURIComponent(router.asPath));
-      }
-    };
-    checkUser();
-    const unsubscribe = pb.authStore.onChange(() => checkUser());
-    return () => unsubscribe();
-  }, [router]);
+    if (authLoading) return;
+    if (!user && step !== 'completado') {
+      openLogin();
+    }
+  }, [authLoading, user, step, openLogin]);
 
-  // Cargar datos geográficos iniciales
   useEffect(() => {
     getEstados().then(setEstadosList).catch(() => {});
   }, []);
 
-  // Efectos para carga dinámica
   useEffect(() => {
     if (negocioData.estadoId) {
       getMunicipios(negocioData.estadoId).then(setMunicipiosList).catch(() => setMunicipiosList([]));
@@ -103,7 +320,6 @@ export default function RegistroNegocioPage() {
     }
   }, [negocioData.localidadId]);
 
-  // Categorías disponibles
   const categorias = [
     'Abarrotes', 'Accesorios (bisutería, celulares, etc.)', 'Agencia de viajes',
     'Antojitos / comida corrida', 'Barbería', 'Boutique (ropa)', 'Cafetería',
@@ -114,10 +330,9 @@ export default function RegistroNegocioPage() {
     'Panadería', 'Pastelería', 'Peluquería', 'Pescadería', 'Pollería',
     'Refaccionaria (auto partes)', 'Restaurante', 'Taquería', 'Taller mecánico',
     'Taller de costura', 'Tienda de ropa', 'Tienda de electrónicos',
-    'Tortillería', 'Veterinaria', 'Zapatería'
+    'Tortillería', 'Veterinaria', 'Zapatería',
   ];
 
-  // Verificar código de invitación
   const verificarCodigo = async () => {
     if (!codigo.trim()) {
       setError('Ingresa el código de invitación');
@@ -134,7 +349,6 @@ export default function RegistroNegocioPage() {
 
       setCodigoValido(invitacion);
       setStep('datos');
-      
     } catch (err) {
       console.error('Error:', err);
       setError('Código de invitación inválido o ya fue utilizado');
@@ -162,9 +376,9 @@ export default function RegistroNegocioPage() {
     if (e.target.files) {
       const files = Array.from(e.target.files);
       setImagenesFiles(files);
-      
+
       const previews = [];
-      files.forEach(file => {
+      files.forEach((file) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           previews.push(reader.result);
@@ -181,14 +395,18 @@ export default function RegistroNegocioPage() {
       return;
     }
 
+    if (!user) {
+      openLogin();
+      return;
+    }
+
     setSaving(true);
     setError('');
 
     try {
       const formData = new FormData();
-      
-      // Campos de texto (incluyendo los nuevos)
-      Object.keys(negocioData).forEach(key => {
+
+      Object.keys(negocioData).forEach((key) => {
         if (key !== 'logo' && key !== 'imagenes') {
           const value = negocioData[key];
           if (typeof value === 'boolean') {
@@ -198,19 +416,16 @@ export default function RegistroNegocioPage() {
           }
         }
       });
-      
+
       formData.append('activo', true);
       formData.append('orden', 0);
       formData.append('visitas', 0);
       formData.append('estadoActivacion', 'pendiente_activacion');
-      
-      if (user) {
-        formData.append('usuarioId', user.id);
-      }
-      
+      formData.append('usuarioId', user.id);
+
       if (logoFile) formData.append('logo', logoFile);
-      
-      imagenesFiles.forEach(file => formData.append('imagenes', file));
+
+      imagenesFiles.forEach((file) => formData.append('imagenes', file));
 
       const nuevoNegocio = await pb.collection('negocios').create(formData);
       console.log('✅ Negocio creado:', nuevoNegocio.id);
@@ -220,11 +435,10 @@ export default function RegistroNegocioPage() {
         negocioId: nuevoNegocio.id,
         negocioNombre: negocioData.nombre,
         usuarioId: user.id,
-        fechaRegistro: new Date().toISOString()
+        fechaRegistro: new Date().toISOString(),
       });
 
       setStep('completado');
-      
     } catch (err) {
       console.error('Error:', err);
       setError(err.message || 'Error al registrar el negocio. Intenta nuevamente.');
@@ -233,14 +447,83 @@ export default function RegistroNegocioPage() {
     }
   };
 
+  // ─── Loading ───────────────────────────────────────────────
+  if (authLoading) {
+    return (
+      <>
+        <Head><title>Cargando | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <TerminalBar mode="rotating" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <span
+                className="font-serif text-[32px] block mb-5 select-none"
+                style={{ color: T.inkGhost }}
+              >
+                ʃƪʃƪ
+              </span>
+              <p
+                className="text-[11px] uppercase tracking-[0.28em]"
+                style={{ color: T.inkFaint, fontWeight: 500 }}
+              >
+                Verificando sesión
+              </p>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ─── Sin sesión ────────────────────────────────────────────
   if (!user && step !== 'completado') {
     return (
-      <StoreLayout>
-        <div className="flex justify-center items-center min-h-[60vh]">
-          <div className="loading-spinner"></div>
-          <p className="ml-3 text-gray-500">Verificando autenticación...</p>
+      <>
+        <Head><title>Registrar mi negocio | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <BackButton fallback="/negocios" />
+          <TerminalBar mode="rotating" />
+          <Header />
+          <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-20 w-full">
+            <div className="text-center">
+              <div
+                className="inline-flex items-center justify-center mb-6"
+                style={{
+                  width: '64px',
+                  height: '64px',
+                  background: 'rgba(79, 46, 232, 0.06)',
+                  borderRadius: '12px',
+                }}
+              >
+                <Key size={28} strokeWidth={1.5} style={{ color: T.accent }} />
+              </div>
+
+              <h1
+                className="text-[32px] md:text-[40px] leading-tight tracking-[-0.03em] mb-3"
+                style={{ color: T.ink, fontWeight: 400 }}
+              >
+                Inicia sesión
+                <br />
+                <span className="font-serif italic" style={{ color: T.inkMid }}>
+                  para continuar.
+                </span>
+              </h1>
+
+              <p
+                className="text-[15px] leading-[1.6] mb-8 max-w-sm mx-auto"
+                style={{ color: T.inkSoft, fontWeight: 450 }}
+              >
+                Necesitas una cuenta en MarketDesliz para registrar tu negocio como aliado.
+              </p>
+
+              <PrimaryButton onClick={openLogin}>
+                Iniciar sesión
+              </PrimaryButton>
+            </div>
+          </main>
+          <Footer variant="minimal" />
         </div>
-      </StoreLayout>
+      </>
     );
   }
 
@@ -248,333 +531,765 @@ export default function RegistroNegocioPage() {
     <>
       <Head>
         <title>Registrar mi negocio | MarketDesliz</title>
-        <meta name="description" content="Registra tu negocio como aliado de MarketDesliz y llega a más clientes en tu comunidad." />
+        <meta
+          name="description"
+          content="Registra tu negocio como aliado de MarketDesliz y llega a más clientes en tu comunidad."
+        />
+        <meta name="theme-color" content="#0F0F0F" />
       </Head>
 
-      <StoreLayout>
-        <div className="max-w-2xl mx-auto px-4 py-12 pt-24">
-          <div className="bg-white rounded-2xl shadow-xl p-8">
-            
-            {step === 'codigo' && (
-              <>
-                <div className="text-center mb-8">
-                  <div className="inline-block p-3 bg-purple-100 rounded-full mb-4">
-                    <span className="text-4xl">🔑</span>
-                  </div>
-                  <h1 className="text-2xl font-bold text-gray-900">Registra tu negocio</h1>
-                  <p className="text-gray-500 mt-2">
-                    Ingresa el código de invitación que te proporcionó MarketDesliz
-                  </p>
-                </div>
+      <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+        <BackButton fallback="/negocios" />
+        <TerminalBar mode="rotating" />
+        <Header />
 
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Código de invitación
-                  </label>
+        <main className="flex-1">
+          {/* ─── PASO 1: Código ───────────────────────────── */}
+          {step === 'codigo' && (
+            <section className="max-w-[560px] mx-auto px-6 md:px-14 pt-16 md:pt-24 pb-20 w-full">
+              <div className="text-center mb-10">
+                <p
+                  className="text-[10px] uppercase tracking-[0.28em] mb-6"
+                  style={{ color: T.inkFaint, fontWeight: 500, fontFeatureSettings: '"ss01"' }}
+                >
+                  Paso 01 · Verificación
+                </p>
+
+                <h1
+                  className="text-[36px] md:text-[48px] leading-[1.02] tracking-[-0.035em] mb-4"
+                  style={{ color: T.ink, fontWeight: 400, fontFeatureSettings: '"ss01"' }}
+                >
+                  Registra
+                  <br />
+                  <span className="font-serif italic" style={{ color: T.inkMid }}>
+                    tu negocio.
+                  </span>
+                </h1>
+
+                <p
+                  className="text-[15px] leading-[1.6] max-w-md mx-auto"
+                  style={{ color: T.inkSoft, fontWeight: 450 }}
+                >
+                  Ingresa el código de invitación que te proporcionó MarketDesliz.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-5">
+                <div>
+                  <FieldLabel required>Código de invitación</FieldLabel>
                   <input
                     type="text"
                     value={codigo}
                     onChange={(e) => setCodigo(e.target.value.toUpperCase())}
-                    placeholder="Ej: MD-ABC123"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-center uppercase text-lg tracking-wider"
+                    placeholder="MD-ABC123"
                     autoFocus
+                    className="w-full text-center uppercase tracking-[0.15em]"
+                    style={{
+                      height: '52px',
+                      background: 'transparent',
+                      border: `1px solid ${T.line}`,
+                      borderRadius: '6px',
+                      color: T.ink,
+                      fontSize: '18px',
+                      fontWeight: 500,
+                      letterSpacing: '0.15em',
+                      outline: 'none',
+                      transition: `border-color 0.2s ${T.ease}`,
+                    }}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = T.accent)}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = T.line)}
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    El código fue enviado cuando aceptaste colocar la lona de MarketDesliz
+                  <p
+                    className="text-[11.5px] leading-[1.5] mt-2.5 text-center"
+                    style={{ color: T.inkFaint, fontWeight: 450 }}
+                  >
+                    El código fue enviado cuando aceptaste colocar la lona de MarketDesliz.
                   </p>
                 </div>
 
                 {error && (
-                  <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">
-                    {error}
+                  <div
+                    className="flex items-start gap-2.5 px-4 py-3"
+                    style={{
+                      background: 'rgba(197, 48, 48, 0.06)',
+                      borderLeft: `2px solid ${T.red}`,
+                      borderRadius: '6px',
+                    }}
+                  >
+                    <AlertCircle
+                      size={14}
+                      strokeWidth={1.75}
+                      style={{ color: T.red, flexShrink: 0, marginTop: 2 }}
+                    />
+                    <p
+                      className="text-[12.5px] leading-relaxed"
+                      style={{ color: T.red, fontWeight: 450 }}
+                    >
+                      {error}
+                    </p>
                   </div>
                 )}
 
-                <button
-                  onClick={verificarCodigo}
-                  disabled={loading}
-                  className="w-full bg-[#6C3BFF] text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition disabled:opacity-50"
-                >
-                  {loading ? 'Verificando...' : 'Validar código'}
-                </button>
+                <PrimaryButton onClick={verificarCodigo} loading={loading} disabled={loading}>
+                  {loading ? 'Verificando…' : 'Validar código'}
+                </PrimaryButton>
 
-                <div className="mt-6 text-center text-sm text-gray-500">
-                  <p>¿No tienes código? </p>
-                  <a href="https://wa.me/522821414939?text=Hola,%20quiero%20ser%20negocio%20aliado%20de%20MarketDesliz" target="_blank" rel="noopener noreferrer" className="text-[#6C3BFF] hover:underline">
+                <div
+                  className="text-center mt-4 pt-6"
+                  style={{ borderTop: `1px solid ${T.line}` }}
+                >
+                  <p
+                    className="text-[12.5px] mb-2"
+                    style={{ color: T.inkSoft, fontWeight: 450 }}
+                  >
+                    ¿No tienes código?
+                  </p>
+                  <a
+                    href="https://wa.me/522821414939?text=Hola,%20quiero%20ser%20negocio%20aliado%20de%20MarketDesliz"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-[12.5px]"
+                    style={{ color: T.accent, fontWeight: 500 }}
+                  >
                     Contáctanos para ser aliado →
                   </a>
                 </div>
-              </>
-            )}
+              </div>
+            </section>
+          )}
 
-            {step === 'datos' && (
-              <>
-                <div className="text-center mb-8">
-                  <div className="inline-block p-3 bg-green-100 rounded-full mb-4">
-                    <span className="text-4xl">✅</span>
+          {/* ─── PASO 2: Datos ────────────────────────────── */}
+          {step === 'datos' && (
+            <section className="max-w-[720px] mx-auto px-6 md:px-14 pt-16 md:pt-24 pb-24 w-full">
+              {/* Header */}
+              <div className="mb-12">
+                <p
+                  className="text-[10px] uppercase tracking-[0.28em] mb-6"
+                  style={{ color: T.inkFaint, fontWeight: 500, fontFeatureSettings: '"ss01"' }}
+                >
+                  Paso 02 · Perfil
+                </p>
+
+                <div className="flex items-start gap-4 flex-wrap">
+                  <div
+                    className="flex items-center justify-center shrink-0"
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      background: 'rgba(26, 127, 75, 0.08)',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <CheckCircle size={22} strokeWidth={1.75} style={{ color: T.green }} />
                   </div>
-                  <h1 className="text-2xl font-bold text-gray-900">Completa tu perfil</h1>
-                  <p className="text-gray-500 mt-2">
-                    Cuéntanos más sobre tu negocio
-                  </p>
-                  {user && (
-                    <div className="mt-2 text-xs text-green-600 bg-green-50 inline-block px-3 py-1 rounded-full">
-                      Registrando como: {user.nombre || user.email}
-                    </div>
-                  )}
+
+                  <div className="flex-1 min-w-[220px]">
+                    <h1
+                      className="text-[32px] md:text-[44px] leading-[1.02] tracking-[-0.03em]"
+                      style={{ color: T.ink, fontWeight: 400, fontFeatureSettings: '"ss01"' }}
+                    >
+                      Completa
+                      <span className="font-serif italic" style={{ color: T.inkMid }}>
+                        {' '}tu perfil.
+                      </span>
+                    </h1>
+                    {user && (
+                      <p
+                        className="text-[13px] mt-3"
+                        style={{ color: T.inkSoft, fontWeight: 450 }}
+                      >
+                        Registrando como <strong style={{ color: T.inkMid }}>{user.nombre || user.email}</strong>
+                      </p>
+                    )}
+                  </div>
                 </div>
+              </div>
 
-                <div className="space-y-8">
-                  {/* ── Información básica ─────────────────── */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Información básica</h3>
-                    
+              <div className="flex flex-col gap-10">
+                {/* Información básica */}
+                <FormSection title="Información básica">
+                  <div>
+                    <FieldLabel required>Nombre del negocio</FieldLabel>
+                    <TextField
+                      name="nombre"
+                      value={negocioData.nombre}
+                      onChange={handleInputChange}
+                      placeholder="Ej: Ferretería El Martillo"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel required>Categoría</FieldLabel>
+                    <SelectField
+                      name="categoria"
+                      value={negocioData.categoria}
+                      onChange={handleInputChange}
+                    >
+                      <option value="">Selecciona una categoría</option>
+                      {categorias.map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </SelectField>
+                  </div>
+
+                  <div>
+                    <FieldLabel required>Dirección</FieldLabel>
+                    <TextField
+                      name="direccion"
+                      value={negocioData.direccion}
+                      onChange={handleInputChange}
+                      placeholder="Calle, número, colonia, ciudad"
+                      required
+                      hint="Esta dirección aparecerá en Google Maps."
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del negocio *</label>
-                      <input type="text" name="nombre" value={negocioData.nombre} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500" placeholder="Ej: Ferretería El Martillo" required />
+                      <FieldLabel>Teléfono</FieldLabel>
+                      <TextField
+                        name="telefono"
+                        type="tel"
+                        value={negocioData.telefono}
+                        onChange={handleInputChange}
+                        placeholder="55 1234 5678"
+                      />
                     </div>
-
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Categoría *</label>
-                      <select name="categoria" value={negocioData.categoria} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500" required>
-                        <option value="">Selecciona una categoría</option>
-                        {categorias.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Dirección *</label>
-                      <input type="text" name="direccion" value={negocioData.direccion} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500" placeholder="Calle, número, colonia, ciudad" required />
-                      <p className="text-xs text-gray-500 mt-1">Esta dirección aparecerá en Google Maps</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-                        <input type="tel" name="telefono" value={negocioData.telefono} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="55 1234 5678" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label>
-                        <input type="tel" name="whatsapp" value={negocioData.whatsapp} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="521234567890" />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Horario de atención</label>
-                      <input type="text" name="horario" value={negocioData.horario} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="Lun-Vie 9am-6pm, Sáb 9am-2pm" />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                      <textarea name="descripcion" value={negocioData.descripcion} onChange={handleInputChange} rows="3" className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="Breve descripción de tu negocio..." />
+                      <FieldLabel>WhatsApp</FieldLabel>
+                      <TextField
+                        name="whatsapp"
+                        type="tel"
+                        value={negocioData.whatsapp}
+                        onChange={handleInputChange}
+                        placeholder="521234567890"
+                      />
                     </div>
                   </div>
 
-                  {/* ── Ubicación geográfica ─────────────────── */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Ubicación (opcional)</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-                        <select name="estadoId" value={negocioData.estadoId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
-                          <option value="">Seleccionar estado</option>
-                          {estadosList.map(est => <option key={est.id} value={est.id}>{est.nombre}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Municipio</label>
-                        <select name="municipioId" value={negocioData.municipioId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
-                          <option value="">Seleccionar municipio</option>
-                          {municipiosList.map(mun => <option key={mun.id} value={mun.id}>{mun.nombre}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Localidad</label>
-                        <select name="localidadId" value={negocioData.localidadId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
-                          <option value="">Seleccionar localidad</option>
-                          {localidadesList.map(loc => <option key={loc.id} value={loc.id}>{loc.nombre}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Sector/Colonia</label>
-                        <select name="sectorId" value={negocioData.sectorId} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2">
-                          <option value="">Seleccionar sector</option>
-                          {sectoresList.map(sec => <option key={sec.id} value={sec.id}>{sec.nombre}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Código Postal</label>
-                        <input type="text" name="codigoPostal" value={negocioData.codigoPostal} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="91000" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Latitud</label>
-                          <input type="number" step="any" name="latitud" value={negocioData.latitud} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="19.4326" />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Longitud</label>
-                          <input type="number" step="any" name="longitud" value={negocioData.longitud} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="-99.1332" />
-                        </div>
-                      </div>
+                  <div>
+                    <FieldLabel>Horario de atención</FieldLabel>
+                    <TextField
+                      name="horario"
+                      value={negocioData.horario}
+                      onChange={handleInputChange}
+                      placeholder="Lun-Vie 9am-6pm, Sáb 9am-2pm"
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel>Descripción</FieldLabel>
+                    <TextField
+                      name="descripcion"
+                      value={negocioData.descripcion}
+                      onChange={handleInputChange}
+                      placeholder="Breve descripción de tu negocio…"
+                      multiline
+                      rows={3}
+                    />
+                  </div>
+                </FormSection>
+
+                {/* Ubicación */}
+                <FormSection title="Ubicación geográfica (opcional)">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <FieldLabel>Estado</FieldLabel>
+                      <SelectField name="estadoId" value={negocioData.estadoId} onChange={handleInputChange}>
+                        <option value="">Seleccionar estado</option>
+                        {estadosList.map((est) => (
+                          <option key={est.id} value={est.id}>{est.nombre}</option>
+                        ))}
+                      </SelectField>
+                    </div>
+                    <div>
+                      <FieldLabel>Municipio</FieldLabel>
+                      <SelectField
+                        name="municipioId"
+                        value={negocioData.municipioId}
+                        onChange={handleInputChange}
+                        disabled={!negocioData.estadoId}
+                      >
+                        <option value="">Seleccionar municipio</option>
+                        {municipiosList.map((mun) => (
+                          <option key={mun.id} value={mun.id}>{mun.nombre}</option>
+                        ))}
+                      </SelectField>
+                    </div>
+                    <div>
+                      <FieldLabel>Localidad</FieldLabel>
+                      <SelectField
+                        name="localidadId"
+                        value={negocioData.localidadId}
+                        onChange={handleInputChange}
+                        disabled={!negocioData.municipioId}
+                      >
+                        <option value="">Seleccionar localidad</option>
+                        {localidadesList.map((loc) => (
+                          <option key={loc.id} value={loc.id}>{loc.nombre}</option>
+                        ))}
+                      </SelectField>
+                    </div>
+                    <div>
+                      <FieldLabel>Sector / Colonia</FieldLabel>
+                      <SelectField
+                        name="sectorId"
+                        value={negocioData.sectorId}
+                        onChange={handleInputChange}
+                        disabled={!negocioData.localidadId}
+                      >
+                        <option value="">Seleccionar sector</option>
+                        {sectoresList.map((sec) => (
+                          <option key={sec.id} value={sec.id}>{sec.nombre}</option>
+                        ))}
+                      </SelectField>
+                    </div>
+                    <div>
+                      <FieldLabel>Código Postal</FieldLabel>
+                      <TextField
+                        name="codigoPostal"
+                        value={negocioData.codigoPostal}
+                        onChange={handleInputChange}
+                        placeholder="91000"
+                      />
                     </div>
                   </div>
 
-                  {/* ── Presencia en línea ─────────────────── */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Presencia en línea</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
-                      <input type="email" name="email" value={negocioData.email} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="correo@negocio.com" />
+                      <FieldLabel>Latitud</FieldLabel>
+                      <TextField
+                        name="latitud"
+                        type="number"
+                        value={negocioData.latitud}
+                        onChange={handleInputChange}
+                        placeholder="19.4326"
+                      />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Sitio Web</label>
-                        <input type="url" name="sitioWeb" value={negocioData.sitioWeb} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="https://www.minegocio.com" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Facebook</label>
-                        <input type="text" name="facebook" value={negocioData.facebook} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="URL de Facebook" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Instagram</label>
-                        <input type="text" name="instagram" value={negocioData.instagram} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="URL de Instagram" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">TikTok</label>
-                        <input type="text" name="tiktok" value={negocioData.tiktok} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="URL de TikTok" />
-                      </div>
+                    <div>
+                      <FieldLabel>Longitud</FieldLabel>
+                      <TextField
+                        name="longitud"
+                        type="number"
+                        value={negocioData.longitud}
+                        onChange={handleInputChange}
+                        placeholder="-99.1332"
+                      />
                     </div>
                   </div>
+                </FormSection>
 
-                  {/* ── Servicios ────────────────────────────── */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Servicios</h3>
-                    <div className="flex flex-wrap gap-4">
-                      <label className="flex items-center gap-2">
-                        <input type="checkbox" name="atencionWhatsapp" checked={negocioData.atencionWhatsapp} onChange={handleInputChange} className="w-4 h-4" />
-                        <span className="text-sm">Atención por WhatsApp</span>
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input type="checkbox" name="citasPrevias" checked={negocioData.citasPrevias} onChange={handleInputChange} className="w-4 h-4" />
-                        <span className="text-sm">Requiere cita previa</span>
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input type="checkbox" name="domicilio" checked={negocioData.domicilio} onChange={handleInputChange} className="w-4 h-4" />
-                        <span className="text-sm">Servicio a domicilio</span>
-                      </label>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Otros servicios (separados por coma)</label>
-                      <input type="text" name="servicios" value={negocioData.servicios} onChange={handleInputChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" placeholder="Estacionamiento, Wi-Fi, Pagos con tarjeta" />
-                    </div>
+                {/* Presencia en línea */}
+                <FormSection title="Presencia en línea">
+                  <div>
+                    <FieldLabel>Correo electrónico</FieldLabel>
+                    <TextField
+                      name="email"
+                      type="email"
+                      value={negocioData.email}
+                      onChange={handleInputChange}
+                      placeholder="correo@negocio.com"
+                    />
                   </div>
 
-                  {/* ── Logo e imágenes ───────────────────────── */}
-                  <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Logo / Foto principal *</label>
-                      <input type="file" accept="image/*" onChange={handleLogoChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" required />
-                      {logoPreview && (
-                        <div className="mt-2">
-                          <p className="text-xs text-gray-500">Vista previa:</p>
-                          <img src={logoPreview} alt="Logo" className="w-24 h-24 object-cover rounded-lg mt-1" />
-                        </div>
-                      )}
-                      <p className="text-xs text-gray-500 mt-1">Recomendado: 500x500px, formato JPG o PNG</p>
+                      <FieldLabel>Sitio web</FieldLabel>
+                      <TextField
+                        name="sitioWeb"
+                        type="url"
+                        value={negocioData.sitioWeb}
+                        onChange={handleInputChange}
+                        placeholder="https://www.minegocio.com"
+                      />
                     </div>
-
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Fotos de tu local</label>
-                      <input type="file" accept="image/*" multiple onChange={handleImagenesChange} className="w-full border border-gray-300 rounded-lg px-4 py-2" />
-                      {imagenesPreviews.length > 0 && (
-                        <div className="mt-2 flex gap-2 flex-wrap">
-                          {imagenesPreviews.map((preview, idx) => (
-                            <img key={idx} src={preview} alt={`Foto ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg" />
-                          ))}
-                        </div>
-                      )}
-                      <p className="text-xs text-gray-500 mt-1">Puedes subir varias fotos de tu negocio</p>
+                      <FieldLabel>Facebook</FieldLabel>
+                      <TextField
+                        name="facebook"
+                        value={negocioData.facebook}
+                        onChange={handleInputChange}
+                        placeholder="URL de Facebook"
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel>Instagram</FieldLabel>
+                      <TextField
+                        name="instagram"
+                        value={negocioData.instagram}
+                        onChange={handleInputChange}
+                        placeholder="URL de Instagram"
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel>TikTok</FieldLabel>
+                      <TextField
+                        name="tiktok"
+                        value={negocioData.tiktok}
+                        onChange={handleInputChange}
+                        placeholder="URL de TikTok"
+                      />
                     </div>
                   </div>
+                </FormSection>
 
-                  {error && (
-                    <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm">
+                {/* Servicios */}
+                <FormSection title="Servicios">
+                  <div className="flex flex-wrap gap-5">
+                    <CheckboxField
+                      name="atencionWhatsapp"
+                      checked={negocioData.atencionWhatsapp}
+                      onChange={handleInputChange}
+                      label="Atención por WhatsApp"
+                    />
+                    <CheckboxField
+                      name="citasPrevias"
+                      checked={negocioData.citasPrevias}
+                      onChange={handleInputChange}
+                      label="Requiere cita previa"
+                    />
+                    <CheckboxField
+                      name="domicilio"
+                      checked={negocioData.domicilio}
+                      onChange={handleInputChange}
+                      label="Servicio a domicilio"
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel>Otros servicios</FieldLabel>
+                    <TextField
+                      name="servicios"
+                      value={negocioData.servicios}
+                      onChange={handleInputChange}
+                      placeholder="Estacionamiento, Wi-Fi, Pagos con tarjeta"
+                      hint="Separa múltiples servicios por coma."
+                    />
+                  </div>
+                </FormSection>
+
+                {/* Logo e imágenes */}
+                <FormSection title="Logo e imágenes">
+                  <div>
+                    <FieldLabel required>Logo / Foto principal</FieldLabel>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoChange}
+                      required
+                      className="w-full outline-none"
+                      style={{
+                        padding: '10px 14px',
+                        background: 'transparent',
+                        border: `1px solid ${T.line}`,
+                        borderRadius: '6px',
+                        color: T.inkMid,
+                        fontSize: '13px',
+                        fontWeight: 450,
+                        cursor: 'pointer',
+                      }}
+                    />
+                    {logoPreview && (
+                      <div className="mt-3">
+                        <img
+                          src={logoPreview}
+                          alt="Logo"
+                          style={{
+                            width: '88px',
+                            height: '88px',
+                            objectFit: 'cover',
+                            border: `1px solid ${T.line}`,
+                            borderRadius: '8px',
+                          }}
+                        />
+                      </div>
+                    )}
+                    <p
+                      className="text-[11.5px] mt-2"
+                      style={{ color: T.inkFaint, fontWeight: 450 }}
+                    >
+                      Recomendado: 500×500px, formato JPG o PNG.
+                    </p>
+                  </div>
+
+                  <div>
+                    <FieldLabel>Fotos de tu local</FieldLabel>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleImagenesChange}
+                      className="w-full outline-none"
+                      style={{
+                        padding: '10px 14px',
+                        background: 'transparent',
+                        border: `1px solid ${T.line}`,
+                        borderRadius: '6px',
+                        color: T.inkMid,
+                        fontSize: '13px',
+                        fontWeight: 450,
+                        cursor: 'pointer',
+                      }}
+                    />
+                    {imagenesPreviews.length > 0 && (
+                      <div className="mt-3 flex gap-2 flex-wrap">
+                        {imagenesPreviews.map((preview, idx) => (
+                          <img
+                            key={idx}
+                            src={preview}
+                            alt={`Foto ${idx + 1}`}
+                            style={{
+                              width: '64px',
+                              height: '64px',
+                              objectFit: 'cover',
+                              border: `1px solid ${T.line}`,
+                              borderRadius: '6px',
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <p
+                      className="text-[11.5px] mt-2"
+                      style={{ color: T.inkFaint, fontWeight: 450 }}
+                    >
+                      Puedes subir varias fotos de tu negocio.
+                    </p>
+                  </div>
+                </FormSection>
+
+                {/* Error */}
+                {error && (
+                  <div
+                    className="flex items-start gap-2.5 px-4 py-3"
+                    style={{
+                      background: 'rgba(197, 48, 48, 0.06)',
+                      borderLeft: `2px solid ${T.red}`,
+                      borderRadius: '6px',
+                    }}
+                  >
+                    <AlertCircle
+                      size={14}
+                      strokeWidth={1.75}
+                      style={{ color: T.red, flexShrink: 0, marginTop: 2 }}
+                    />
+                    <p
+                      className="text-[12.5px] leading-relaxed"
+                      style={{ color: T.red, fontWeight: 450 }}
+                    >
                       {error}
-                    </div>
-                  )}
+                    </p>
+                  </div>
+                )}
 
-                  <div className="flex gap-3">
-                    <button onClick={() => setStep('codigo')} className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-300 transition">
-                      Atrás
-                    </button>
-                    <button onClick={guardarNegocio} disabled={saving} className="flex-1 bg-[#6C3BFF] text-white py-2 rounded-lg font-bold hover:bg-purple-700 transition disabled:opacity-50">
-                      {saving ? 'Registrando...' : 'Registrar negocio'}
-                    </button>
+                {/* Acciones */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <SecondaryButton onClick={() => setStep('codigo')}>
+                    Atrás
+                  </SecondaryButton>
+                  <div className="md:col-span-2">
+                    <PrimaryButton onClick={guardarNegocio} loading={saving} disabled={saving}>
+                      {saving ? 'Registrando…' : 'Registrar negocio'}
+                    </PrimaryButton>
                   </div>
                 </div>
-              </>
-            )}
+              </div>
+            </section>
+          )}
 
-            {step === 'completado' && (
-              <>
-                <div className="text-center">
-                  <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <span className="text-4xl">🎉</span>
-                  </div>
-                  <h1 className="text-2xl font-bold text-gray-900 mb-2">¡Registro completado!</h1>
-                  <p className="text-gray-500 mb-6">
-                    Tu negocio ya está registrado en MarketDesliz. 
-                    Aparecerás en la lista de negocios aliados.
-                  </p>
-                  <div className="bg-purple-50 rounded-xl p-4 mb-6">
-                    <p className="text-sm text-purple-700">
-                      📍 Tu negocio aparecerá en la categoría: <strong>{negocioData.categoria}</strong>
+          {/* ─── PASO 3: Completado ───────────────────────── */}
+          {step === 'completado' && (
+            <section className="max-w-[640px] mx-auto px-6 md:px-14 pt-20 md:pt-28 pb-24 w-full">
+              <div className="text-center mb-12">
+                <div
+                  className="inline-flex items-center justify-center mb-8"
+                  style={{
+                    width: '72px',
+                    height: '72px',
+                    background: 'rgba(26, 127, 75, 0.08)',
+                    borderRadius: '14px',
+                  }}
+                >
+                  <PartyPopper size={32} strokeWidth={1.5} style={{ color: T.green }} />
+                </div>
+
+                <p
+                  className="text-[10px] uppercase tracking-[0.28em] mb-5"
+                  style={{ color: T.inkFaint, fontWeight: 500, fontFeatureSettings: '"ss01"' }}
+                >
+                  Paso 03 · Completado
+                </p>
+
+                <h1
+                  className="text-[36px] md:text-[52px] leading-[1.02] tracking-[-0.035em] mb-4"
+                  style={{ color: T.ink, fontWeight: 400, fontFeatureSettings: '"ss01"' }}
+                >
+                  Registro
+                  <br />
+                  <span className="font-serif italic" style={{ color: T.green }}>
+                    completado.
+                  </span>
+                </h1>
+
+                <p
+                  className="text-[15px] md:text-[16px] leading-[1.6] max-w-md mx-auto"
+                  style={{ color: T.inkSoft, fontWeight: 450 }}
+                >
+                  Tu negocio ya está registrado en MarketDesliz. Aparecerás en la lista de negocios aliados.
+                </p>
+              </div>
+
+              {/* Card informativa */}
+              <div
+                className="p-6 md:p-8 mb-8"
+                style={{
+                  background: 'rgba(79, 46, 232, 0.03)',
+                  border: '1px solid rgba(79, 46, 232, 0.12)',
+                  borderRadius: '8px',
+                }}
+              >
+                <div className="flex items-start gap-3 mb-5">
+                  <MapPin
+                    size={14}
+                    strokeWidth={1.75}
+                    style={{ color: T.accent, flexShrink: 0, marginTop: 3 }}
+                  />
+                  <div>
+                    <p
+                      className="text-[13px] leading-[1.6]"
+                      style={{ color: T.inkMid, fontWeight: 450 }}
+                    >
+                      Tu negocio aparecerá en la categoría
                     </p>
-                    <p className="text-xs text-purple-600 mt-2">
-                      Los clientes podrán encontrarte y contactarte directamente
+                    <p
+                      className="text-[15px] mt-1"
+                      style={{ color: T.accent, fontWeight: 500 }}
+                    >
+                      {negocioData.categoria}
                     </p>
-                    <div className="mt-3 pt-3 border-t border-purple-200">
-                      <p className="text-xs text-purple-600 flex items-center gap-1">
-                        <span>⚡</span> Tu negocio aparecerá en la lista <strong>después de tu primera compra</strong> en MarketDesliz
-                      </p>
-                    </div>
-                    <div className="mt-3 pt-3 border-t border-purple-200">
-                      <p className="text-xs text-purple-600">
-                        🔔 Recibirás notificaciones cuando los clientes interactúen con tu negocio
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    <Link href="/negocios" className="bg-[#6C3BFF] text-white px-6 py-3 rounded-lg font-bold hover:bg-purple-700 transition">
-                      Ver negocios aliados
-                    </Link>
-                    <Link href="/negocios/notificaciones" className="bg-gray-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-700 transition">
-                      🔔 Configurar notificaciones
-                    </Link>
-                    <a href={`https://wa.me/522821414939?text=Hola,%20ya%20registr%C3%A9%20mi%20negocio%20${encodeURIComponent(negocioData.nombre)}`} target="_blank" rel="noopener noreferrer" className="bg-green-500 text-white px-6 py-3 rounded-lg font-bold hover:bg-green-600 transition">
-                      📱 Contactar a MarketDesliz
-                    </a>
+                    <p
+                      className="text-[12px] mt-2"
+                      style={{ color: T.inkFaint, fontWeight: 450 }}
+                    >
+                      Los clientes podrán encontrarte y contactarte directamente.
+                    </p>
                   </div>
                 </div>
-              </>
-            )}
-          </div>
-        </div>
-      </StoreLayout>
 
-      <style jsx>{`
-        .loading-spinner {
-          width: 50px;
-          height: 50px;
-          border: 3px solid #f3f3f3;
-          border-top: 3px solid #6C3BFF;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
+                <div
+                  className="pt-5 mt-5 flex flex-col gap-4"
+                  style={{ borderTop: `1px solid rgba(79, 46, 232, 0.12)` }}
+                >
+                  <div className="flex items-start gap-3">
+                    <Zap
+                      size={13}
+                      strokeWidth={1.75}
+                      style={{ color: T.accent, flexShrink: 0, marginTop: 3 }}
+                    />
+                    <p
+                      className="text-[12.5px] leading-[1.6]"
+                      style={{ color: T.inkMid, fontWeight: 450 }}
+                    >
+                      Tu negocio aparecerá en la lista <strong>después de tu primera compra</strong> en MarketDesliz.
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <Bell
+                      size={13}
+                      strokeWidth={1.75}
+                      style={{ color: T.accent, flexShrink: 0, marginTop: 3 }}
+                    />
+                    <p
+                      className="text-[12.5px] leading-[1.6]"
+                      style={{ color: T.inkMid, fontWeight: 450 }}
+                    >
+                      Recibirás notificaciones cuando los clientes interactúen con tu negocio.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* CTAs */}
+              <div className="flex flex-col gap-3">
+                <Link
+                  href="/negocios"
+                  className="flex items-center justify-center gap-2.5 h-11 text-white text-[13.5px]"
+                  style={{
+                    background: T.accent,
+                    borderRadius: '6px',
+                    fontWeight: 500,
+                    letterSpacing: '0.01em',
+                    WebkitTapHighlightColor: 'transparent',
+                    transition: `background 0.2s ${T.ease}`,
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = T.accentDeep)}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = T.accent)}
+                >
+                  <Store size={15} strokeWidth={1.75} />
+                  Ver negocios aliados
+                </Link>
+
+                <Link
+                  href="/negocios/notificaciones"
+                  className="flex items-center justify-center gap-2.5 h-11 text-[13.5px]"
+                  style={{
+                    background: 'transparent',
+                    border: `1px solid ${T.line}`,
+                    borderRadius: '6px',
+                    color: T.inkMid,
+                    fontWeight: 500,
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  <Bell size={15} strokeWidth={1.75} />
+                  Configurar notificaciones
+                </Link>
+
+                <a
+                  href={`https://wa.me/522821414939?text=Hola,%20ya%20registr%C3%A9%20mi%20negocio%20${encodeURIComponent(negocioData.nombre)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2.5 h-11 text-white text-[13.5px]"
+                  style={{
+                    background: '#1A7F4B',
+                    borderRadius: '6px',
+                    fontWeight: 500,
+                    letterSpacing: '0.01em',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = '#15803D')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = '#1A7F4B')}
+                >
+                  <MessageCircle size={15} strokeWidth={1.75} />
+                  Contactar a MarketDesliz
+                </a>
+              </div>
+            </section>
+          )}
+        </main>
+
+        <Footer variant="minimal" />
+      </div>
+
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
         }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
+        .animate-blink { animation: blink 1s step-end infinite; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
         }
+        .font-serif {
+          font-family: ui-serif, 'Iowan Old Style', 'Apple Garamond', 'Palatino', Georgia, 'Times New Roman', serif;
+        }
+        ::selection { background: rgba(79, 46, 232, 0.12); color: #0F0F0F; }
+        * { -webkit-tap-highlight-color: transparent; font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1; }
       `}</style>
     </>
   );

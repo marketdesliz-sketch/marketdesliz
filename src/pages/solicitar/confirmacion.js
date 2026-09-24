@@ -3,10 +3,100 @@ import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import StoreLayout from '../../layouts/StoreLayout';
+import {
+  CheckCircle, FileText, DollarSign, CreditCard, Phone,
+  MessageCircle, AlertCircle, ChevronLeft, Package,
+  Wallet, Calendar, AlertTriangle, Home,
+} from 'lucide-react';
 import pb from '../../lib/pocketbase';
 import { notificarAdmin, formatMoney, generarFolio } from '../../lib/notificaciones';
+import { T } from '../../lib/tokens';
+import TerminalBar from '../../components/TerminalBar';
+import Header from '../../components/Header';
+import Footer from '../../components/Footer';
+import BackButton from '../../components/BackButton';
 
+// ─────────────────────────────────────────────────────────────────────────
+// Sub-componentes UI
+// ─────────────────────────────────────────────────────────────────────────
+function SectionLabel({ children, accent = false }) {
+  return (
+    <p
+      className="text-[10px] md:text-[11px] uppercase tracking-[0.22em] mb-4"
+      style={{
+        color: accent ? T.accent : T.inkFaint,
+        fontWeight: 500,
+        fontFeatureSettings: '"ss01"',
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function DetailRow({ label, value, accent = false, sub, border = true }) {
+  return (
+    <div
+      className="flex items-start justify-between gap-4 py-4"
+      style={{ borderTop: border ? `1px solid ${T.line}` : 'none' }}
+    >
+      <span
+        className="text-[10px] uppercase tracking-[0.18em] shrink-0 pt-1"
+        style={{ color: T.inkFaint, fontWeight: 500 }}
+      >
+        {label}
+      </span>
+      <span
+        className="text-[13.5px] text-right tabular-nums tracking-[-0.005em] flex-1 min-w-0"
+        style={{
+          color: accent ? T.accent : T.ink,
+          fontWeight: 500,
+          fontFeatureSettings: '"tnum"',
+        }}
+      >
+        {value}
+        {sub && (
+          <span
+            className="text-[11px] ml-1.5"
+            style={{ color: T.inkFaint, fontWeight: 450 }}
+          >
+            {sub}
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+function PaymentRow({ label, value, accent = false, big = false }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-3">
+      <span
+        className="text-[11px] uppercase tracking-[0.16em]"
+        style={{ color: T.inkFaint, fontWeight: 500 }}
+      >
+        {label}
+      </span>
+      <span
+        className={`tabular-nums tracking-[-0.01em] ${
+          big ? 'text-[22px] md:text-[26px]' : 'text-[14px]'
+        }`}
+        style={{
+          color: accent ? T.green : T.ink,
+          fontWeight: 500,
+          fontFeatureSettings: '"tnum"',
+          lineHeight: 1,
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Página
+// ─────────────────────────────────────────────────────────────────────────
 export default function ConfirmacionPage() {
   const router = useRouter();
   const [order, setOrder] = useState(null);
@@ -17,6 +107,10 @@ export default function ConfirmacionPage() {
   const [saved, setSaved] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  const notifications = [];
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // ─── Init: leer pendingOrder ────────────────────────────
   useEffect(() => {
     const pendingOrder = localStorage.getItem('pendingOrder');
     if (!pendingOrder) {
@@ -30,39 +124,39 @@ export default function ConfirmacionPage() {
     buscarOCrearCliente(orderData.clienteData);
   }, []);
 
+  // ─── Cargar producto · SIN CAMBIOS ──────────────────────
   const cargarProducto = async (productId) => {
     try {
       const record = await pb.collection('products').getOne(productId);
       setProducto({
         id: record.id,
         nombre: record.nombre,
-        precio: record.precio
+        precio: record.precio,
       });
     } catch (error) {
       console.error('Error cargando producto:', error);
     }
   };
 
+  // ─── Buscar o crear cliente · SIN CAMBIOS ───────────────
   const buscarOCrearCliente = async (clienteData) => {
     try {
-      const existing = await pb.collection('users').getFirstListItem(
-        `telefono = "${clienteData.telefono}"`
-      );
+      const existing = await pb
+        .collection('users')
+        .getFirstListItem(`telefono = "${clienteData.telefono}"`);
       setClienteExistente(existing);
       setLoading(false);
       return existing;
     } catch (error) {
       try {
-        // ✅ Crear usuario
         const newClient = await pb.collection('users').create({
           nombre: clienteData.nombre,
           telefono: clienteData.telefono,
           email: clienteData.email || '',
           role: 'cliente',
-          activo: true
+          activo: true,
         });
 
-        // ✅ Crear registro en clients
         await pb.collection('clients').create({
           userId: newClient.id,
           direccionCalle: clienteData.direccion || '',
@@ -83,7 +177,7 @@ export default function ConfirmacionPage() {
           deudaActual: 0,
           limiteDeuda: 5000,
           trustScore: 0,
-          datosCompletos: false
+          datosCompletos: false,
         });
 
         setClienteExistente(newClient);
@@ -98,12 +192,12 @@ export default function ConfirmacionPage() {
     }
   };
 
+  // ─── Guardar orden · SIN CAMBIOS ────────────────────────
   const guardarOrdenEnPocketBase = async (orderData, clienteId) => {
     try {
       setSaving(true);
       setErrorMsg('');
 
-      // ✅ CORREGIDO: Campos correctos según tu colección orders
       const orderToSave = {
         userId: clienteId,
         productId: orderData.product,
@@ -111,21 +205,14 @@ export default function ConfirmacionPage() {
         tipo: orderData.tipo || orderData.tipoSolicitud,
         estadoPago: 'pendiente',
 
-        // Campos por defecto
         enganche: 0,
         pagoSemanal: 0,
         semanasTotales: 0,
-        saldoRestante: 0
+        saldoRestante: 0,
       };
-
-      // ✅ ELIMINADO: clienteData no existe en orders
-      // if (orderData.clienteData) {
-      //   orderToSave.clienteData = JSON.stringify(orderData.clienteData);
-      // }
 
       if ((orderData.tipo || orderData.tipoSolicitud) === 'contado') {
         orderToSave.metodoPago = orderData.paymentMethod || 'qr_vendedor';
-        // ✅ ELIMINADO: amountToPay no existe
       }
 
       if ((orderData.tipo || orderData.tipoSolicitud) === 'credito') {
@@ -149,15 +236,14 @@ export default function ConfirmacionPage() {
         const folio = generarFolio(createdOrder.id);
         await notificarAdmin(
           `<b>🆕 NUEVA ORDEN - TRANSFERENCIA PENDIENTE</b>\n\n` +
-          `👤 Cliente: ${orderData.clienteData?.nombre}\n` +
-          `📞 Teléfono: ${orderData.clienteData?.telefono}\n` +
-          `💰 Total: ${formatMoney(orderData.totalPrice)}\n` +
-          `🆔 Folio: ${folio}\n\n` +
-          `💳 Método: Transferencia pendiente de validación`,
+            `👤 Cliente: ${orderData.clienteData?.nombre}\n` +
+            `📞 Teléfono: ${orderData.clienteData?.telefono}\n` +
+            `💰 Total: ${formatMoney(orderData.totalPrice)}\n` +
+            `🆔 Folio: ${folio}\n\n` +
+            `💳 Método: Transferencia pendiente de validación`,
           'pago'
         );
       }
-
     } catch (error) {
       console.error('❌ Error guardando orden:', error);
 
@@ -174,181 +260,464 @@ export default function ConfirmacionPage() {
     }
   };
 
+  // ─── Auto-save cuando order + cliente listos ────────────
   useEffect(() => {
     if (order && clienteExistente && !saved && !errorMsg && !saving) {
       guardarOrdenEnPocketBase(order, clienteExistente.id);
     }
   }, [order, clienteExistente]);
 
+  // ─── Helpers ────────────────────────────────────────────
   const getTipoTexto = () => {
     const tipos = {
       contado: 'Compra de Contado',
       credito: 'Compra a Crédito',
       visita: 'Solicitud de Visita',
-      entrega: 'Solicitud de Entrega'
+      entrega: 'Solicitud de Entrega',
     };
     return tipos[order?.tipo || order?.tipoSolicitud] || 'Solicitud';
   };
 
+  // ─── Loading ────────────────────────────────────────────
   if (loading || !order || !producto) {
     return (
-      <StoreLayout>
-        <div className="flex justify-center items-center min-h-[60vh]">
-          <div className="loading-spinner"></div>
+      <>
+        <Head><title>Cargando | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <TerminalBar mode="rotating" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <span
+                className="font-serif text-[32px] block mb-5 select-none"
+                style={{ color: T.inkGhost }}
+              >
+                ʃƪʃƪ
+              </span>
+              <p
+                className="text-[11px] uppercase tracking-[0.28em]"
+                style={{ color: T.inkFaint, fontWeight: 500 }}
+              >
+                Procesando solicitud
+              </p>
+            </div>
+          </div>
         </div>
-      </StoreLayout>
+      </>
     );
   }
 
-  // ✅ CORREGIDO: Usar campos correctos
-  const montoPagar = (order.tipo || order.tipoSolicitud) === 'contado'
-    ? order.totalPrice  // ✅ Solo totalPrice, no amountToPay
-    : order.downPayment;
+  // ─── Cálculos ───────────────────────────────────────────
+  const tipo = order.tipo || order.tipoSolicitud;
+  const esPago = tipo === 'contado' || tipo === 'credito';
+  const esContacto = tipo === 'visita' || tipo === 'entrega';
 
+  const montoPagar =
+    tipo === 'contado' ? order.totalPrice : order.downPayment;
+
+  // ─── Render principal ───────────────────────────────────
   return (
     <>
       <Head>
         <title>Confirmación | MarketDesliz</title>
+        <meta name="theme-color" content="#0F0F0F" />
       </Head>
 
-      <StoreLayout>
-        <div className="max-w-3xl mx-auto px-4 py-12 pt-24">
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-4xl">✅</span>
+      <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+        <BackButton fallback="/productos" />
+        <TerminalBar mode="rotating" />
+        <Header notifications={notifications} unreadCount={unreadCount} />
+
+        <main className="flex-1 max-w-[840px] mx-auto px-6 md:px-14 py-12 md:py-16 w-full">
+
+          {/* ─── Hero editorial ─────────────────────────── */}
+          <section className="mb-10 text-center">
+            <div
+              className="inline-flex items-center justify-center mb-6"
+              style={{
+                width: '72px',
+                height: '72px',
+                background: 'rgba(26, 127, 75, 0.08)',
+                borderRadius: '14px',
+              }}
+            >
+              <CheckCircle
+                size={32}
+                strokeWidth={1.5}
+                style={{ color: T.green }}
+              />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">¡Solicitud Registrada!</h1>
-            <p className="text-gray-600 mt-2">Tu solicitud ha sido recibida correctamente</p>
+
+            <p
+              className="text-[10px] uppercase tracking-[0.28em] mb-4"
+              style={{
+                color: T.green,
+                fontWeight: 500,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              Solicitud recibida
+            </p>
+
+            <h1
+              className="text-[32px] md:text-[48px] leading-[1.05] tracking-[-0.035em] mb-4 max-w-2xl mx-auto"
+              style={{
+                color: T.ink,
+                fontWeight: 400,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              ¡Solicitud
+              <span className="font-serif italic" style={{ color: T.inkMid }}>
+                {' '}registrada!
+              </span>
+            </h1>
+
+            <p
+              className="text-[15px] leading-[1.55] max-w-md mx-auto"
+              style={{ color: T.inkSoft, fontWeight: 450 }}
+            >
+              Tu solicitud ha sido recibida correctamente.
+            </p>
+
             {saved && (
-              <p className="text-green-600 text-sm mt-2">✓ Guardada en nuestro sistema</p>
-            )}
-            {errorMsg && (
-              <p className="text-red-600 text-sm mt-2">❌ {errorMsg}</p>
-            )}
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">📋 Detalles de tu solicitud</h2>
-
-            <div className="space-y-3">
-              <div className="flex justify-between py-2 border-b border-gray-100">
-                <span className="text-gray-500">Tipo de solicitud:</span>
-                <span className="font-medium text-[#6C3BFF]">{getTipoTexto()}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-gray-100">
-                <span className="text-gray-500">Producto:</span>
-                <span className="font-medium">{producto.nombre}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-gray-100">
-                <span className="text-gray-500">Cliente:</span>
-                <span className="font-medium">{order.clienteData?.nombre}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-gray-100">
-                <span className="text-gray-500">Teléfono:</span>
-                <span className="font-medium">{order.clienteData?.telefono}</span>
-              </div>
-              <div className="flex justify-between py-2">
-                <span className="text-gray-500">Dirección:</span>
-                <span className="font-medium text-right">{order.clienteData?.direccion}</span>
-              </div>
-            </div>
-          </div>
-
-          {((order.tipo || order.tipoSolicitud) === 'contado' || (order.tipo || order.tipoSolicitud) === 'credito') && (
-            <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6 mb-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">💰 Información de pago</h2>
-
-              {(order.tipo || order.tipoSolicitud) === 'contado' && (
-                <div className="space-y-3">
-                  <div className="flex justify-between py-2">
-                    <span className="text-gray-600">Total a pagar:</span>
-                    <span className="text-2xl font-bold text-green-600">{formatMoney(montoPagar)}</span>
-                  </div>
-                  <div className="flex justify-between py-2">
-                    <span className="text-gray-600">Método de pago:</span>
-                    <span className="font-medium">{order.paymentMethod === 'qr' ? '📱 QR con vendedor' : '🏦 Transferencia BBVA'}</span>
-                  </div>
-                </div>
-              )}
-
-              {(order.tipo || order.tipoSolicitud) === 'credito' && (
-                <div className="space-y-3">
-                  <div className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="text-gray-600">Enganche inicial:</span>
-                    <span className="font-bold text-[#6C3BFF]">{formatMoney(order.downPayment)}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="text-gray-600">Pagos semanales:</span>
-                    <span className="font-bold">{formatMoney(order.weeklyAmount)} x {order.totalWeeks} semanas</span>
-                  </div>
-                  <div className="flex justify-between py-2">
-                    <span className="text-gray-600">Total a pagar:</span>
-                    <span className="text-xl font-bold text-green-600">{formatMoney(order.downPayment + (order.weeklyAmount * order.totalWeeks))}</span>
-                  </div>
-                </div>
-              )}
-
-              {order.paymentMethod === 'transferencia' && saved && (
-                <Link
-                  href={`/solicitar/subir-comprobante?orderId=${localStorage.getItem('lastOrderId')}`}
-                  className="block text-center mt-4 py-3 bg-[#6C3BFF] text-white rounded-lg font-medium hover:bg-purple-700 transition"
-                >
-                  Subir comprobante de pago →
-                </Link>
-              )}
-            </div>
-          )}
-
-          {((order.tipo || order.tipoSolicitud) === 'visita' || (order.tipo || order.tipoSolicitud) === 'entrega') && (
-            <div className="bg-yellow-50 rounded-xl p-6 mb-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">📞 Próximos pasos</h2>
-              <p className="text-gray-700 mb-3">
-                Un asesor se pondrá en contacto contigo en las próximas 24 horas para coordinar
-                {(order.tipo || order.tipoSolicitud) === 'visita' ? ' la visita a domicilio.' : ' la entrega del producto.'}
+              <p
+                className="text-[11.5px] uppercase tracking-[0.18em] mt-4"
+                style={{ color: T.green, fontWeight: 500 }}
+              >
+                ✓ Guardada en nuestro sistema
               </p>
-              <div className="bg-white rounded-lg p-4 mt-4">
-                <p className="text-sm text-gray-500">¿Necesitas ayuda? Contáctanos:</p>
-                <p className="text-[#6C3BFF] font-medium mt-1">📞 (123) 456-7890</p>
-                <p className="text-[#6C3BFF] font-medium">💬 WhatsApp: 55 1234 5678</p>
+            )}
+
+            {errorMsg && (
+              <div
+                className="mt-6 max-w-md mx-auto flex items-start gap-2.5 px-4 py-3 text-left"
+                style={{
+                  background: 'rgba(197, 48, 48, 0.06)',
+                  border: `1px solid rgba(197, 48, 48, 0.15)`,
+                  borderLeft: `2px solid ${T.red}`,
+                  borderRadius: '6px',
+                }}
+              >
+                <AlertCircle
+                  size={14}
+                  strokeWidth={1.75}
+                  style={{ color: T.red, flexShrink: 0, marginTop: 2 }}
+                />
+                <p
+                  className="text-[12.5px] leading-[1.55]"
+                  style={{ color: T.red, fontWeight: 450 }}
+                >
+                  {errorMsg}
+                </p>
               </div>
+            )}
+          </section>
+
+          {/* ─── Detalles de la solicitud ────────────────── */}
+          <section className="mb-8">
+            <SectionLabel>Detalles de tu solicitud</SectionLabel>
+            <div
+              className="px-5 md:px-6"
+              style={{
+                background: T.bg,
+                border: `1px solid ${T.line}`,
+                borderRadius: '8px',
+              }}
+            >
+              <DetailRow
+                label="Tipo de solicitud"
+                value={getTipoTexto()}
+                accent
+                border={false}
+              />
+              <DetailRow label="Producto" value={producto.nombre} />
+              <DetailRow
+                label="Cliente"
+                value={order.clienteData?.nombre || '—'}
+              />
+              <DetailRow
+                label="Teléfono"
+                value={order.clienteData?.telefono || '—'}
+              />
+              <DetailRow
+                label="Dirección"
+                value={order.clienteData?.direccion || '—'}
+              />
             </div>
+          </section>
+
+          {/* ─── Pago (contado / crédito) ────────────────── */}
+          {esPago && (
+            <section className="mb-8">
+              <SectionLabel>Información de pago</SectionLabel>
+              <div
+                className="px-5 md:px-6 py-4"
+                style={{
+                  background: 'rgba(79, 46, 232, 0.03)',
+                  border: `1px solid rgba(79, 46, 232, 0.12)`,
+                  borderRadius: '8px',
+                }}
+              >
+                {tipo === 'contado' && (
+                  <div>
+                    <PaymentRow
+                      label="Total a pagar"
+                      value={formatMoney(montoPagar)}
+                      accent
+                      big
+                    />
+                    <div
+                      className="pt-4 mt-2"
+                      style={{ borderTop: `1px solid ${T.line}` }}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {order.paymentMethod === 'qr' ? (
+                          <CreditCard
+                            size={13}
+                            strokeWidth={1.75}
+                            style={{ color: T.inkFaint }}
+                          />
+                        ) : (
+                          <Wallet
+                            size={13}
+                            strokeWidth={1.75}
+                            style={{ color: T.inkFaint }}
+                          />
+                        )}
+                        <span
+                          className="text-[12.5px]"
+                          style={{ color: T.inkMid, fontWeight: 450 }}
+                        >
+                          {order.paymentMethod === 'qr'
+                            ? 'QR con vendedor'
+                            : 'Transferencia BBVA'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {tipo === 'credito' && (
+                  <div>
+                    <PaymentRow
+                      label="Enganche inicial"
+                      value={formatMoney(order.downPayment)}
+                      accent
+                    />
+                    <PaymentRow
+                      label="Pagos semanales"
+                      value={formatMoney(order.weeklyAmount)}
+                      sub={`× ${order.totalWeeks} semanas`}
+                    />
+                    <div
+                      className="pt-4 mt-2"
+                      style={{ borderTop: `1px solid ${T.line}` }}
+                    >
+                      <PaymentRow
+                        label="Total a pagar"
+                        value={formatMoney(
+                          order.downPayment +
+                            order.weeklyAmount * order.totalWeeks
+                        )}
+                        accent
+                        big
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {order.paymentMethod === 'transferencia' && saved && (
+                  <Link
+                    href={`/solicitar/subir-comprobante?orderId=${localStorage.getItem('lastOrderId')}`}
+                    className="flex items-center justify-center gap-2 h-11 mt-5 text-white text-[13px]"
+                    style={{
+                      background: T.accent,
+                      borderRadius: '6px',
+                      fontWeight: 500,
+                      textDecoration: 'none',
+                      WebkitTapHighlightColor: 'transparent',
+                      transitionTimingFunction: T.ease,
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background = T.accentDeep)
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = T.accent)
+                    }
+                  >
+                    Subir comprobante de pago →
+                  </Link>
+                )}
+              </div>
+            </section>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-4">
+          {/* ─── Próximos pasos (visita / entrega) ───────── */}
+          {esContacto && (
+            <section className="mb-8">
+              <SectionLabel>Próximos pasos</SectionLabel>
+              <div
+                className="p-5 md:p-6"
+                style={{
+                  background: 'rgba(184, 130, 14, 0.05)',
+                  border: `1px solid rgba(184, 130, 14, 0.18)`,
+                  borderLeft: '2px solid #B8820E',
+                  borderRadius: '8px',
+                }}
+              >
+                <p
+                  className="text-[13.5px] leading-[1.6] mb-5"
+                  style={{ color: '#8A6109', fontWeight: 450 }}
+                >
+                  Un asesor se pondrá en contacto contigo en las próximas 24
+                  horas para coordinar{' '}
+                  {tipo === 'visita'
+                    ? 'la visita a domicilio.'
+                    : 'la entrega del producto.'}
+                </p>
+
+                <div
+                  className="p-4"
+                  style={{
+                    background: T.bg,
+                    border: `1px solid rgba(184, 130, 14, 0.15)`,
+                    borderRadius: '6px',
+                  }}
+                >
+                  <p
+                    className="text-[10px] uppercase tracking-[0.18em] mb-3"
+                    style={{ color: T.inkFaint, fontWeight: 500 }}
+                  >
+                    ¿Necesitas ayuda?
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <Phone
+                        size={13}
+                        strokeWidth={1.75}
+                        style={{ color: T.accent, flexShrink: 0 }}
+                      />
+                      <span
+                        className="text-[13px] tabular-nums"
+                        style={{
+                          color: T.ink,
+                          fontWeight: 500,
+                          fontFeatureSettings: '"tnum"',
+                        }}
+                      >
+                        (123) 456-7890
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <MessageCircle
+                        size={13}
+                        strokeWidth={1.75}
+                        style={{ color: T.green, flexShrink: 0 }}
+                      />
+                      <span
+                        className="text-[13px] tabular-nums"
+                        style={{
+                          color: T.ink,
+                          fontWeight: 500,
+                          fontFeatureSettings: '"tnum"',
+                        }}
+                      >
+                        55 1234 5678
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* ─── Acciones finales ────────────────────────── */}
+          <section className="flex flex-col sm:flex-row gap-2.5">
             <Link
               href="/"
-              className="flex-1 bg-gray-200 text-gray-700 text-center py-3 rounded-lg font-medium hover:bg-gray-300 transition"
+              className="flex-1 inline-flex items-center justify-center gap-2 h-11 text-[13px] transition-colors"
+              style={{
+                background: 'transparent',
+                border: `1px solid ${T.line}`,
+                borderRadius: '6px',
+                color: T.inkMid,
+                fontWeight: 500,
+                textDecoration: 'none',
+                WebkitTapHighlightColor: 'transparent',
+                transitionTimingFunction: T.ease,
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = 'rgba(15,15,15,0.03)')
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = 'transparent')
+              }
             >
-              Volver al inicio
+              <Home size={14} strokeWidth={1.75} /> Volver al inicio
             </Link>
+
             <Link
               href={`/productos/${producto.id}`}
-              className="flex-1 bg-[#6C3BFF] text-white text-center py-3 rounded-lg font-bold hover:bg-purple-700 transition"
+              className="flex-1 inline-flex items-center justify-center gap-2 h-11 text-white text-[13px]"
+              style={{
+                background: T.accent,
+                borderRadius: '6px',
+                fontWeight: 500,
+                textDecoration: 'none',
+                WebkitTapHighlightColor: 'transparent',
+                transitionTimingFunction: T.ease,
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = T.accentDeep)
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = T.accent)
+              }
             >
-              Ver más productos
+              <Package size={14} strokeWidth={1.75} /> Ver más productos
             </Link>
-          </div>
+          </section>
 
+          {/* ─── Guardando ───────────────────────────────── */}
           {saving && (
-            <div className="text-center mt-6">
-              <p className="text-gray-500 text-sm">Guardando tu solicitud...</p>
-            </div>
+            <p
+              className="text-center text-[11px] uppercase tracking-[0.24em] mt-8"
+              style={{ color: T.inkFaint, fontWeight: 500 }}
+            >
+              Guardando tu solicitud…
+            </p>
           )}
-        </div>
-      </StoreLayout>
+        </main>
 
-      <style jsx>{`
-        .loading-spinner {
-          width: 50px;
-          height: 50px;
-          border: 3px solid #f3f3f3;
-          border-top: 3px solid #6C3BFF;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
+        <Footer variant="minimal" />
+      </div>
+
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
         }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
+        .animate-blink { animation: blink 1s step-end infinite; }
+        body {
+          font-family:
+            -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display',
+            'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
+        }
+        .font-serif {
+          font-family:
+            ui-serif, 'Iowan Old Style', 'Apple Garamond', 'Palatino',
+            Georgia, 'Times New Roman', serif;
+        }
+        ::selection {
+          background: rgba(79, 46, 232, 0.12);
+          color: #0F0F0F;
+        }
+        * {
+          -webkit-tap-highlight-color: transparent;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
         }
       `}</style>
     </>

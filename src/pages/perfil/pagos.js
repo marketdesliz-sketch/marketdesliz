@@ -3,10 +3,151 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { DollarSign, CreditCard, Calendar, CheckCircle, Clock, AlertCircle, ChevronRight, ArrowLeft, TrendingUp, Package } from 'lucide-react';
-import StoreLayout from '../../layouts/StoreLayout';
+import {
+  DollarSign, CreditCard, Calendar, CheckCircle, Clock,
+  AlertCircle, ChevronRight, TrendingUp, Package,
+} from 'lucide-react';
 import pb from '../../lib/pocketbase';
+import { T } from '../../lib/tokens';
+import TerminalBar from '../../components/TerminalBar';
+import Header from '../../components/Header';
+import Footer from '../../components/Footer';
+import BackButton from '../../components/BackButton';
 
+// ─────────────────────────────────────────────────────────────────────────
+// Helpers · SIN CAMBIOS
+// ─────────────────────────────────────────────────────────────────────────
+const formatMoney = (amount) => {
+  if (!amount && amount !== 0) return '$0';
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
+const formatDate = (date) => {
+  if (!date) return 'No definida';
+  return new Date(date).toLocaleDateString('es-MX', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sub-componentes UI
+// ─────────────────────────────────────────────────────────────────────────
+function SectionLabel({ children, accent = false }) {
+  return (
+    <p
+      className="text-[10px] md:text-[11px] uppercase tracking-[0.22em] mb-4"
+      style={{
+        color: accent ? T.accent : T.inkFaint,
+        fontWeight: 500,
+        fontFeatureSettings: '"ss01"',
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function StatusBadge({ icon: Icon, label, fg, bg }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 px-2.5 py-1"
+      style={{
+        background: bg,
+        color: fg,
+        borderRadius: '4px',
+        fontSize: '10px',
+        textTransform: 'uppercase',
+        letterSpacing: '0.12em',
+        fontWeight: 600,
+      }}
+    >
+      <Icon size={10} strokeWidth={2.25} />
+      {label}
+    </span>
+  );
+}
+
+function InfoCell({ label, value, accent = false, sub, border = true }) {
+  return (
+    <div
+      className="p-3.5"
+      style={{ borderLeft: border ? `1px solid ${T.line}` : 'none' }}
+    >
+      <p
+        className="text-[9.5px] uppercase tracking-[0.16em] mb-1.5"
+        style={{ color: T.inkFaint, fontWeight: 500 }}
+      >
+        {label}
+      </p>
+      <p
+        className="text-[13px] tabular-nums tracking-[-0.005em]"
+        style={{
+          color: accent ? T.accent : T.ink,
+          fontWeight: 500,
+          fontFeatureSettings: '"tnum"',
+        }}
+      >
+        {value}
+        {sub && (
+          <span
+            className="text-[10.5px] ml-1.5"
+            style={{ color: T.inkFaint, fontWeight: 450 }}
+          >
+            {sub}
+          </span>
+        )}
+      </p>
+    </div>
+  );
+}
+
+function SummaryCell({ label, value, color, border = true }) {
+  return (
+    <div
+      className="p-4"
+      style={{ borderLeft: border ? `1px solid ${T.line}` : 'none' }}
+    >
+      <p
+        className="text-[9.5px] uppercase tracking-[0.16em] mb-2"
+        style={{ color: T.inkFaint, fontWeight: 500 }}
+      >
+        {label}
+      </p>
+      <p
+        className="text-[20px] md:text-[22px] tabular-nums tracking-[-0.02em] leading-none"
+        style={{
+          color,
+          fontWeight: 500,
+          fontFeatureSettings: '"tnum"',
+        }}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function Th({ children }) {
+  return (
+    <th
+      className="text-left py-3.5 pr-3 text-[9.5px] uppercase tracking-[0.18em]"
+      style={{ color: T.inkFaint, fontWeight: 500 }}
+    >
+      {children}
+    </th>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Página
+// ─────────────────────────────────────────────────────────────────────────
 export default function MisPagosPage() {
   const router = useRouter();
   const { orden: ordenId } = router.query;
@@ -14,6 +155,9 @@ export default function MisPagosPage() {
   const [ordenes, setOrdenes] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const notifications = [];
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   useEffect(() => {
     if (!pb.authStore.isValid) {
@@ -25,7 +169,7 @@ export default function MisPagosPage() {
 
   useEffect(() => {
     if (ordenId && ordenes.length > 0) {
-      const order = ordenes.find(o => o.id === ordenId);
+      const order = ordenes.find((o) => o.id === ordenId);
       setSelectedOrder(order);
       cargarPagosPorOrden(ordenId);
     }
@@ -39,14 +183,13 @@ export default function MisPagosPage() {
       const ordenesData = await pb.collection('orders').getFullList({
         filter: `userId = "${user.id}"`,
         sort: '-created',
-        expand: 'productId'
+        expand: 'productId',
       });
       setOrdenes(ordenesData);
 
       if (!ordenId) {
         await cargarTodosLosPagos(user.id);
       }
-
     } catch (error) {
       console.error('Error cargando datos:', error);
     } finally {
@@ -59,7 +202,7 @@ export default function MisPagosPage() {
       const pagosData = await pb.collection('payments').getFullList({
         filter: `userId = "${userId}"`,
         sort: '-fechaVencimiento',
-        expand: 'orderId'
+        expand: 'orderId',
       });
       setPagos(pagosData);
     } catch (error) {
@@ -71,7 +214,7 @@ export default function MisPagosPage() {
     try {
       const pagosData = await pb.collection('payments').getFullList({
         filter: `orderId = "${orderId}"`,
-        sort: 'numeroSemana'
+        sort: 'numeroSemana',
       });
       setPagos(pagosData);
     } catch (error) {
@@ -79,246 +222,536 @@ export default function MisPagosPage() {
     }
   };
 
-  const formatMoney = (amount) => {
-    if (!amount && amount !== 0) return '$0';
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const formatDate = (date) => {
-    if (!date) return 'No definida';
-    return new Date(date).toLocaleDateString('es-MX', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
-  };
-
   const getPaymentStatus = (payment) => {
     if (payment.estado === 'pagado') {
-      return { label: 'Pagado', color: 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/20', icon: CheckCircle };
+      return {
+        label: 'Pagado',
+        fg: T.green,
+        bg: 'rgba(26, 127, 75, 0.08)',
+        icon: CheckCircle,
+      };
     }
     if (payment.estado === 'atrasado') {
-      return { label: 'Atrasado', color: 'bg-red-50 text-red-700 border-red-100', icon: AlertCircle };
+      return {
+        label: 'Atrasado',
+        fg: T.red,
+        bg: 'rgba(197, 48, 48, 0.08)',
+        icon: AlertCircle,
+      };
     }
     if (payment.estado === 'parcial') {
-      return { label: 'Parcial', color: 'bg-blue-50 text-blue-700 border-blue-100', icon: Clock };
+      return {
+        label: 'Parcial',
+        fg: T.accent,
+        bg: 'rgba(79, 46, 232, 0.08)',
+        icon: Clock,
+      };
     }
     const dueDate = new Date(payment.fechaVencimiento);
     const today = new Date();
     if (dueDate < today) {
-      return { label: 'Atrasado', color: 'bg-red-50 text-red-700 border-red-100', icon: AlertCircle };
+      return {
+        label: 'Atrasado',
+        fg: T.red,
+        bg: 'rgba(197, 48, 48, 0.08)',
+        icon: AlertCircle,
+      };
     }
-    return { label: 'Pendiente', color: 'bg-amber-50 text-amber-700 border-amber-100', icon: Clock };
+    return {
+      label: 'Pendiente',
+      fg: '#B8820E',
+      bg: 'rgba(184, 130, 14, 0.08)',
+      icon: Clock,
+    };
   };
 
   const calcularTotalOrden = (orden) => {
     if (orden.tipo === 'contado') {
       return orden.totalPagar || 0;
     } else if (orden.tipo === 'credito') {
-      return (orden.enganche || 0) + ((orden.pagoSemanal || 0) * (orden.semanasTotales || 0));
+      return (
+        (orden.enganche || 0) +
+        (orden.pagoSemanal || 0) * (orden.semanasTotales || 0)
+      );
     }
     return orden.totalPagar || 0;
   };
 
+  // ─── Loading ────────────────────────────────────────────
   if (loading) {
     return (
-      <StoreLayout>
-        <div className="flex justify-center items-center min-h-[60vh]">
-          <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
+      <>
+        <Head><title>Cargando | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <TerminalBar mode="rotating" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <span
+                className="font-serif text-[32px] block mb-5 select-none"
+                style={{ color: T.inkGhost }}
+              >
+                ʃƪʃƪ
+              </span>
+              <p
+                className="text-[11px] uppercase tracking-[0.28em]"
+                style={{ color: T.inkFaint, fontWeight: 500 }}
+              >
+                Cargando pagos
+              </p>
+            </div>
+          </div>
         </div>
-      </StoreLayout>
+      </>
     );
   }
 
+  // ─── Render principal ───────────────────────────────────
   return (
     <>
       <Head>
         <title>Mis Pagos | MarketDesliz</title>
+        <meta name="theme-color" content="#0F0F0F" />
       </Head>
 
-      <StoreLayout>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-40 pb-8">
-          {/* Header */}
-          <div className="mb-6">
-            <Link href="/perfil" className="inline-flex items-center gap-1 text-sm text-[#6C3BFF] hover:gap-2 transition-all mb-4 group">
-              <ChevronRight size={14} className="rotate-180 group-hover:-translate-x-0.5 transition-transform" /> Volver a mi perfil
-            </Link>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#6C3BFF]/10 rounded-xl flex items-center justify-center">
-                <DollarSign size={20} className="text-[#6C3BFF]" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Mis pagos</h1>
-                <p className="text-sm text-gray-400">Historial de todos tus pagos realizados</p>
-              </div>
-            </div>
-          </div>
+      <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+        <BackButton fallback="/perfil" />
+        <TerminalBar mode="rotating" />
+        <Header notifications={notifications} unreadCount={unreadCount} />
 
-          {/* Selector de orden */}
+        <main className="flex-1 max-w-[1080px] mx-auto px-6 md:px-14 py-12 md:py-16 w-full">
+
+          {/* ─── Hero editorial ─────────────────────────── */}
+          <section className="mb-10">
+            <p
+              className="text-[10px] uppercase tracking-[0.28em] mb-6"
+              style={{
+                color: T.inkFaint,
+                fontWeight: 500,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              Perfil · Pagos
+            </p>
+
+            <h1
+              className="text-[40px] md:text-[56px] leading-[1.02] tracking-[-0.035em] max-w-2xl"
+              style={{
+                color: T.ink,
+                fontWeight: 400,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              Mis pagos
+              <br />
+              <span className="font-serif italic" style={{ color: T.inkMid }}>
+                y vencimientos.
+              </span>
+            </h1>
+
+            <p
+              className="text-[15px] md:text-[17px] leading-[1.55] mt-5 max-w-xl"
+              style={{ color: T.inkSoft, fontWeight: 450 }}
+            >
+              Historial de todos tus pagos realizados.
+            </p>
+          </section>
+
+          {/* ─── Selector de orden ───────────────────────── */}
           {!ordenId && ordenes.length > 1 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                Filtrar por orden
-              </label>
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    router.push(`/perfil/pagos?orden=${e.target.value}`);
-                  } else {
-                    router.push('/perfil/pagos');
-                  }
+            <section className="mb-6">
+              <div
+                className="p-5"
+                style={{
+                  background: T.bg,
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '8px',
                 }}
-                className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6C3BFF]/25 focus:border-[#6C3BFF] transition-all bg-white"
               >
-                <option value="">Todas las órdenes</option>
-                {ordenes.map(orden => (
-                  <option key={orden.id} value={orden.id}>
-                    {orden.expand?.productId?.nombre || 'Producto'} - {formatDate(orden.created)}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <SectionLabel>Filtrar por orden</SectionLabel>
+                <select
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      router.push(`/perfil/pagos?orden=${e.target.value}`);
+                    } else {
+                      router.push('/perfil/pagos');
+                    }
+                  }}
+                  className="w-full outline-none appearance-none transition-colors"
+                  style={{
+                    height: '42px',
+                    padding: '0 14px',
+                    background: 'transparent',
+                    border: `1px solid ${T.line}`,
+                    borderRadius: '6px',
+                    color: T.ink,
+                    fontSize: '13.5px',
+                    fontWeight: 450,
+                    cursor: 'pointer',
+                    WebkitTapHighlightColor: 'transparent',
+                    transitionTimingFunction: T.ease,
+                  }}
+                >
+                  <option value="">Todas las órdenes</option>
+                  {ordenes.map((orden) => (
+                    <option key={orden.id} value={orden.id}>
+                      {orden.expand?.productId?.nombre || 'Producto'} -{' '}
+                      {formatDate(orden.created)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </section>
           )}
 
-          {/* Información de la orden seleccionada */}
+          {/* ─── Orden seleccionada ──────────────────────── */}
           {selectedOrder && (
-            <div className="bg-gradient-to-r from-[#6C3BFF]/5 to-[#6C3BFF]/10 rounded-2xl border border-[#6C3BFF]/20 p-5 mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <Package size={16} className="text-[#6C3BFF]" />
-                <h3 className="font-bold text-gray-900">
-                  {selectedOrder.expand?.productId?.nombre || 'Producto'}
-                </h3>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3">
-                <div>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Total</p>
-                  <p className="text-base font-bold text-[#6C3BFF] mt-0.5">
-                    {formatMoney(calcularTotalOrden(selectedOrder))}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Tipo</p>
-                  <p className="text-sm font-medium text-gray-700 mt-0.5 capitalize">
-                    {selectedOrder.tipo === 'contado' ? 'Contado' : 'Crédito'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Estado</p>
-                  <p className="text-sm font-medium text-gray-700 mt-0.5 capitalize">
-                    {selectedOrder.estadoPago || 'N/A'}
-                  </p>
-                </div>
-                {selectedOrder.tipo === 'credito' && (
-                  <>
-                    <div>
-                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Enganche</p>
-                      <p className="text-sm font-medium text-gray-700 mt-0.5">{formatMoney(selectedOrder.enganche || 0)}</p>
+            <section className="mb-6">
+              <div
+                className="overflow-hidden"
+                style={{
+                  background: 'rgba(79, 46, 232, 0.03)',
+                  border: `1px solid rgba(79, 46, 232, 0.15)`,
+                  borderRadius: '8px',
+                }}
+              >
+                <div className="p-5 md:p-6">
+                  <div className="flex items-center gap-2 mb-5">
+                    <Package
+                      size={14}
+                      strokeWidth={1.75}
+                      style={{ color: T.accent }}
+                    />
+                    <h3
+                      className="text-[15.5px] leading-snug tracking-[-0.005em]"
+                      style={{ color: T.ink, fontWeight: 500 }}
+                    >
+                      {selectedOrder.expand?.productId?.nombre || 'Producto'}
+                    </h3>
+                  </div>
+
+                  <div
+                    className="grid grid-cols-2 sm:grid-cols-4"
+                    style={{
+                      border: `1px solid ${T.line}`,
+                      borderRadius: '6px',
+                      overflow: 'hidden',
+                      background: T.bg,
+                    }}
+                  >
+                    <InfoCell
+                      label="Total"
+                      value={formatMoney(calcularTotalOrden(selectedOrder))}
+                      accent
+                      border={false}
+                    />
+                    <InfoCell
+                      label="Tipo"
+                      value={
+                        selectedOrder.tipo === 'contado' ? 'Contado' : 'Crédito'
+                      }
+                    />
+                    <InfoCell
+                      label="Estado"
+                      value={selectedOrder.estadoPago || 'N/A'}
+                    />
+                    {selectedOrder.tipo === 'credito' ? (
+                      <>
+                        <InfoCell
+                          label="Enganche"
+                          value={formatMoney(selectedOrder.enganche || 0)}
+                        />
+                      </>
+                    ) : (
+                      <InfoCell label="—" value="—" />
+                    )}
+                  </div>
+
+                  {selectedOrder.tipo === 'credito' && (
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div
+                        className="flex items-baseline justify-between gap-2 px-4 py-3"
+                        style={{
+                          background: T.bg,
+                          border: `1px solid ${T.line}`,
+                          borderRadius: '6px',
+                        }}
+                      >
+                        <span
+                          className="text-[10px] uppercase tracking-[0.16em]"
+                          style={{ color: T.inkFaint, fontWeight: 500 }}
+                        >
+                          Pago semanal
+                        </span>
+                        <span
+                          className="text-[13px] tabular-nums"
+                          style={{
+                            color: T.ink,
+                            fontWeight: 500,
+                            fontFeatureSettings: '"tnum"',
+                          }}
+                        >
+                          {formatMoney(selectedOrder.pagoSemanal || 0)}
+                        </span>
+                      </div>
+                      <div
+                        className="flex items-baseline justify-between gap-2 px-4 py-3"
+                        style={{
+                          background: T.bg,
+                          border: `1px solid ${T.line}`,
+                          borderRadius: '6px',
+                        }}
+                      >
+                        <span
+                          className="text-[10px] uppercase tracking-[0.16em]"
+                          style={{ color: T.inkFaint, fontWeight: 500 }}
+                        >
+                          Semanas
+                        </span>
+                        <span
+                          className="text-[13px] tabular-nums"
+                          style={{
+                            color: T.ink,
+                            fontWeight: 500,
+                            fontFeatureSettings: '"tnum"',
+                          }}
+                        >
+                          {selectedOrder.semanasTotales || 0}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Pago semanal</p>
-                      <p className="text-sm font-medium text-gray-700 mt-0.5">{formatMoney(selectedOrder.pagoSemanal || 0)}</p>
-                    </div>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
+            </section>
           )}
 
-          {/* Lista de pagos */}
+          {/* ─── Lista de pagos ──────────────────────────── */}
           {pagos.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
-              <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <DollarSign size={28} className="text-gray-300" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay pagos registrados</h3>
-              <p className="text-sm text-gray-400">Aún no has realizado ningún pago</p>
+            <div
+              className="flex flex-col items-center justify-center py-20 px-6 text-center"
+              style={{
+                background: 'rgba(15, 15, 15, 0.02)',
+                border: `1px solid ${T.line}`,
+                borderRadius: '8px',
+              }}
+            >
+              <DollarSign
+                size={32}
+                strokeWidth={1.5}
+                style={{ color: T.inkGhost, marginBottom: '16px' }}
+              />
+              <h3
+                className="text-[15px] mb-1"
+                style={{ color: T.ink, fontWeight: 500 }}
+              >
+                No hay pagos registrados
+              </h3>
+              <p
+                className="text-[13px] max-w-md"
+                style={{ color: T.inkSoft, fontWeight: 450 }}
+              >
+                Aún no has realizado ningún pago.
+              </p>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-100">
-                    <tr>
-                      <th className="text-left p-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">#</th>
-                      <th className="text-left p-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Monto</th>
-                      <th className="text-left p-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Fecha límite</th>
-                      <th className="text-left p-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Fecha de pago</th>
-                      <th className="text-left p-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {pagos.map((pago) => {
-                      const status = getPaymentStatus(pago);
-                      const StatusIcon = status.icon;
-                      return (
-                        <tr key={pago.id} className="hover:bg-gray-50/50 transition">
-                          <td className="p-4 font-semibold text-gray-900">
-                            {pago.numeroSemana === 0 ? 'Enganche' : `Semana ${pago.numeroSemana || pago.semana || 'N/A'}`}
-                          </td>
-                          <td className="p-4 font-bold text-gray-900">
-                            {formatMoney(pago.estado === 'pagado' ? (pago.montoPagado || pago.montoProgramado || 0) : (pago.montoProgramado || pago.monto || 0))}
-                          </td>
-                          <td className="p-4 text-sm text-gray-500">{formatDate(pago.fechaVencimiento)}</td>
-                          <td className="p-4 text-sm text-gray-500">{pago.fechaPago ? formatDate(pago.fechaPago) : '—'}</td>
-                          <td className="p-4">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border ${status.color}`}>
-                              <StatusIcon size={10} /> {status.label}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            <section className="mb-6">
+              <div
+                style={{
+                  background: T.bg,
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                }}
+              >
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${T.line}` }}>
+                        <Th>#</Th>
+                        <Th>Monto</Th>
+                        <Th>Fecha límite</Th>
+                        <Th>Fecha de pago</Th>
+                        <Th>Estado</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagos.map((pago) => {
+                        const status = getPaymentStatus(pago);
+                        const StatusIcon = status.icon;
+                        return (
+                          <tr
+                            key={pago.id}
+                            style={{ borderBottom: `1px solid ${T.line}` }}
+                          >
+                            <td
+                              className="py-3.5 pr-3 text-[13px] tabular-nums"
+                              style={{
+                                color: T.ink,
+                                fontWeight: 500,
+                                fontFeatureSettings: '"tnum"',
+                              }}
+                            >
+                              {pago.numeroSemana === 0
+                                ? 'Enganche'
+                                : `Semana ${
+                                    pago.numeroSemana || pago.semana || 'N/A'
+                                  }`}
+                            </td>
+                            <td
+                              className="py-3.5 pr-3 text-[13px] tabular-nums"
+                              style={{
+                                color: T.ink,
+                                fontWeight: 500,
+                                fontFeatureSettings: '"tnum"',
+                              }}
+                            >
+                              {formatMoney(
+                                pago.estado === 'pagado'
+                                  ? pago.montoPagado ||
+                                      pago.montoProgramado ||
+                                      0
+                                  : pago.montoProgramado || pago.monto || 0
+                              )}
+                            </td>
+                            <td
+                              className="py-3.5 pr-3 text-[12.5px]"
+                              style={{ color: T.inkSoft, fontWeight: 450 }}
+                            >
+                              {formatDate(pago.fechaVencimiento)}
+                            </td>
+                            <td
+                              className="py-3.5 pr-3 text-[12.5px]"
+                              style={{ color: T.inkSoft, fontWeight: 450 }}
+                            >
+                              {pago.fechaPago ? formatDate(pago.fechaPago) : '—'}
+                            </td>
+                            <td className="py-3.5">
+                              <StatusBadge
+                                icon={StatusIcon}
+                                label={status.label}
+                                fg={status.fg}
+                                bg={status.bg}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            </section>
           )}
 
-          {/* Resumen de pagos */}
+          {/* ─── Resumen ─────────────────────────────────── */}
           {pagos.length > 0 && (
-            <div className="mt-6 bg-gradient-to-r from-gray-50 to-white rounded-2xl border border-gray-100 p-5">
-              <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <TrendingUp size={16} className="text-[#6C3BFF]" /> Resumen
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
-                <div>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Total pagado</p>
-                  <p className="text-xl font-bold text-[#10b981] mt-1">
-                    {formatMoney(pagos.filter(p => p.estado === 'pagado').reduce((sum, p) => sum + (p.montoPagado || p.montoProgramado || 0), 0))}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Pendiente</p>
-                  <p className="text-xl font-bold text-amber-600 mt-1">
-                    {formatMoney(pagos.filter(p => p.estado === 'pendiente').reduce((sum, p) => sum + (p.montoProgramado || p.monto || 0), 0))}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Atrasados</p>
-                  <p className="text-xl font-bold text-red-500 mt-1">
-                    {formatMoney(pagos.filter(p => {
-                      if (p.estado === 'pagado') return false;
-                      return new Date(p.fechaVencimiento) < new Date();
-                    }).reduce((sum, p) => sum + (p.montoProgramado || p.monto || 0), 0))}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Pagos realizados</p>
-                  <p className="text-xl font-bold text-[#6C3BFF] mt-1">
-                    {pagos.filter(p => p.estado === 'pagado').length} / {pagos.length}
-                  </p>
-                </div>
+            <section>
+              <SectionLabel>Resumen</SectionLabel>
+              <div
+                className="grid grid-cols-2 sm:grid-cols-4"
+                style={{
+                  background: T.bg,
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                }}
+              >
+                <SummaryCell
+                  label="Total pagado"
+                  value={formatMoney(
+                    pagos
+                      .filter((p) => p.estado === 'pagado')
+                      .reduce(
+                        (sum, p) =>
+                          sum + (p.montoPagado || p.montoProgramado || 0),
+                        0
+                      )
+                  )}
+                  color={T.green}
+                  border={false}
+                />
+                <SummaryCell
+                  label="Pendiente"
+                  value={formatMoney(
+                    pagos
+                      .filter((p) => p.estado === 'pendiente')
+                      .reduce(
+                        (sum, p) => sum + (p.montoProgramado || p.monto || 0),
+                        0
+                      )
+                  )}
+                  color="#B8820E"
+                />
+                <SummaryCell
+                  label="Atrasados"
+                  value={formatMoney(
+                    pagos
+                      .filter((p) => {
+                        if (p.estado === 'pagado') return false;
+                        return new Date(p.fechaVencimiento) < new Date();
+                      })
+                      .reduce(
+                        (sum, p) => sum + (p.montoProgramado || p.monto || 0),
+                        0
+                      )
+                  )}
+                  color={T.red}
+                />
+                <SummaryCell
+                  label="Realizados"
+                  value={
+                    <span>
+                      {pagos.filter((p) => p.estado === 'pagado').length}
+                      <span
+                        style={{
+                          color: T.inkFaint,
+                          fontWeight: 450,
+                          fontSize: '0.65em',
+                          marginLeft: '4px',
+                        }}
+                      >
+                        / {pagos.length}
+                      </span>
+                    </span>
+                  }
+                  color={T.accent}
+                />
               </div>
-            </div>
+            </section>
           )}
+        </main>
 
-        </div>
-      </StoreLayout>
+        <Footer variant="minimal" />
+      </div>
+
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
+        }
+        .animate-blink { animation: blink 1s step-end infinite; }
+        body {
+          font-family:
+            -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display',
+            'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
+        }
+        .font-serif {
+          font-family:
+            ui-serif, 'Iowan Old Style', 'Apple Garamond', 'Palatino',
+            Georgia, 'Times New Roman', serif;
+        }
+        ::selection {
+          background: rgba(79, 46, 232, 0.12);
+          color: #0F0F0F;
+        }
+        * {
+          -webkit-tap-highlight-color: transparent;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
+        }
+      `}</style>
     </>
   );
 }

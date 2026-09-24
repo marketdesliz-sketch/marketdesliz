@@ -6,25 +6,34 @@ import Link from 'next/link';
 import {
   ChevronLeft, ChevronRight, Home, SlidersHorizontal,
   Package, Search, Inbox, ArrowUpDown, Plus, Minus,
-  Filter, X, Bell, User, ChevronDown, Heart
+  X, Heart,
 } from 'lucide-react';
 import pb from '../../../lib/pocketbase';
 import { CATEGORIAS, generarSlug } from '../../../config/categorias';
-import HeaderSimple from '../../../components/HeaderSimple';
+import { T } from '../../../lib/tokens';
+import TerminalBar from '../../../components/TerminalBar';
+import Header from '../../../components/Header';
+import Footer from '../../../components/Footer';
+import BackButton from '../../../components/BackButton';
 
-// ─── Formateador de moneda ─────────────────────────────────────
+// ─── Formateador de moneda · SIN CAMBIOS ────────────────────────
 const formatMoney = (amount) =>
   new Intl.NumberFormat('es-MX', {
-    style: 'currency', currency: 'MXN',
-    minimumFractionDigits: 0, maximumFractionDigits: 0
+    style: 'currency',
+    currency: 'MXN',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(amount);
 
-// ─── Helpers ────────────────────────────────────────────────────
+// ─── Helpers · SIN CAMBIOS ──────────────────────────────────────
 function getCategoriaInfoFromStatic(nombreOSlug) {
   if (!nombreOSlug) return null;
   const search = nombreOSlug.toLowerCase().trim();
   for (const [key, categoria] of Object.entries(CATEGORIAS)) {
-    if (categoria.slug === search || categoria.nombre?.toLowerCase() === search) {
+    if (
+      categoria.slug === search ||
+      categoria.nombre?.toLowerCase() === search
+    ) {
       return { key, ...categoria };
     }
     if (categoria.sections) {
@@ -51,7 +60,7 @@ function getSubcategoriasFromStatic(tipo = 'productos') {
         nombre: cat.name,
         slug: generarSlug(cat.name),
         items: cat.items || [],
-        section: section.title
+        section: section.title,
       });
     }
   }
@@ -61,14 +70,14 @@ function getSubcategoriasFromStatic(tipo = 'productos') {
 function getFiltroSecciones(tipo) {
   const categoria = CATEGORIAS[tipo];
   if (!categoria || !categoria.sections) return [];
-  return categoria.sections.map(section => ({
+  return categoria.sections.map((section) => ({
     id: generarSlug(section.title),
     title: section.title,
-    categories: section.categories.map(cat => ({
+    categories: section.categories.map((cat) => ({
       name: cat.name,
       slug: generarSlug(cat.name),
-      items: cat.items || []
-    }))
+      items: cat.items || [],
+    })),
   }));
 }
 
@@ -77,7 +86,7 @@ const collections = {
   'uso-personal': 'products',
   ganado: 'products',
   instrumentos: 'products',
-  tandas: 'tandas'
+  tandas: 'tandas',
 };
 
 const tipoNombres = {
@@ -85,7 +94,7 @@ const tipoNombres = {
   'uso-personal': 'Uso Personal',
   ganado: 'Ganado',
   instrumentos: 'Instrumentos',
-  tandas: 'Tandas'
+  tandas: 'Tandas',
 };
 
 function normalizeItem(item, tipo) {
@@ -97,7 +106,7 @@ function normalizeItem(item, tipo) {
     enganche: item.enganche || 0,
     paga: item.pagoSemanal || 0,
     semanas: item.semanas || 12,
-    categoriaId: item.categoriaId || '', // ✅ Guardar el ID
+    categoriaId: item.categoriaId || '',
     subcategoria: item.subcategoria || '',
     subcategoriaId: item.subcategoriaId || '',
     imagen: item.imagen ? pb.files.getURL(item, item.imagen) : null,
@@ -106,12 +115,21 @@ function normalizeItem(item, tipo) {
     tipo,
     created: item.created,
     sku: item.sku || item.id?.substring(0, 6).toUpperCase(),
-    expand: item.expand || {} // ✅ Guardar expand para obtener el nombre
+    expand: item.expand || {},
   };
-  if (tipo === 'uso-personal') { base.talla = item.size; base.color = item.color; }
-  else if (tipo === 'ganado') { base.raza = item.breed; base.edad = item.age; base.peso = item.weight; base.salud = item.healthStatus; }
-  else if (tipo === 'instrumentos') { base.marca = item.brand; base.modelo = item.model; base.tipoInstrumento = item.type; }
-  else if (tipo === 'tandas') {
+  if (tipo === 'uso-personal') {
+    base.talla = item.size;
+    base.color = item.color;
+  } else if (tipo === 'ganado') {
+    base.raza = item.breed;
+    base.edad = item.age;
+    base.peso = item.weight;
+    base.salud = item.healthStatus;
+  } else if (tipo === 'instrumentos') {
+    base.marca = item.brand;
+    base.modelo = item.model;
+    base.tipoInstrumento = item.type;
+  } else if (tipo === 'tandas') {
     base.montoTotal = item.montoTotal || item.monto || 0;
     base.montoCuota = item.montoCuota || 0;
     base.totalMiembros = item.cupoMaximo || item.totalMembers || 0;
@@ -124,33 +142,32 @@ function normalizeItem(item, tipo) {
   return base;
 }
 
-// ✅ NUEVO: Filtrar items usando categoriaId (relación)
 const filterItems = (items, categoriaId, subcategoriaId, activeFilters = {}) => {
   if (!items.length) return [];
   let filtered = [...items];
 
-  // Filtrar por categoriaId (si existe)
   if (categoriaId) {
-    filtered = filtered.filter(item => item.categoriaId === categoriaId);
+    filtered = filtered.filter((item) => item.categoriaId === categoriaId);
   }
 
-  // Filtrar por subcategoriaId (si existe)
   if (subcategoriaId) {
-    filtered = filtered.filter(item => item.subcategoriaId === subcategoriaId);
+    filtered = filtered.filter(
+      (item) => item.subcategoriaId === subcategoriaId
+    );
   }
 
-  // Filtros activos (checkboxes) - ahora usan nombres pero los comparamos con categoríaId
   if (Object.keys(activeFilters).length > 0) {
     Object.entries(activeFilters).forEach(([, filterItemsArr]) => {
       if (filterItemsArr.length > 0) {
-        filtered = filtered.filter(item => {
-          // Obtener nombre de categoría desde expand o desde el campo categoria
+        filtered = filtered.filter((item) => {
           const categoriaNombre = item.expand?.categoriaId?.nombre || '';
-          return filterItemsArr.some(fi => {
+          return filterItemsArr.some((fi) => {
             const s = fi.toLowerCase().trim();
-            return categoriaNombre.toLowerCase().includes(s) ||
+            return (
+              categoriaNombre.toLowerCase().includes(s) ||
               item.nombre.toLowerCase().includes(s) ||
-              item.descripcion.toLowerCase().includes(s);
+              item.descripcion.toLowerCase().includes(s)
+            );
           });
         });
       }
@@ -162,15 +179,42 @@ const filterItems = (items, categoriaId, subcategoriaId, activeFilters = {}) => 
 
 const getNombreFromSlug = (slug) => {
   if (!slug) return '';
-  return slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  return slug
+    .split('-')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 };
 
-// ─── Breadcrumb ────────────────────────────────────────────────
-function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaInfo, categoriaId, categoriasMap }) {
+// ─── Sub-componentes UI ─────────────────────────────────────────
+function SectionLabel({ children, accent = false }) {
+  return (
+    <p
+      className="text-[10px] md:text-[11px] uppercase tracking-[0.22em] mb-4"
+      style={{
+        color: accent ? T.accent : T.inkFaint,
+        fontWeight: 500,
+        fontFeatureSettings: '"ss01"',
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+// ─── Breadcrumb ─────────────────────────────────────────────────
+function Breadcrumb({
+  tipo,
+  slugs = [],
+  itemCount,
+  sortBy,
+  setSortBy,
+  categoriaInfo,
+  categoriaId,
+  categoriasMap,
+}) {
   const router = useRouter();
   const displayTipo = tipoNombres[tipo] || tipo?.replace(/-/g, ' ') || '';
 
-  // Obtener nombre de categoría desde el mapa (PocketBase) o desde estática
   const getCategoriaNombre = (id) => {
     if (categoriasMap && id) {
       return categoriasMap[id] || id;
@@ -179,29 +223,65 @@ function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaI
   };
 
   return (
-    <div className="bg-white border-b border-gray-100 mb-6">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
+    <div
+      style={{
+        background: T.bg,
+        borderBottom: `1px solid ${T.line}`,
+      }}
+    >
+      <div className="max-w-[1280px] mx-auto px-6 md:px-14 py-4">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <nav className="flex items-center gap-1.5 text-xs text-gray-400 flex-wrap">
+          <nav
+            className="flex items-center gap-2 text-[11.5px] flex-wrap"
+            style={{ color: T.inkFaint }}
+          >
             <button
-              onClick={() => window.history.length > 1 ? router.back() : router.push('/')}
-              className="flex items-center gap-1 text-[#6C3BFF] font-medium hover:underline"
+              onClick={() =>
+                window.history.length > 1 ? router.back() : router.push('/')
+              }
+              className="inline-flex items-center gap-1 transition-colors"
+              style={{
+                color: T.accent,
+                fontWeight: 500,
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent',
+              }}
             >
-              <ChevronLeft size={13} /> Volver
+              <ChevronLeft size={12} strokeWidth={1.75} /> Volver
             </button>
-            <span className="text-gray-200">·</span>
-            <Link href="/" className="flex items-center gap-1 hover:text-[#6C3BFF] transition-colors">
-              <Home size={12} /> Inicio
+            <span style={{ color: T.inkGhost }}>·</span>
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1 transition-colors"
+              style={{
+                color: T.inkSoft,
+                textDecoration: 'none',
+              }}
+            >
+              <Home size={11} strokeWidth={1.75} /> Inicio
             </Link>
-            <ChevronRight size={12} className="text-gray-300" />
-            <Link href={`/${tipo}`} className="hover:text-[#6C3BFF] transition-colors capitalize">{displayTipo}</Link>
+            <ChevronRight
+              size={11}
+              strokeWidth={1.75}
+              style={{ color: T.inkGhost }}
+            />
+            <Link
+              href={`/${tipo}`}
+              className="capitalize transition-colors"
+              style={{ color: T.inkSoft, textDecoration: 'none' }}
+            >
+              {displayTipo}
+            </Link>
 
             {slugs.map((slug, idx) => {
-              const href = `/${tipo}/categoria/${slugs.slice(0, idx + 1).join('/')}`;
+              const href = `/${tipo}/categoria/${slugs
+                .slice(0, idx + 1)
+                .join('/')}`;
               const isLast = idx === slugs.length - 1;
               let nombreMostrado = getNombreFromSlug(slug);
 
-              // Si tenemos el ID de categoría y el mapa, obtener nombre real
               if (idx === 0 && categoriaId && categoriasMap) {
                 const realNombre = getCategoriaNombre(categoriaId);
                 if (realNombre) nombreMostrado = realNombre;
@@ -211,28 +291,64 @@ function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaI
                 nombreMostrado = categoriaInfo.nombre || nombreMostrado;
               }
               if (categoriaInfo?.subcategorias && idx === 1) {
-                const sub = categoriaInfo.subcategorias.find(s => s.slug === slug);
+                const sub = categoriaInfo.subcategorias.find(
+                  (s) => s.slug === slug
+                );
                 if (sub) nombreMostrado = sub.nombre;
               }
               return (
                 <span key={idx} className="flex items-center gap-1.5">
-                  <ChevronRight size={12} className="text-gray-300" />
-                  {isLast
-                    ? <span className="text-gray-600 font-medium">{nombreMostrado}</span>
-                    : <Link href={href} className="hover:text-[#6C3BFF] transition-colors">{nombreMostrado}</Link>
-                  }
+                  <ChevronRight
+                    size={11}
+                    strokeWidth={1.75}
+                    style={{ color: T.inkGhost }}
+                  />
+                  {isLast ? (
+                    <span style={{ color: T.ink, fontWeight: 500 }}>
+                      {nombreMostrado}
+                    </span>
+                  ) : (
+                    <Link
+                      href={href}
+                      className="transition-colors"
+                      style={{ color: T.inkSoft, textDecoration: 'none' }}
+                    >
+                      {nombreMostrado}
+                    </Link>
+                  )}
                 </span>
               );
             })}
           </nav>
 
           <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-400">{itemCount} {itemCount === 1 ? 'resultado' : 'resultados'}</span>
+            <span
+              className="text-[11px] tabular-nums"
+              style={{
+                color: T.inkFaint,
+                fontWeight: 450,
+                fontFeatureSettings: '"tnum"',
+              }}
+            >
+              {itemCount} {itemCount === 1 ? 'resultado' : 'resultados'}
+            </span>
+
             <div className="relative">
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="appearance-none pl-3 pr-8 py-1.5 border border-gray-200 rounded-xl text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#6C3BFF]/25 focus:border-[#6C3BFF] bg-white transition-all cursor-pointer"
+                className="outline-none appearance-none transition-colors"
+                style={{
+                  height: '34px',
+                  padding: '0 28px 0 12px',
+                  background: 'transparent',
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '6px',
+                  color: T.inkMid,
+                  fontSize: '12px',
+                  fontWeight: 450,
+                  cursor: 'pointer',
+                }}
               >
                 <option value="relevance">Relevancia</option>
                 <option value="newest">Más nuevos</option>
@@ -240,7 +356,12 @@ function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaI
                 <option value="price_desc">Precio: mayor a menor</option>
                 <option value="popular">Más populares</option>
               </select>
-              <ArrowUpDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <ArrowUpDown
+                size={11}
+                strokeWidth={1.75}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ color: T.inkFaint }}
+              />
             </div>
           </div>
         </div>
@@ -249,8 +370,15 @@ function Breadcrumb({ tipo, slugs = [], itemCount, sortBy, setSortBy, categoriaI
   );
 }
 
-// ─── CategoryFilters (adaptado para usar IDs) ──────────────
-function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll, items, categoriasMap }) {
+// ─── CategoryFilters ────────────────────────────────────────────
+function CategoryFilters({
+  onFilterChange,
+  activeFilters,
+  tipo,
+  onClearAll,
+  items,
+  categoriasMap,
+}) {
   const [expanded, setExpanded] = useState({});
 
   useEffect(() => {
@@ -262,83 +390,194 @@ function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll, item
     setExpanded(initial);
   }, [tipo]);
 
-  const toggle = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  const toggle = (id) =>
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const secciones = useMemo(() => getFiltroSecciones(tipo), [tipo]);
 
-  // ✅ Contar usando categoriaId
   const counts = useMemo(() => {
     const countsMap = {};
     if (!items) return countsMap;
-    items.forEach(item => {
-      // Obtener nombre de categoría desde expand o desde el campo categoria
+    items.forEach((item) => {
       const catName = item.expand?.categoriaId?.nombre || '';
       if (catName) countsMap[catName] = (countsMap[catName] || 0) + 1;
     });
     return countsMap;
   }, [items]);
 
-  const hasActiveFilters = Object.values(activeFilters).some(arr => arr?.length > 0);
+  const hasActiveFilters = Object.values(activeFilters).some(
+    (arr) => arr?.length > 0
+  );
 
   if (secciones.length === 0) {
     return (
-      <div className="w-72 shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-24 p-4">
-        <p className="text-sm text-gray-400 text-center">No hay filtros disponibles</p>
+      <div
+        className="shrink-0 p-5"
+        style={{
+          width: '288px',
+          background: T.bg,
+          border: `1px solid ${T.line}`,
+          borderRadius: '8px',
+          position: 'sticky',
+          top: '24px',
+        }}
+      >
+        <p
+          className="text-[12px] text-center"
+          style={{ color: T.inkFaint, fontWeight: 450 }}
+        >
+          No hay filtros disponibles
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="w-72 shrink-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden sticky top-24">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-        <h3 className="font-semibold text-sm text-gray-900 flex items-center gap-2">
-          <SlidersHorizontal size={15} className="text-[#6C3BFF]" /> Filtros
+    <div
+      className="shrink-0 overflow-hidden"
+      style={{
+        width: '288px',
+        background: T.bg,
+        border: `1px solid ${T.line}`,
+        borderRadius: '8px',
+        position: 'sticky',
+        top: '24px',
+      }}
+    >
+      <div
+        className="flex items-center justify-between px-5 py-4"
+        style={{ borderBottom: `1px solid ${T.line}` }}
+      >
+        <h3
+          className="flex items-center gap-2 text-[12px] uppercase tracking-[0.18em]"
+          style={{ color: T.ink, fontWeight: 500 }}
+        >
+          <SlidersHorizontal
+            size={13}
+            strokeWidth={1.75}
+            style={{ color: T.accent }}
+          />
+          Filtros
         </h3>
         {hasActiveFilters && (
-          <button onClick={onClearAll} className="text-xs text-[#6C3BFF] font-medium hover:underline">
-            Limpiar todos
+          <button
+            onClick={onClearAll}
+            className="text-[11px] transition-colors"
+            style={{
+              color: T.accent,
+              fontWeight: 500,
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            Limpiar
           </button>
         )}
       </div>
 
-      <div className="p-4 space-y-1">
-        {secciones.map((section) => (
-          <div key={section.id} className="border-b border-gray-50 pb-3 last:border-0">
+      <div className="p-4 flex flex-col gap-1">
+        {secciones.map((section, sIdx) => (
+          <div
+            key={section.id}
+            className="pb-3"
+            style={{
+              borderTop: sIdx === 0 ? 'none' : `1px solid ${T.line}`,
+              paddingTop: sIdx === 0 ? 0 : '12px',
+            }}
+          >
             <button
               onClick={() => toggle(section.id)}
-              className="flex items-center justify-between w-full py-2 text-left group"
+              className="flex items-center justify-between w-full py-2 text-left"
             >
-              <span className="text-xs font-bold text-gray-600 uppercase tracking-wide group-hover:text-[#6C3BFF] transition-colors">
+              <span
+                className="text-[10px] uppercase tracking-[0.18em]"
+                style={{ color: T.inkMid, fontWeight: 500 }}
+              >
                 {section.title}
               </span>
               <span className="flex items-center gap-2">
-                <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
-                  {section.categories.reduce((acc, cat) => acc + (counts[cat.name] || 0), 0)}
+                <span
+                  className="text-[10px] px-1.5 py-0.5 tabular-nums"
+                  style={{
+                    color: T.inkFaint,
+                    background: 'rgba(15,15,15,0.04)',
+                    borderRadius: '4px',
+                    fontWeight: 500,
+                    fontFeatureSettings: '"tnum"',
+                  }}
+                >
+                  {section.categories.reduce(
+                    (acc, cat) => acc + (counts[cat.name] || 0),
+                    0
+                  )}
                 </span>
-                {expanded[section.id]
-                  ? <Minus size={13} className="text-gray-400" />
-                  : <Plus size={13} className="text-gray-400" />}
+                {expanded[section.id] ? (
+                  <Minus
+                    size={12}
+                    strokeWidth={1.75}
+                    style={{ color: T.inkFaint }}
+                  />
+                ) : (
+                  <Plus
+                    size={12}
+                    strokeWidth={1.75}
+                    style={{ color: T.inkFaint }}
+                  />
+                )}
               </span>
             </button>
 
             {expanded[section.id] && (
-              <div className="space-y-1.5 pl-1 pt-1">
+              <div className="flex flex-col gap-1.5 pt-1">
                 {section.categories.map((cat) => {
-                  const isActive = activeFilters[section.id]?.includes(cat.name);
+                  const isActive = activeFilters[section.id]?.includes(
+                    cat.name
+                  );
                   const count = counts[cat.name] || 0;
                   if (count === 0) return null;
                   return (
-                    <label key={cat.name} className="flex items-center gap-2.5 cursor-pointer group">
+                    <label
+                      key={cat.name}
+                      className="flex items-center gap-2.5 cursor-pointer"
+                    >
                       <input
                         type="checkbox"
                         checked={isActive}
-                        onChange={(e) => onFilterChange(section.id, cat.name, e.target.checked)}
-                        className="w-3.5 h-3.5 accent-[#6C3BFF] rounded"
+                        onChange={(e) =>
+                          onFilterChange(
+                            section.id,
+                            cat.name,
+                            e.target.checked
+                          )
+                        }
+                        style={{
+                          width: '14px',
+                          height: '14px',
+                          accentColor: T.accent,
+                          cursor: 'pointer',
+                        }}
                       />
-                      <span className={`text-sm transition-colors ${isActive ? 'text-[#6C3BFF] font-medium' : 'text-gray-600 group-hover:text-[#6C3BFF]'}`}>
+                      <span
+                        className="text-[12.5px] flex-1"
+                        style={{
+                          color: isActive ? T.accent : T.inkMid,
+                          fontWeight: isActive ? 500 : 450,
+                        }}
+                      >
                         {cat.name}
                       </span>
-                      <span className="text-xs text-gray-400 ml-auto">{count}</span>
+                      <span
+                        className="text-[11px] tabular-nums"
+                        style={{
+                          color: T.inkFaint,
+                          fontWeight: 450,
+                          fontFeatureSettings: '"tnum"',
+                        }}
+                      >
+                        {count}
+                      </span>
                     </label>
                   );
                 })}
@@ -349,95 +588,247 @@ function CategoryFilters({ onFilterChange, activeFilters, tipo, onClearAll, item
       </div>
 
       <div className="px-4 pb-4">
-        <div className="p-3.5 bg-gray-50 border border-gray-100 rounded-xl">
+        <div
+          className="p-3.5"
+          style={{
+            background: 'rgba(15,15,15,0.02)',
+            border: `1px solid ${T.line}`,
+            borderRadius: '6px',
+          }}
+        >
           <label className="flex items-center gap-2.5 cursor-pointer">
-            <input type="checkbox" className="w-3.5 h-3.5 accent-[#6C3BFF] rounded" />
-            <span className="text-sm font-medium text-gray-800">Pick Up Disponible</span>
+            <input
+              type="checkbox"
+              style={{
+                width: '14px',
+                height: '14px',
+                accentColor: T.accent,
+                cursor: 'pointer',
+              }}
+            />
+            <span
+              className="text-[12px]"
+              style={{ color: T.ink, fontWeight: 500 }}
+            >
+              Pick Up Disponible
+            </span>
           </label>
-          <p className="text-xs text-gray-400 mt-1.5">Recoge en tienda sin costo adicional</p>
+          <p
+            className="text-[10.5px] mt-1.5"
+            style={{ color: T.inkFaint, fontWeight: 450 }}
+          >
+            Recoge en tienda sin costo adicional
+          </p>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── ProductCard (sin cambios, usa item.categoria para mostrar) ──
+// ─── ProductCard ────────────────────────────────────────────────
 function ProductCard({ item, tipo, onSelect, favorites, toggleFavorite }) {
   const router = useRouter();
-  // Obtener nombre de categoría desde expand o fallback
   const categoriaNombre = item.expand?.categoriaId?.nombre || '';
+  const [hover, setHover] = useState(false);
 
   return (
     <div
       onClick={() => router.push(`/${tipo}/${item.id}`)}
-      className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="cursor-pointer flex flex-col transition-all duration-300"
+      style={{
+        background: T.bg,
+        border: `1px solid ${hover ? 'rgba(15,15,15,0.14)' : T.line}`,
+        borderRadius: '8px',
+        overflow: 'hidden',
+        transform: hover ? 'translateY(-2px)' : 'translateY(0)',
+        boxShadow: hover
+          ? '0 1px 2px rgba(15,15,15,0.04), 0 8px 24px rgba(15,15,15,0.06)'
+          : 'none',
+        transitionTimingFunction: T.ease,
+        WebkitTapHighlightColor: 'transparent',
+      }}
     >
-      <div className="aspect-[4/3] bg-muted/30 relative overflow-hidden">
+      <div
+        className="relative overflow-hidden"
+        style={{ aspectRatio: '4 / 3', background: 'rgba(15,15,15,0.03)' }}
+      >
         {item.imagen ? (
           <img
             src={item.imagen}
             alt={item.nombre}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            className="w-full h-full object-cover transition-transform duration-500"
+            style={{
+              transform: hover ? 'scale(1.04)' : 'scale(1)',
+              transitionTimingFunction: T.ease,
+            }}
+            loading="lazy"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gray-100">
-            <Package className="w-12 h-12 text-gray-300" />
+          <div className="w-full h-full flex items-center justify-center">
+            <Package size={40} strokeWidth={1.5} style={{ color: T.inkGhost }} />
           </div>
         )}
+
+        {/* Favorito */}
         <div className="absolute top-3 right-3">
           <button
             onClick={(e) => {
               e.stopPropagation();
               toggleFavorite(item.id);
             }}
-            className="w-8 h-8 rounded-full bg-white/90 shadow-sm flex items-center justify-center hover:scale-110 transition-transform"
+            className="flex items-center justify-center transition-transform"
+            style={{
+              width: '32px',
+              height: '32px',
+              background: 'rgba(250, 250, 249, 0.9)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              borderRadius: '50%',
+              border: 'none',
+              cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.08)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            aria-label="Favorito"
           >
             <Heart
-              className={`w-4 h-4 ${favorites.includes(item.id) ? 'fill-red-500 text-red-500' : 'text-gray-400'}`}
+              size={14}
+              strokeWidth={1.75}
+              style={{
+                fill: favorites.includes(item.id) ? '#EF4444' : 'transparent',
+                color: favorites.includes(item.id) ? '#EF4444' : T.inkFaint,
+              }}
             />
           </button>
         </div>
+
+        {/* Badges */}
         {item.nuevo && !item.agotado && (
-          <div className="absolute top-2 left-2 bg-orange-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">Nuevo</div>
+          <span
+            className="absolute top-3 left-3 inline-flex items-center px-2 py-0.5"
+            style={{
+              background: 'rgba(184, 130, 14, 0.92)',
+              color: '#FFFFFF',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              borderRadius: '4px',
+              fontSize: '9px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.15em',
+              fontWeight: 600,
+            }}
+          >
+            Nuevo
+          </span>
         )}
         {item.agotado && (
-          <div className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-full">Agotado</div>
+          <span
+            className="absolute top-3 left-3 inline-flex items-center px-2 py-0.5"
+            style={{
+              background: 'rgba(197, 48, 48, 0.92)',
+              color: '#FFFFFF',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              borderRadius: '4px',
+              fontSize: '9px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.15em',
+              fontWeight: 600,
+            }}
+          >
+            Agotado
+          </span>
         )}
       </div>
-      <div className="p-3">
+
+      <div className="p-4 flex flex-col gap-2 flex-1">
         {categoriaNombre && (
-          <span className="text-[9px] font-semibold text-[#6C3BFF] bg-[#6C3BFF]/8 px-2 py-0.5 rounded-full uppercase tracking-wide inline-block mb-1">
+          <span
+            className="inline-flex items-center self-start px-2 py-0.5"
+            style={{
+              background: 'rgba(79, 46, 232, 0.06)',
+              color: T.accent,
+              borderRadius: '4px',
+              fontSize: '9px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.14em',
+              fontWeight: 500,
+            }}
+          >
             {categoriaNombre}
           </span>
         )}
-        <h3 className="font-bold text-sm text-gray-800 line-clamp-1">{item.nombre}</h3>
-        <p className="text-base font-black text-gray-900 mt-1">
-          {formatMoney(item.paga)} / semana
+
+        <h3
+          className="text-[14px] leading-snug tracking-[-0.005em] line-clamp-1"
+          style={{ color: T.ink, fontWeight: 500 }}
+        >
+          {item.nombre}
+        </h3>
+
+        <p
+          className="text-[16px] tabular-nums tracking-[-0.01em]"
+          style={{
+            color: T.ink,
+            fontWeight: 500,
+            fontFeatureSettings: '"tnum"',
+          }}
+        >
+          {formatMoney(item.paga)}
+          <span
+            className="text-[11px] ml-1"
+            style={{ color: T.inkFaint, fontWeight: 450 }}
+          >
+            / semana
+          </span>
         </p>
+
         {item.precio > 0 && (
-          <div className="mt-1 text-xs text-gray-500">
+          <p
+            className="text-[11.5px] tabular-nums"
+            style={{
+              color: T.inkSoft,
+              fontWeight: 450,
+              fontFeatureSettings: '"tnum"',
+            }}
+          >
             Enganche{' '}
-            <span className="font-semibold text-[#6C3BFF]">
+            <span style={{ color: T.accent, fontWeight: 500 }}>
               {formatMoney(Math.round(item.precio * 0.25))}
             </span>
-            <span className="text-gray-400"> (25%)</span>
-          </div>
+            <span style={{ color: T.inkFaint }}> (25%)</span>
+          </p>
         )}
+
         <button
           onClick={(e) => {
             e.stopPropagation();
             router.push(`/${tipo}/${item.id}`);
           }}
-          className="mt-4 w-full bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white text-xs font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5"
+          className="mt-3 inline-flex items-center justify-center gap-1.5 h-9 text-white text-[12px]"
+          style={{
+            background: T.accent,
+            borderRadius: '6px',
+            fontWeight: 500,
+            border: 'none',
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            transitionTimingFunction: T.ease,
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = T.accentDeep)}
+          onMouseLeave={(e) => (e.currentTarget.style.background = T.accent)}
         >
-          Ver producto <ChevronRight size={13} />
+          Ver producto <ChevronRight size={12} strokeWidth={1.75} />
         </button>
       </div>
     </div>
   );
 }
 
-// ─── PÁGINA PRINCIPAL ──────────────────────────────────────────
+// ─── PÁGINA PRINCIPAL ───────────────────────────────────────────
 export default function CategoriaPage() {
   const router = useRouter();
   const { tipo, slug = [] } = router.query;
@@ -456,15 +847,12 @@ export default function CategoriaPage() {
   const [categoriaInfo, setCategoriaInfo] = useState(null);
   const [categoriaId, setCategoriaId] = useState(null);
   const [categoriasMap, setCategoriasMap] = useState({});
-
-  // ─── Estados de autenticación y favoritos ──────────────────────
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
-  const [showLoginDropdown, setShowLoginDropdown] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [favorites, setFavorites] = useState([]);
 
-  // ─── Cargar favoritos ─────────────────────────────────────────
+  const notifications = [];
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // ─── Cargar favoritos ───────────────────────────────────
   useEffect(() => {
     const saved = localStorage.getItem('favorites');
     if (saved) setFavorites(JSON.parse(saved));
@@ -472,114 +860,103 @@ export default function CategoriaPage() {
 
   const toggleFavorite = (productId) => {
     const newFavorites = favorites.includes(productId)
-      ? favorites.filter(id => id !== productId)
+      ? favorites.filter((id) => id !== productId)
       : [...favorites, productId];
     setFavorites(newFavorites);
     localStorage.setItem('favorites', JSON.stringify(newFavorites));
   };
 
-  const notifications = [
-    { id: 1, title: '¡Nueva colección!', description: 'Descubre la línea Otoño 2026', time: 'Hace 2 horas', read: false },
-    { id: 2, title: '¡Bienvenido!', description: 'Completa tu registro para empezar', time: 'Hace 5 horas', read: false },
-  ];
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  // ─── Efecto de autenticación ──────────────────────────────────
-  useEffect(() => {
-    const checkAuth = () => {
-      const currentUser = pb.authStore.model;
-      setIsAuthenticated(!!currentUser);
-      setUser(currentUser);
-    };
-    checkAuth();
-    const unsubscribe = pb.authStore.onChange(() => checkAuth());
-    return () => unsubscribe();
-  }, []);
-
-  // ─── Navegación ────────────────────────────────────────────────
-  const navigateTo = (path) => router.push(path);
-
-  // ─── Cargar categorías y productos ────────────────────────────
+  // ─── Cargar categorías y productos · SIN CAMBIOS ────────
   useEffect(() => {
     const cargarDatos = async () => {
       try {
         setLoading(true);
         const busqueda = router.query.busqueda;
 
-        // 1. Obtener mapa de categorías (id → nombre)
+        // 1. Mapa de categorías (id → nombre)
         let categoriasMapLocal = {};
         try {
-          const categoriasList = await pb.collection('categorias').getFullList({
-            filter: 'activo = true',
-            fields: 'id,nombre'
-          });
-          categoriasList.forEach(c => {
+          const categoriasList = await pb
+            .collection('categorias')
+            .getFullList({
+              filter: 'activo = true',
+              fields: 'id,nombre',
+            });
+          categoriasList.forEach((c) => {
             categoriasMapLocal[c.id] = c.nombre;
           });
           setCategoriasMap(categoriasMapLocal);
         } catch (e) {
-          console.warn('No se pudieron cargar categorías desde PocketBase:', e);
+          console.warn(
+            'No se pudieron cargar categorías desde PocketBase:',
+            e
+          );
         }
 
-        // 2. Obtener ID de categoría desde el slug (usando CATEGORIAS estática o buscando en PocketBase)
-        // 2. Obtener ID de categoría desde el slug (usando CATEGORIAS estática o buscando en PocketBase)
+        // 2. Obtener ID de categoría desde el slug
         let catId = null;
         let catInfo = null;
         let catNombre = '';
 
         if (categoriaSlug && categoriaSlug !== 'todos') {
-          // Primero buscar en CATEGORIAS estática
           const staticInfo = getCategoriaInfoFromStatic(categoriaSlug);
           if (staticInfo) {
             catInfo = staticInfo;
             catNombre = staticInfo.nombre;
-            // Buscar el ID en PocketBase por nombre (insensible a mayúsculas)
             try {
-              // Usamos ~ para búsqueda case-insensitive y coincidencia parcial
-              const catRecord = await pb.collection('categorias').getFirstListItem(
-                `nombre ~ "${staticInfo.nombre}" && activo = true`,
-                { fields: 'id,nombre' }
-              );
+              const catRecord = await pb
+                .collection('categorias')
+                .getFirstListItem(
+                  `nombre ~ "${staticInfo.nombre}" && activo = true`,
+                  { fields: 'id,nombre' }
+                );
               if (catRecord) {
                 catId = catRecord.id;
                 catNombre = catRecord.nombre;
               }
             } catch (e) {
-              // Si no se encuentra por nombre, intentar por slug (si existe)
               try {
-                const catRecord = await pb.collection('categorias').getFirstListItem(
-                  `slug = "${categoriaSlug}" && activo = true`,
-                  { fields: 'id,nombre' }
-                );
+                const catRecord = await pb
+                  .collection('categorias')
+                  .getFirstListItem(
+                    `slug = "${categoriaSlug}" && activo = true`,
+                    { fields: 'id,nombre' }
+                  );
                 if (catRecord) {
                   catId = catRecord.id;
                   catNombre = catRecord.nombre;
                 }
               } catch (e2) {
-                console.warn(`⚠️ Categoría no encontrada para slug: ${categoriaSlug}`);
+                console.warn(
+                  `⚠️ Categoría no encontrada para slug: ${categoriaSlug}`
+                );
               }
             }
           } else {
-            // Si no está en CATEGORIAS estática, buscar directamente en PocketBase
             try {
-              const catRecord = await pb.collection('categorias').getFirstListItem(
-                `nombre ~ "${categoriaSlug}" && activo = true`,
-                { fields: 'id,nombre' }
-              );
+              const catRecord = await pb
+                .collection('categorias')
+                .getFirstListItem(
+                  `nombre ~ "${categoriaSlug}" && activo = true`,
+                  { fields: 'id,nombre' }
+                );
               if (catRecord) {
                 catId = catRecord.id;
                 catNombre = catRecord.nombre;
                 catInfo = { nombre: catNombre, slug: categoriaSlug };
               }
             } catch (e) {
-              console.warn(`⚠️ Categoría no encontrada en PocketBase: ${categoriaSlug}`);
+              console.warn(
+                `⚠️ Categoría no encontrada en PocketBase: ${categoriaSlug}`
+              );
             }
           }
         }
 
-        // ✅ Si no se encontró la categoría, redirigir a la página de productos
         if (!catId && categoriaSlug && categoriaSlug !== 'todos') {
-          console.warn(`⚠️ No se encontró categoría para slug: ${categoriaSlug}, redirigiendo a /${tipo}`);
+          console.warn(
+            `⚠️ No se encontró categoría para slug: ${categoriaSlug}, redirigiendo a /${tipo}`
+          );
           router.push(`/${tipo}`);
           return;
         }
@@ -589,38 +966,34 @@ export default function CategoriaPage() {
         setCategoriaInfo(catInfo);
         setSubcategoriaNombre(getNombreFromSlug(subcategoriaSlug));
 
-        // 3. Cargar productos usando categoriaId
+        // 3. Cargar productos
         let records = [];
         if (tipo === 'tandas') {
           records = await pb.collection('tandas').getFullList({
             filter: 'estado = "abierta"',
-            sort: '-created'
+            sort: '-created',
           });
         } else {
           let filter = 'activo = true';
 
-          // Búsqueda por texto
           if (busqueda?.trim()) {
             const term = busqueda.trim();
             filter += ` && (nombre ~ "${term}" || descripcion ~ "${term}" || sku ~ "${term}")`;
           }
 
-          // ✅ Filtrar por categoriaId (relación)
           if (catId) {
             filter += ` && categoriaId = "${catId}"`;
           }
 
-          // Si no hay categoría específica, traer todos los activos
           records = await pb.collection('products').getFullList({
             filter: filter,
             sort: '-created',
-            expand: 'categoriaId,subcategoriaId' // ✅ Expandir relaciones
+            expand: 'categoriaId,subcategoriaId',
           });
         }
 
-        const itemsData = records.map(item => normalizeItem(item, tipo));
+        const itemsData = records.map((item) => normalizeItem(item, tipo));
         setItems(itemsData);
-
       } catch (error) {
         console.error('Error cargando datos:', error);
       } finally {
@@ -630,61 +1003,78 @@ export default function CategoriaPage() {
     if (tipo) cargarDatos();
   }, [tipo, categoriaSlug, router.query.busqueda]);
 
-  // ─── Filtrar y ordenar ────────────────────────────────────────
+  // ─── Filtrar y ordenar · SIN CAMBIOS ────────────────────
   const itemsFiltrados = useMemo(() => {
     if (items.length === 0) return [];
 
-    // Obtener subcategoriaId desde el slug
     let subcategoriaId = null;
     if (subcategoriaSlug && categoriaInfo?.subcategorias) {
-      const sub = categoriaInfo.subcategorias.find(s => s.slug === subcategoriaSlug);
+      const sub = categoriaInfo.subcategorias.find(
+        (s) => s.slug === subcategoriaSlug
+      );
       if (sub) {
-        // Buscar en los items para obtener el ID real desde expand
-        const itemWithSub = items.find(i => i.subcategoria === sub.nombre || i.subcategoriaId);
+        const itemWithSub = items.find(
+          (i) => i.subcategoria === sub.nombre || i.subcategoriaId
+        );
         if (itemWithSub) {
           subcategoriaId = itemWithSub.subcategoriaId;
         }
       }
     }
 
-    let filtered = filterItems(items, categoriaId, subcategoriaId, activeFilters);
+    let filtered = filterItems(
+      items,
+      categoriaId,
+      subcategoriaId,
+      activeFilters
+    );
 
-    // Búsqueda por texto (adicional)
     const busqueda = router.query.busqueda;
     if (busqueda?.trim()) {
       const t = busqueda.trim().toLowerCase();
-      filtered = filtered.filter(item =>
-        (item.nombre || '').toLowerCase().includes(t) ||
-        (item.descripcion || '').toLowerCase().includes(t) ||
-        (item.sku || '').toLowerCase().includes(t) ||
-        (item.expand?.categoriaId?.nombre || '').toLowerCase().includes(t)
+      filtered = filtered.filter(
+        (item) =>
+          (item.nombre || '').toLowerCase().includes(t) ||
+          (item.descripcion || '').toLowerCase().includes(t) ||
+          (item.sku || '').toLowerCase().includes(t) ||
+          (item.expand?.categoriaId?.nombre || '').toLowerCase().includes(t)
       );
     }
 
-    // Ordenar
     if (sortBy === 'price_asc') filtered.sort((a, b) => a.precio - b.precio);
-    else if (sortBy === 'price_desc') filtered.sort((a, b) => b.precio - a.precio);
-    else if (sortBy === 'newest') filtered.sort((a, b) => new Date(b.created) - new Date(a.created));
-    else if (sortBy === 'popular') filtered.sort((a, b) => (b.visitas || 0) - (a.visitas || 0));
+    else if (sortBy === 'price_desc')
+      filtered.sort((a, b) => b.precio - a.precio);
+    else if (sortBy === 'newest')
+      filtered.sort((a, b) => new Date(b.created) - new Date(a.created));
+    else if (sortBy === 'popular')
+      filtered.sort((a, b) => (b.visitas || 0) - (a.visitas || 0));
 
     return filtered;
-  }, [items, categoriaId, subcategoriaSlug, activeFilters, sortBy, router.query.busqueda, categoriaInfo]);
+  }, [
+    items,
+    categoriaId,
+    subcategoriaSlug,
+    activeFilters,
+    sortBy,
+    router.query.busqueda,
+    categoriaInfo,
+  ]);
 
   useEffect(() => {
     setFilteredItems(itemsFiltrados);
     setCurrentPage(1);
   }, [itemsFiltrados]);
 
-  // ─── Handlers ──────────────────────────────────────────────────
+  // ─── Handlers ───────────────────────────────────────────
   const handleFilterChange = useCallback((section, item, isChecked) => {
-    setActiveFilters(prev => {
+    setActiveFilters((prev) => {
       const n = { ...prev };
       if (isChecked) {
         if (!n[section]) n[section] = [];
         if (!n[section].includes(item)) n[section].push(item);
       } else {
         if (n[section]) {
-          n[section] = n[section].filter(i => i !== item);
+          n[section] = n[section].filter((i) => i !== item);
           if (!n[section].length) delete n[section];
         }
       }
@@ -698,137 +1088,231 @@ export default function CategoriaPage() {
 
   const handleSelect = (itemId) => router.push(`/${tipo}/solicitar/${itemId}`);
 
-  const paginatedItems = filteredItems.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const paginatedItems = filteredItems.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
 
   const esServicio = tipo === 'servicios';
   const esInstrumento = tipo === 'instrumentos';
-  const tipoLabel = esServicio ? 'servicios' : esInstrumento ? 'instrumentos' : 'productos';
+  const tipoLabel = esServicio
+    ? 'servicios'
+    : esInstrumento
+    ? 'instrumentos'
+    : 'productos';
 
-  // ─── Renderizado ──────────────────────────────────────────────
+  // ─── Loading ────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <HeaderSimple
-          showNotifications={showNotifications}
-          setShowNotifications={setShowNotifications}
-          unreadCount={unreadCount}
-          navigateTo={navigateTo}
-          notifications={notifications}
-          showLoginDropdown={showLoginDropdown}
-          setShowLoginDropdown={setShowLoginDropdown}
-          onLoginSuccess={() => {
-            const user = pb.authStore.model;
-            setIsAuthenticated(!!user);
-            setUser(user);
-          }}
-        />
-        <div className="flex justify-center items-center min-h-[60vh]">
-          <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
+      <>
+        <Head><title>Cargando | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <TerminalBar mode="rotating" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <span
+                className="font-serif text-[32px] block mb-5 select-none"
+                style={{ color: T.inkGhost }}
+              >
+                ʃƪʃƪ
+              </span>
+              <p
+                className="text-[11px] uppercase tracking-[0.28em]"
+                style={{ color: T.inkFaint, fontWeight: 500 }}
+              >
+                Cargando categoría
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
+  // ─── Render principal ───────────────────────────────────
   return (
     <>
       <Head>
-        <title>{categoriaNombre || subcategoriaNombre || 'Categoría'} | MarketDesliz</title>
-        <meta name="description" content={`Explora ${tipoLabel} en ${categoriaNombre || 'categoría'}`} />
+        <title>
+          {categoriaNombre || subcategoriaNombre || 'Categoría'} | MarketDesliz
+        </title>
+        <meta
+          name="description"
+          content={`Explora ${tipoLabel} en ${categoriaNombre || 'categoría'}`}
+        />
+        <meta name="theme-color" content="#0F0F0F" />
       </Head>
 
-      <div className="min-h-screen bg-background flex flex-col">
-        <HeaderSimple
-          showNotifications={showNotifications}
-          setShowNotifications={setShowNotifications}
-          unreadCount={unreadCount}
-          navigateTo={navigateTo}
-          notifications={notifications}
-          showLoginDropdown={showLoginDropdown}
-          setShowLoginDropdown={setShowLoginDropdown}
-          onLoginSuccess={() => {
-            const user = pb.authStore.model;
-            setIsAuthenticated(!!user);
-            setUser(user);
-          }}
-        />
+      <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+        <BackButton fallback={`/${tipo || ''}`} />
+        <TerminalBar mode="rotating" />
+        <Header notifications={notifications} unreadCount={unreadCount} />
 
-        <div className="max-w-[1400px] mx-auto w-full px-4 py-6 flex-1">
-          <main className="flex flex-col gap-6">
-            {/* Breadcrumb */}
-            <Breadcrumb
-              tipo={tipo}
-              slugs={slug}
-              itemCount={filteredItems.length}
-              sortBy={sortBy}
-              setSortBy={setSortBy}
-              categoriaInfo={categoriaInfo}
-              categoriaId={categoriaId}
-              categoriasMap={categoriasMap}
-            />
+        <main className="flex-1">
+          {/* ─── Breadcrumb ───────────────────────────── */}
+          <Breadcrumb
+            tipo={tipo}
+            slugs={slug}
+            itemCount={filteredItems.length}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            categoriaInfo={categoriaInfo}
+            categoriaId={categoriaId}
+            categoriasMap={categoriasMap}
+          />
 
-            <div className="flex gap-7">
-              {/* Sidebar de filtros */}
-              <CategoryFilters
-                onFilterChange={handleFilterChange}
-                activeFilters={activeFilters}
-                tipo={tipo}
-                onClearAll={handleClearAllFilters}
-                items={items}
-                categoriasMap={categoriasMap}
-              />
+          <div className="max-w-[1280px] mx-auto px-6 md:px-14 py-8 md:py-10 w-full">
+            <div className="flex flex-col lg:flex-row gap-6">
+              {/* ─── Sidebar filtros ─────────────────── */}
+              <div className="hidden lg:block">
+                <CategoryFilters
+                  onFilterChange={handleFilterChange}
+                  activeFilters={activeFilters}
+                  tipo={tipo}
+                  onClearAll={handleClearAllFilters}
+                  items={items}
+                  categoriasMap={categoriasMap}
+                />
+              </div>
 
-              {/* Resultados */}
+              {/* ─── Resultados ──────────────────────── */}
               <div className="flex-1 min-w-0">
-                {Object.values(activeFilters).some(a => a?.length > 0) && (
-                  <div className="flex flex-wrap gap-2 mb-4">
+                {/* Filtros activos como pills */}
+                {Object.values(activeFilters).some((a) => a?.length > 0) && (
+                  <div className="flex flex-wrap gap-2 mb-5">
                     {Object.entries(activeFilters).flatMap(([, arr]) =>
-                      (arr || []).map(item => (
-                        <span key={item} className="flex items-center gap-1.5 bg-[#6C3BFF]/8 text-[#6C3BFF] text-xs font-medium px-3 py-1.5 rounded-full">
+                      (arr || []).map((item) => (
+                        <span
+                          key={item}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5"
+                          style={{
+                            background: 'rgba(79, 46, 232, 0.06)',
+                            color: T.accent,
+                            borderRadius: '6px',
+                            fontSize: '11.5px',
+                            fontWeight: 500,
+                          }}
+                        >
                           {item}
                           <button
                             onClick={() => {
-                              const section = Object.keys(activeFilters).find(k => activeFilters[k]?.includes(item));
-                              if (section) handleFilterChange(section, item, false);
+                              const section = Object.keys(
+                                activeFilters
+                              ).find((k) =>
+                                activeFilters[k]?.includes(item)
+                              );
+                              if (section)
+                                handleFilterChange(section, item, false);
                             }}
-                            className="hover:text-[#5b2ee6]"
+                            style={{
+                              color: T.accent,
+                              background: 'transparent',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: 0,
+                              WebkitTapHighlightColor: 'transparent',
+                            }}
+                            aria-label={`Quitar ${item}`}
                           >
-                            <X size={12} />
+                            <X size={11} strokeWidth={2} />
                           </button>
                         </span>
                       ))
                     )}
-                    <button onClick={handleClearAllFilters} className="text-xs text-gray-400 hover:text-gray-600 px-2">
+                    <button
+                      onClick={handleClearAllFilters}
+                      className="text-[11px] px-2 transition-colors"
+                      style={{
+                        color: T.inkFaint,
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        WebkitTapHighlightColor: 'transparent',
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.color = T.inkSoft)
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.color = T.inkFaint)
+                      }
+                    >
                       Limpiar todo
                     </button>
                   </div>
                 )}
 
                 {filteredItems.length === 0 ? (
-                  <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center shadow-sm">
-                    <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      {router.query.busqueda ? <Search size={28} className="text-gray-400" /> : <Inbox size={28} className="text-gray-300" />}
+                  <div
+                    className="flex flex-col items-center justify-center py-20 px-6 text-center"
+                    style={{
+                      background: 'rgba(15, 15, 15, 0.02)',
+                      border: `1px solid ${T.line}`,
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <div
+                      className="inline-flex items-center justify-center mb-4"
+                      style={{
+                        width: '64px',
+                        height: '64px',
+                        background: 'rgba(15,15,15,0.04)',
+                        borderRadius: '12px',
+                      }}
+                    >
+                      {router.query.busqueda ? (
+                        <Search
+                          size={26}
+                          strokeWidth={1.5}
+                          style={{ color: T.inkSoft }}
+                        />
+                      ) : (
+                        <Inbox
+                          size={26}
+                          strokeWidth={1.5}
+                          style={{ color: T.inkGhost }}
+                        />
+                      )}
                     </div>
-                    <h3 className="text-base font-semibold text-gray-800 mb-2">
+                    <h3
+                      className="text-[15px] mb-2"
+                      style={{ color: T.ink, fontWeight: 500 }}
+                    >
                       {router.query.busqueda
                         ? `Sin resultados para "${router.query.busqueda}"`
                         : `No hay ${tipoLabel} disponibles`}
                     </h3>
-                    <p className="text-sm text-gray-400 mb-6 max-w-sm mx-auto">
+                    <p
+                      className="text-[13px] max-w-sm mb-6"
+                      style={{ color: T.inkSoft, fontWeight: 450 }}
+                    >
                       {router.query.busqueda
                         ? 'Intenta con otra palabra clave o revisa la ortografía.'
                         : `No se encontraron ${tipoLabel} en esta categoría.`}
                     </p>
                     <Link
                       href={`/${tipo}`}
-                      className="inline-flex items-center gap-2 bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white px-6 py-2.5 rounded-xl font-semibold text-sm transition-colors"
+                      className="inline-flex items-center gap-2 h-10 px-5 text-white text-[13px]"
+                      style={{
+                        background: T.accent,
+                        borderRadius: '6px',
+                        fontWeight: 500,
+                        textDecoration: 'none',
+                        WebkitTapHighlightColor: 'transparent',
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.background = T.accentDeep)
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.background = T.accent)
+                      }
                     >
                       Ver todos los {tipoLabel}
                     </Link>
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
                       {paginatedItems.map((item) => (
                         <ProductCard
                           key={item.id}
@@ -842,23 +1326,76 @@ export default function CategoriaPage() {
                     </div>
 
                     {totalPages > 1 && (
-                      <div className="flex items-center justify-center gap-2 mt-8">
+                      <div className="flex items-center justify-center gap-3 mt-12">
                         <button
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          onClick={() =>
+                            setCurrentPage((p) => Math.max(1, p - 1))
+                          }
                           disabled={currentPage === 1}
-                          className="flex items-center gap-1 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
+                          className="flex items-center gap-1.5 h-9 px-4 text-[12.5px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          style={{
+                            background: 'transparent',
+                            border: `1px solid ${T.line}`,
+                            borderRadius: '6px',
+                            color: T.inkMid,
+                            fontWeight: 500,
+                            cursor:
+                              currentPage === 1 ? 'not-allowed' : 'pointer',
+                            WebkitTapHighlightColor: 'transparent',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (currentPage > 1) {
+                              e.currentTarget.style.borderColor = T.accent;
+                              e.currentTarget.style.color = T.accent;
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = T.line;
+                            e.currentTarget.style.color = T.inkMid;
+                          }}
                         >
-                          <ChevronLeft size={14} /> Anterior
+                          <ChevronLeft size={13} strokeWidth={1.75} /> Anterior
                         </button>
-                        <span className="px-4 py-2 text-sm text-gray-500">
+                        <span
+                          className="px-3 text-[12px] tabular-nums"
+                          style={{
+                            color: T.inkFaint,
+                            fontWeight: 500,
+                            fontFeatureSettings: '"tnum"',
+                          }}
+                        >
                           {currentPage} / {totalPages}
                         </span>
                         <button
-                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                          onClick={() =>
+                            setCurrentPage((p) => Math.min(totalPages, p + 1))
+                          }
                           disabled={currentPage === totalPages}
-                          className="flex items-center gap-1 px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
+                          className="flex items-center gap-1.5 h-9 px-4 text-[12.5px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          style={{
+                            background: 'transparent',
+                            border: `1px solid ${T.line}`,
+                            borderRadius: '6px',
+                            color: T.inkMid,
+                            fontWeight: 500,
+                            cursor:
+                              currentPage === totalPages
+                                ? 'not-allowed'
+                                : 'pointer',
+                            WebkitTapHighlightColor: 'transparent',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (currentPage < totalPages) {
+                              e.currentTarget.style.borderColor = T.accent;
+                              e.currentTarget.style.color = T.accent;
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = T.line;
+                            e.currentTarget.style.color = T.inkMid;
+                          }}
                         >
-                          Siguiente <ChevronRight size={14} />
+                          Siguiente <ChevronRight size={13} strokeWidth={1.75} />
                         </button>
                       </div>
                     )}
@@ -866,9 +1403,40 @@ export default function CategoriaPage() {
                 )}
               </div>
             </div>
-          </main>
-        </div>
+          </div>
+        </main>
+
+        <Footer variant="minimal" />
       </div>
+
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
+        }
+        .animate-blink { animation: blink 1s step-end infinite; }
+        body {
+          font-family:
+            -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display',
+            'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
+        }
+        .font-serif {
+          font-family:
+            ui-serif, 'Iowan Old Style', 'Apple Garamond', 'Palatino',
+            Georgia, 'Times New Roman', serif;
+        }
+        ::selection {
+          background: rgba(79, 46, 232, 0.12);
+          color: #0F0F0F;
+        }
+        * {
+          -webkit-tap-highlight-color: transparent;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
+        }
+      `}</style>
     </>
   );
 }

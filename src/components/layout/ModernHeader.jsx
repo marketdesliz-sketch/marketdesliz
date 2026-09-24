@@ -11,13 +11,24 @@ import {
 import pb from '../../lib/pocketbase';
 import LoginDropdown from '../LoginDropdown';
 import { getMenuItems, generarSlug } from '../../config/categorias';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function ModernHeader({ subtitle, showAuth = true }) {
   const router = useRouter();
+
+  // ─── Auth desde el contexto ────────────────────────────
+  const {
+    user,
+    isAuthenticated,
+    showLogin,
+    openLogin,
+    closeLogin,
+    logout,
+  } = useAuth();
+
+  // ─── Estados locales de UI ─────────────────────────────
   const [scrolled, setScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
   const [userBalance, setUserBalance] = useState('$0.00');
   const [userLevel, setUserLevel] = useState(0);
   const [activeDropdown, setActiveDropdown] = useState(null);
@@ -29,29 +40,22 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
   const menuRef = useRef(null);
   const userMenuRef = useRef(null);
 
-  const [showLoginDropdown, setShowLoginDropdown] = useState(false);
-
-  // ============================================================
-  // 1. MENÚ ESTÁTICO (optimizado con useMemo)
-  // ============================================================
+  // ─── Menú estático ─────────────────────────────────────
   const navigationItems = useMemo(() => getMenuItems(), []);
 
-  // ============================================================
-  // 2. SCROLL Y CIERRE DE MENÚES AL HACER CLICK FUERA
-  // ============================================================
+  // ─── Scroll listener ───────────────────────────────────
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // ─── Click outside ─────────────────────────────────────
   useEffect(() => {
     const handleClickOutside = (event) => {
-      // Cerrar menú de usuario
       if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
         setIsMenuOpen(false);
       }
-      // Cerrar menú de navegación (mega menús)
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setActiveDropdown(null);
         setActiveCategory('');
@@ -61,59 +65,39 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ============================================================
-  // 3. AUTENTICACIÓN Y DATOS DEL USUARIO
-  // ============================================================
+  // ─── Datos del cliente (deuda, nivel, notificaciones) ──
   useEffect(() => {
-    const checkAuth = async () => {
-      // ✅ Limpiar sesión de admin
-      if (pb.authStore.isValid && pb.authStore.role === 'admin') {
-        console.warn('🚨 Sesión de admin en ModernHeader. Limpiando...');
-        pb.authStore.clearAll();
-        setIsAuthenticated(false);
-        setUser(null);
-        setUserBalance('$0');
+    const fetchClientData = async () => {
+      if (!user) {
+        setUserBalance('$0.00');
         setUserLevel(0);
+        setNotificationsCount(0);
         return;
       }
 
-      const isAuth = pb.authStore.isValid;
-      setIsAuthenticated(isAuth);
-      if (isAuth) {
-        const currentUser = pb.authStore.model;
-        setUser(currentUser);
-        try {
-          // Obtener datos del cliente
-          const clientRecord = await pb.collection('clients').getFirstListItem(`userId = "${currentUser.id}"`);
-          const deuda = clientRecord.deudaActual || 0;
-          setUserBalance(`Deuda: $${deuda.toLocaleString()}`);
-          setUserLevel(clientRecord.nivel || 0);
+      try {
+        const clientRecord = await pb
+          .collection('clients')
+          .getFirstListItem(`userId = "${user.id}"`);
+        const deuda = clientRecord.deudaActual || 0;
+        setUserBalance(`Deuda: $${deuda.toLocaleString()}`);
+        setUserLevel(clientRecord.nivel || 0);
 
-          // Obtener notificaciones no leídas (ejemplo)
-          const notificaciones = await pb.collection('notificaciones').getList(1, 1, {
-            filter: `usuarioId = "${currentUser.id}" && leida = false`
-          });
-          setNotificationsCount(notificaciones.totalItems);
-        } catch (error) {
-          console.debug('Error al cargar datos del cliente:', error);
-          setUserBalance('$0');
-          setUserLevel(0);
-        }
-      } else {
-        setUser(null);
+        const notificaciones = await pb.collection('notificaciones').getList(1, 1, {
+          filter: `usuarioId = "${user.id}" && leida = false`,
+        });
+        setNotificationsCount(notificaciones.totalItems);
+      } catch (error) {
+        console.debug('Error al cargar datos del cliente:', error);
         setUserBalance('$0');
         setUserLevel(0);
-        setNotificationsCount(0);
       }
     };
-    checkAuth();
-    const unsubscribe = pb.authStore.onChange(() => checkAuth());
-    return () => unsubscribe();
-  }, []);
 
-  // ============================================================
-  // 4. CARRITO
-  // ============================================================
+    fetchClientData();
+  }, [user]);
+
+  // ─── Carrito ───────────────────────────────────────────
   useEffect(() => {
     const updateCartCount = () => {
       const carrito = JSON.parse(localStorage.getItem('carrito') || '[]');
@@ -125,19 +109,13 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
     return () => window.removeEventListener('carritoActualizado', updateCartCount);
   }, []);
 
-  // ============================================================
-  // 5. FUNCIONES DE UTILIDAD
-  // ============================================================
-  const handleLogout = () => {
-    pb.authStore.clearAll();
-    router.push('/');
+  // ─── Utilidades ────────────────────────────────────────
+  const handleLogoutClick = (e) => {
+    e.preventDefault();
+    logout('/');
     setIsMenuOpen(false);
   };
 
-  const handleLoginClick = () => setShowLoginDropdown(true);
-  const handleLogoutClick = (e) => { e.preventDefault(); handleLogout(); };
-
-  // Búsqueda funcional (Enter)
   const handleSearchKeyDown = (e) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
       router.push(`/buscar?q=${encodeURIComponent(searchQuery.trim())}`);
@@ -145,14 +123,12 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
   };
 
   const generateHref = (mainCategory, subCategory, item) => {
-    if (mainCategory === "Negocios") {
+    if (mainCategory === 'Negocios') {
       const slug = generarSlug(item);
       return `/negocios?categoria=${encodeURIComponent(slug)}`;
     }
-
-    const categoryItem = navigationItems.find(cat => cat.nombre === mainCategory);
-    if (!categoryItem || !categoryItem.sections) return "#";
-
+    const categoryItem = navigationItems.find((cat) => cat.nombre === mainCategory);
+    if (!categoryItem || !categoryItem.sections) return '#';
     for (const section of categoryItem.sections) {
       for (const cat of section.categories) {
         if (cat.name === subCategory && cat.items.includes(item)) {
@@ -161,7 +137,7 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
         }
       }
     }
-    return "#";
+    return '#';
   };
 
   const handleMouseEnter = (index) => {
@@ -176,31 +152,30 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
     }, 300);
   };
 
-  const handleItemHover = (categoryName, itemName) => setActiveCategory(`${categoryName}-${itemName}`);
+  const handleItemHover = (categoryName, itemName) =>
+    setActiveCategory(`${categoryName}-${itemName}`);
 
-  // ============================================================
-  // 6. MENÚ DE USUARIO SEGÚN ROL
-  // ============================================================
+  // ─── Menú de usuario según rol ─────────────────────────
   const menuVendedor = [
-    { icon: LayoutDashboard, label: "Panel de Vendedor", href: "/vendedor" },
-    { icon: ClipboardList, label: "Solicitudes pendientes", href: "/vendedor/solicitudes" },
-    { icon: History, label: "Historial", href: "/vendedor/historial" },
-    { icon: User, label: "Mi perfil", href: "/vendedor/perfil" },
-    { icon: QrCode, label: "Mi código QR", href: "/vendedor/qr" },
+    { icon: LayoutDashboard, label: 'Panel de Vendedor', href: '/vendedor' },
+    { icon: ClipboardList, label: 'Solicitudes pendientes', href: '/vendedor/solicitudes' },
+    { icon: History, label: 'Historial', href: '/vendedor/historial' },
+    { icon: User, label: 'Mi perfil', href: '/vendedor/perfil' },
+    { icon: QrCode, label: 'Mi código QR', href: '/vendedor/qr' },
   ];
   const menuAdmin = [
-    { icon: Crown, label: "Panel de Admin", href: "/admin/dashboard" },
-    { icon: Users, label: "Clientes", href: "/admin/clientes" },
-    { icon: User, label: "Vendedores", href: "/admin/vendedores" },
-    { icon: Package, label: "Productos", href: "/admin/productos" },
-    { icon: ShoppingBag, label: "Órdenes", href: "/admin/ordenes" },
+    { icon: Crown, label: 'Panel de Admin', href: '/admin/dashboard' },
+    { icon: Users, label: 'Clientes', href: '/admin/clientes' },
+    { icon: User, label: 'Vendedores', href: '/admin/vendedores' },
+    { icon: Package, label: 'Productos', href: '/admin/productos' },
+    { icon: ShoppingBag, label: 'Órdenes', href: '/admin/ordenes' },
   ];
   const menuCliente = [
-    { icon: User, label: "Mi perfil", href: "/perfil" },
-    { icon: Package, label: "Mis órdenes", href: "/perfil/ordenes" },
-    { icon: CreditCard, label: "Mis pagos", href: "/perfil/pagos" },
-    { icon: ShoppingBag, label: "Mi tarjeta virtual", href: "/perfil/tarjeta" },
-    { icon: Heart, label: "Favoritos", href: "/perfil/favoritos" },
+    { icon: User, label: 'Mi perfil', href: '/perfil' },
+    { icon: Package, label: 'Mis órdenes', href: '/perfil/ordenes' },
+    { icon: CreditCard, label: 'Mis pagos', href: '/perfil/pagos' },
+    { icon: ShoppingBag, label: 'Mi tarjeta virtual', href: '/perfil/tarjeta' },
+    { icon: Heart, label: 'Favoritos', href: '/perfil/favoritos' },
   ];
 
   const getMenuItemsByRole = () => {
@@ -210,15 +185,14 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
     return menuCliente;
   };
 
-  // ============================================================
-  // 7. RENDERIZADO PRINCIPAL
-  // ============================================================
+  // ─── RENDER ─────────────────────────────────────────────
   return (
     <header
-      className={`fixed top-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-white shadow-md border-b border-gray-100' : 'bg-white border-b border-gray-100'
-        }`}
+      className={`fixed top-0 w-full z-50 transition-all duration-300 ${
+        scrolled ? 'bg-white shadow-md border-b border-gray-100' : 'bg-white border-b border-gray-100'
+      }`}
     >
-      {/* ── BARRA ANUNCIO ───────────────────────────────────── */}
+      {/* ── BARRA ANUNCIO ──────────────────────────────── */}
       <div className="bg-[#6C3BFF] text-white py-1.5 px-4">
         <p className="text-center text-xs font-medium tracking-wide">
           <span className="font-bold">MARKETDESLIZ</span>
@@ -227,7 +201,7 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
         </p>
       </div>
 
-      {/* ── HEADER PRINCIPAL ────────────────────────────────── */}
+      {/* ── HEADER PRINCIPAL ───────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex items-center h-16 gap-6">
           {/* Logo */}
@@ -241,7 +215,7 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
             </span>
           </Link>
 
-          {/* Búsqueda con funcionalidad Enter */}
+          {/* Búsqueda */}
           <div className="flex-1 max-w-xl">
             <div className="relative">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -300,7 +274,10 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
                     </p>
                     <p className="text-[#10b981] text-xs font-medium">{userBalance}</p>
                   </div>
-                  <ChevronDown size={14} className={`text-gray-400 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown
+                    size={14}
+                    className={`text-gray-400 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`}
+                  />
                 </button>
 
                 {isMenuOpen && (
@@ -308,7 +285,6 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
                     id="user-menu"
                     className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-50"
                   >
-                    {/* Información extra del usuario */}
                     <div className="px-4 py-2 border-b border-gray-100">
                       <p className="text-xs text-gray-500">
                         Nivel: <span className="font-medium text-gray-700">{userLevel}</span>
@@ -343,30 +319,28 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
             ) : (
               /* Usuario no autenticado */
               <div className="relative">
-  <button
-    onClick={handleLoginClick}
-    className="flex items-center gap-2 text-sm text-gray-700 hover:text-[#6C3BFF] transition-colors"
-    aria-label="Iniciar sesión"
-  >
-    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-      <User size={16} className="text-gray-500" />
-    </div>
-    <div className="hidden sm:block text-left leading-tight">
-      <p className="font-semibold text-sm">Iniciar sesión</p>
-      <p className="text-[#10b981] text-xs font-medium">$0.00</p>
-    </div>
-  </button>
-  {showLoginDropdown && (
-    <LoginDropdown
-      onClose={() => setShowLoginDropdown(false)}
-      onSuccess={() => {
-        // El estado de autenticación se actualizará automáticamente
-        // en el useEffect de autenticación.
-        setShowLoginDropdown(false);
-      }}
-    />
-  )}
-</div>
+                <button
+                  onClick={openLogin}
+                  className="flex items-center gap-2 text-sm text-gray-700 hover:text-[#6C3BFF] transition-colors"
+                  aria-label="Iniciar sesión"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                    <User size={16} className="text-gray-500" />
+                  </div>
+                  <div className="hidden sm:block text-left leading-tight">
+                    <p className="font-semibold text-sm">Iniciar sesión</p>
+                    <p className="text-[#10b981] text-xs font-medium">$0.00</p>
+                  </div>
+                </button>
+                {showLogin && (
+                  <LoginDropdown
+                    onClose={closeLogin}
+                    onSuccess={() => {
+                      closeLogin();
+                    }}
+                  />
+                )}
+              </div>
             )}
 
             {/* Hamburguesa mobile */}
@@ -380,7 +354,7 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
           </div>
         </div>
 
-        {/* ── NAVEGACIÓN ──────────────────────────────────────── */}
+        {/* ── NAVEGACIÓN ───────────────────────────────── */}
         <nav
           ref={menuRef}
           className="hidden lg:flex items-center gap-1 border-t border-gray-100 h-10"
@@ -397,10 +371,11 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
               {item.simple ? (
                 <Link
                   href={item.href || '/'}
-                  className={`px-3 h-full flex items-center text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${router.pathname === item.href
+                  className={`px-3 h-full flex items-center text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${
+                    router.pathname === item.href
                       ? 'text-[#6C3BFF] border-[#6C3BFF]'
                       : 'text-gray-600 hover:text-[#6C3BFF] border-transparent'
-                    }`}
+                  }`}
                   aria-current={router.pathname === item.href ? 'page' : undefined}
                 >
                   {item.nombre}
@@ -408,15 +383,19 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
               ) : item.megaMenu && item.sections ? (
                 <>
                   <button
-                    className={`px-3 h-full flex items-center gap-1 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeDropdown === index
+                    className={`px-3 h-full flex items-center gap-1 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${
+                      activeDropdown === index
                         ? 'text-[#6C3BFF] border-[#6C3BFF]'
                         : 'text-gray-600 hover:text-[#6C3BFF] border-transparent'
-                      }`}
+                    }`}
                     aria-expanded={activeDropdown === index}
                     aria-haspopup="true"
                   >
                     {item.nombre}
-                    <ChevronDown size={13} className={`transition-transform ${activeDropdown === index ? 'rotate-180' : ''}`} />
+                    <ChevronDown
+                      size={13}
+                      className={`transition-transform ${activeDropdown === index ? 'rotate-180' : ''}`}
+                    />
                   </button>
 
                   {activeDropdown === index && (
@@ -445,13 +424,17 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
                                       <li key={itemIndex}>
                                         <Link
                                           href={itemHref}
-                                          className={`block py-0.5 text-sm transition-colors ${activeCategory === itemKey
+                                          className={`block py-0.5 text-sm transition-colors ${
+                                            activeCategory === itemKey
                                               ? 'text-[#6C3BFF] font-medium'
                                               : 'text-gray-500 hover:text-[#6C3BFF]'
-                                            }`}
+                                          }`}
                                           onMouseEnter={() => handleItemHover(category.name, subItem)}
                                           onMouseLeave={() => setActiveCategory('')}
-                                          onClick={() => { setActiveDropdown(null); setActiveCategory(''); }}
+                                          onClick={() => {
+                                            setActiveDropdown(null);
+                                            setActiveCategory('');
+                                          }}
                                           role="menuitem"
                                         >
                                           {subItem}
@@ -478,7 +461,6 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
                   )}
                 </>
               ) : (
-                /* Submenú simple (Ver Más) */
                 item.submenu && (
                   <>
                     <button
@@ -488,7 +470,10 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
                       aria-haspopup="true"
                     >
                       {item.nombre}
-                      <ChevronDown size={13} className={`transition-transform ${activeDropdown === index ? 'rotate-180' : ''}`} />
+                      <ChevronDown
+                        size={13}
+                        className={`transition-transform ${activeDropdown === index ? 'rotate-180' : ''}`}
+                      />
                     </button>
 
                     {activeDropdown === index && (
@@ -519,7 +504,7 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
         </nav>
       </div>
 
-      {/* ── MENÚ MOBILE ─────────────────────────────────────── */}
+      {/* ── MENÚ MOBILE ─────────────────────────────────── */}
       {isMenuOpen && (
         <div className="lg:hidden bg-white border-t border-gray-100 max-h-[80vh] overflow-y-auto">
           <div className="px-4 py-3 space-y-0.5">
@@ -565,7 +550,10 @@ export default function ModernHeader({ subtitle, showAuth = true }) {
                 </>
               ) : (
                 <button
-                  onClick={() => { handleLoginClick(); setIsMenuOpen(false); }}
+                  onClick={() => {
+                    openLogin();
+                    setIsMenuOpen(false);
+                  }}
                   className="flex items-center gap-2.5 w-full py-2.5 px-3 text-sm font-medium text-[#6C3BFF] hover:bg-purple-50 rounded-lg transition-colors"
                 >
                   <User size={15} />

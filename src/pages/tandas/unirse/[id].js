@@ -4,31 +4,12 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import {
-  Target,
-  ArrowLeft,
-  CheckCircle,
-  XCircle,
-  Fuel,
-  ShieldCheck,
-  FileText,
-  Users,
-  Calendar,
-  DollarSign,
-  Clock,
-  Award,
-  Crown,
-  Star,
-  AlertCircle,
-  CreditCard,
-  ListChecks,
-  Hash,
-  TrendingUp,
-  Zap,
-  Gift,
-  HeartHandshake,
-  RefreshCw
+  Target, ArrowLeft, CheckCircle, XCircle, Fuel, ShieldCheck,
+  FileText, Users, Calendar, DollarSign, Clock, Award, Crown, Star,
+  AlertCircle, CreditCard, ListChecks, Hash, TrendingUp, Zap, Gift,
+  HeartHandshake, RefreshCw, ChevronLeft,
 } from 'lucide-react';
-import StoreLayout from '../../../layouts/StoreLayout';
+import pb from '../../../lib/pocketbase';
 import {
   getTandaById,
   getMiembrosTanda,
@@ -39,12 +20,19 @@ import {
   getMemberByClientAndTanda,
   canJoinTandaProgresivo,
   getNivelTandaPermitido,
-  getTandaWithDetails
+  getTandaWithDetails,
 } from '../../../lib/tandasService';
 import { getClientKYC } from '../../../lib/kycService';
-import pb from '../../../lib/pocketbase';
+import { useAuth } from '../../../contexts/AuthContext';
+import { T } from '../../../lib/tokens';
+import TerminalBar from '../../../components/TerminalBar';
+import Header from '../../../components/Header';
+import Footer from '../../../components/Footer';
+import BackButton from '../../../components/BackButton';
 
-// ─── Toast simple ──────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// Toast simple — restyleado con tokens
+// ─────────────────────────────────────────────────────────────────────────
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
@@ -52,29 +40,200 @@ function Toast({ message, type, onClose }) {
   }, [onClose]);
 
   const colors = {
-    success: 'bg-green-50 border-green-200 text-green-800',
-    error: 'bg-red-50 border-red-200 text-red-800',
-    warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-    info: 'bg-blue-50 border-blue-200 text-blue-800'
+    success: { fg: T.green, bg: 'rgba(26, 127, 75, 0.06)' },
+    error: { fg: T.red, bg: 'rgba(197, 48, 48, 0.06)' },
+    warning: { fg: '#B8820E', bg: 'rgba(184, 130, 14, 0.06)' },
+    info: { fg: T.accent, bg: 'rgba(79, 46, 232, 0.06)' },
   };
 
+  const c = colors[type] || colors.info;
+
   return (
-    <div className={`fixed bottom-4 right-4 z-50 p-4 rounded-xl border shadow-lg max-w-sm ${colors[type] || colors.info}`}>
-      <p className="text-sm">{message}</p>
+    <div
+      className="fixed bottom-4 right-4 z-50 px-4 py-3 max-w-sm"
+      style={{
+        background: T.bg,
+        border: `1px solid ${T.line}`,
+        borderLeft: `2px solid ${c.fg}`,
+        borderRadius: '6px',
+        boxShadow: '0 4px 20px rgba(15,15,15,0.08)',
+      }}
+    >
+      <p
+        className="text-[12.5px] leading-[1.5]"
+        style={{ color: c.fg, fontWeight: 500 }}
+      >
+        {message}
+      </p>
     </div>
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Sub-componentes UI
+// ─────────────────────────────────────────────────────────────────────────
+function SectionLabel({ children, accent = false }) {
+  return (
+    <p
+      className="text-[10px] md:text-[11px] uppercase tracking-[0.22em] mb-4"
+      style={{
+        color: accent ? T.accent : T.inkFaint,
+        fontWeight: 500,
+        fontFeatureSettings: '"ss01"',
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function StepIndicator({ steps, paso }) {
+  return (
+    <div className="flex items-start justify-between gap-2 mb-10">
+      {steps.map((step) => {
+        const StepIcon = step.icon;
+        const isActive = paso >= step.num;
+        const isCompleted = paso > step.num;
+
+        return (
+          <div key={step.num} className="flex-1 flex flex-col items-center gap-2">
+            <div
+              className="flex items-center justify-center transition-all"
+              style={{
+                width: '32px',
+                height: '32px',
+                background: isCompleted
+                  ? T.green
+                  : isActive
+                  ? T.accent
+                  : 'rgba(15,15,15,0.04)',
+                color: isActive ? '#FFFFFF' : T.inkFaint,
+                borderRadius: '8px',
+                transitionTimingFunction: T.ease,
+              }}
+            >
+              {isCompleted ? (
+                <CheckCircle size={15} strokeWidth={2} />
+              ) : (
+                <StepIcon size={15} strokeWidth={1.75} />
+              )}
+            </div>
+            <span
+              className="text-[10px] uppercase tracking-[0.14em] text-center"
+              style={{
+                color: isActive ? T.ink : T.inkFaint,
+                fontWeight: 500,
+              }}
+            >
+              {step.label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function StatCell({ icon: Icon, label, value, accent = false, border = true }) {
+  return (
+    <div
+      className="p-4 text-center"
+      style={{ borderLeft: border ? `1px solid ${T.line}` : 'none' }}
+    >
+      <Icon
+        size={15}
+        strokeWidth={1.75}
+        style={{ color: accent ? T.accent : T.inkFaint, margin: '0 auto 8px' }}
+      />
+      <p
+        className="text-[9.5px] uppercase tracking-[0.16em] mb-1.5"
+        style={{ color: T.inkFaint, fontWeight: 500 }}
+      >
+        {label}
+      </p>
+      <p
+        className="text-[15px] tabular-nums tracking-[-0.005em]"
+        style={{
+          color: accent ? T.accent : T.ink,
+          fontWeight: 500,
+          fontFeatureSettings: '"tnum"',
+        }}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function StatusBadge({ icon: Icon, label, color, bg }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 shrink-0"
+      style={{
+        background: bg,
+        color,
+        borderRadius: '4px',
+        fontSize: '10px',
+        textTransform: 'uppercase',
+        letterSpacing: '0.12em',
+        fontWeight: 600,
+      }}
+    >
+      {Icon && <Icon size={10} strokeWidth={2.25} />}
+      {label}
+    </span>
+  );
+}
+
+function Callout({ variant = 'info', icon: Icon, children }) {
+  const variants = {
+    info: { fg: T.accent, bg: 'rgba(79, 46, 232, 0.06)', border: 'rgba(79, 46, 232, 0.12)' },
+    warning: { fg: '#B8820E', bg: 'rgba(184, 130, 14, 0.06)', border: 'rgba(184, 130, 14, 0.15)' },
+    success: { fg: T.green, bg: 'rgba(26, 127, 75, 0.06)', border: 'rgba(26, 127, 75, 0.15)' },
+    error: { fg: T.red, bg: 'rgba(197, 48, 48, 0.06)', border: 'rgba(197, 48, 48, 0.15)' },
+  };
+  const c = variants[variant] || variants.info;
+
+  return (
+    <div
+      className="flex items-start gap-2.5 px-4 py-3"
+      style={{
+        background: c.bg,
+        border: `1px solid ${c.border}`,
+        borderRadius: '6px',
+      }}
+    >
+      {Icon && (
+        <Icon
+          size={14}
+          strokeWidth={1.75}
+          style={{ color: c.fg, flexShrink: 0, marginTop: 2 }}
+        />
+      )}
+      <div
+        className="text-[12.5px] leading-[1.55] flex-1"
+        style={{ color: c.fg, fontWeight: 450 }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Página — lógica SIN CAMBIOS
+// ─────────────────────────────────────────────────────────────────────────
 export default function UnirseTandaPage() {
   const router = useRouter();
   const { id } = router.query;
+
+  // ─── Auth desde el contexto ────────────────────────────
+  const { user, loading: authLoading, openLogin } = useAuth();
 
   const [tanda, setTanda] = useState(null);
   const [miembros, setMiembros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [procesando, setProcesando] = useState(false);
-  const [clienteId, setClienteId] = useState(null);
-  const [cliente, setCliente] = useState(null);
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [paso, setPaso] = useState(1);
   const [error, setError] = useState('');
@@ -90,7 +249,7 @@ export default function UnirseTandaPage() {
   const [toast, setToast] = useState(null);
   const [cargandoVerificacion, setCargandoVerificacion] = useState(false);
 
-  // ─── Persistencia del paso en localStorage ─────────────────────────────
+  // ─── Persistencia del paso en localStorage ─────────────────
   useEffect(() => {
     if (id && paso > 1 && paso < 5) {
       localStorage.setItem(`tanda_unirse_paso_${id}`, paso.toString());
@@ -100,30 +259,30 @@ export default function UnirseTandaPage() {
     }
   }, [paso, id]);
 
-  // ─── Autenticación y carga inicial ─────────────────────────────────────
+  // ─── Autenticación y carga inicial ─────────────────────────
   useEffect(() => {
-    if (!pb.authStore.isValid) {
-      router.push('/solicitar?redirect=' + encodeURIComponent(router.asPath));
+    if (authLoading) return;
+
+    if (!user) {
+      // Sin sesión → abrir el dropdown de login
+      setLoading(false);
+      openLogin();
       return;
     }
-    const user = pb.authStore.model;
-    setClienteId(user.id);
-    setCliente(user);
 
     if (id) {
       cargarDatos(user.id);
     }
-  }, [id]);
+  }, [id, user, authLoading, openLogin]);
 
   const cargarDatos = async (clientId) => {
     try {
       setLoading(true);
       setError('');
 
-      // 1. Obtener datos de la tanda y miembros en paralelo
       const [tandaData, miembrosData] = await Promise.all([
         getTandaById(id),
-        getMiembrosTanda(id)
+        getMiembrosTanda(id),
       ]);
 
       if (!tandaData) {
@@ -135,7 +294,6 @@ export default function UnirseTandaPage() {
       setTanda(tandaData);
       setMiembros(miembrosData);
 
-      // 2. Verificar KYC
       const kyc = await getClientKYC(clientId);
       if (kyc?.estado !== 'aprobado') {
         setError('Debes completar la verificación KYC para unirte a una tanda');
@@ -143,7 +301,6 @@ export default function UnirseTandaPage() {
         return;
       }
 
-      // 3. Verificar nivel progresivo usando el servicio centralizado
       const verificacion = await canJoinTandaProgresivo(clientId, id);
 
       if (!verificacion.allowed) {
@@ -155,21 +312,17 @@ export default function UnirseTandaPage() {
         return;
       }
 
-      // Si permite, guardar información de niveles
       setNivelPermitido(verificacion.siguienteNivel || 1);
       setNivelMaximoParticipado(verificacion.nivelActual || 0);
       setHaParticipado(verificacion.nivelActual > 0);
 
-      // 4. Verificar si ya es miembro
-      const miembroExistente = miembrosData.find(m => m.userId === clientId);
+      const miembroExistente = miembrosData.find((m) => m.userId === clientId);
       if (miembroExistente) {
         setMemberId(miembroExistente.id);
 
-        // Recuperar paso guardado si existe
         const savedPaso = localStorage.getItem(`tanda_unirse_paso_${id}`);
         if (savedPaso && parseInt(savedPaso) > 1) {
           const savedPasoNum = parseInt(savedPaso);
-          // Validar que el paso guardado sea coherente con el estado actual
           if (savedPasoNum === 5 && miembroExistente.posicion > 1) {
             setPosicionFinal(miembroExistente.posicion);
             setPaso(5);
@@ -182,17 +335,14 @@ export default function UnirseTandaPage() {
           } else if (savedPasoNum === 2) {
             setPaso(2);
           } else {
-            // Si no coincide, determinar paso lógicamente
             determinarPaso(miembroExistente, miembrosData);
           }
         } else {
           determinarPaso(miembroExistente, miembrosData);
         }
       } else {
-        // No es miembro, comenzar en paso 1
         setPaso(1);
       }
-
     } catch (error) {
       console.error('Error cargando datos:', error);
       setError('Error al cargar la información de la tanda. Intenta de nuevo.');
@@ -206,8 +356,7 @@ export default function UnirseTandaPage() {
       setPosicionFinal(miembro.posicion);
       setPaso(5);
     } else if (miembro.gasFeePaid) {
-      // Tiene gasolina pagada pero aún no ha elegido posición
-      getAvailablePositions(id).then(disponibles => {
+      getAvailablePositions(id).then((disponibles) => {
         setPosicionesDisponibles(disponibles);
         setPaso(4);
       });
@@ -216,17 +365,23 @@ export default function UnirseTandaPage() {
     }
   };
 
-  // ─── Funciones de acción ──────────────────────────────────────────────
+  // ─── Funciones de acción ──────────────────────────────────
   const handleUnirse = async () => {
+    if (!user) {
+      openLogin();
+      return;
+    }
     try {
       setProcesando(true);
       setError('');
 
-      const miembro = await joinTanda(clienteId, id);
+      const miembro = await joinTanda(user.id, id);
       setMemberId(miembro.id);
       setPaso(2);
-      setToast({ message: '✅ Registro exitoso, ahora revisa los términos', type: 'success' });
-
+      setToast({
+        message: 'Registro exitoso, ahora revisa los términos',
+        type: 'success',
+      });
     } catch (error) {
       console.error('Error al unirse:', error);
       setError(error.message || 'Error al unirse a la tanda');
@@ -242,9 +397,10 @@ export default function UnirseTandaPage() {
 
       let currentMemberId = memberId;
       if (!currentMemberId) {
-        // Buscar el miembro nuevamente
         const miembrosActualizados = await getMiembrosTanda(id);
-        const miMiembro = miembrosActualizados.find(m => m.userId === clienteId);
+        const miMiembro = miembrosActualizados.find(
+          (m) => m.userId === user?.id
+        );
         if (!miMiembro) {
           throw new Error('No se encontró tu membresía');
         }
@@ -257,8 +413,10 @@ export default function UnirseTandaPage() {
       const disponibles = await getAvailablePositions(id);
       setPosicionesDisponibles(disponibles);
       setPaso(4);
-      setToast({ message: '✅ Pago de gasolina registrado, elige tu posición', type: 'success' });
-
+      setToast({
+        message: 'Pago de gasolina registrado, elige tu posición',
+        type: 'success',
+      });
     } catch (error) {
       console.error('Error pagando gasolina:', error);
       setError(error.message || 'Error al procesar el pago de gasolina');
@@ -280,10 +438,11 @@ export default function UnirseTandaPage() {
       await selectPosition(memberId, posicionSeleccionada);
       setPosicionFinal(posicionSeleccionada);
       setPaso(5);
-      // Limpiar paso guardado
       localStorage.removeItem(`tanda_unirse_paso_${id}`);
-      setToast({ message: `✅ Posición #${posicionSeleccionada} confirmada!`, type: 'success' });
-
+      setToast({
+        message: `Posición #${posicionSeleccionada} confirmada!`,
+        type: 'success',
+      });
     } catch (error) {
       console.error('Error seleccionando posición:', error);
       setError(error.message || 'Error al seleccionar tu posición');
@@ -296,25 +455,27 @@ export default function UnirseTandaPage() {
     setContratoAceptado(true);
     setMostrarContrato(false);
     setPaso(3);
-    setToast({ message: '✅ Contrato aceptado, ahora paga la gasolina', type: 'success' });
+    setToast({
+      message: 'Contrato aceptado, ahora paga la gasolina',
+      type: 'success',
+    });
   };
 
-  // ─── Reintentar carga ──────────────────────────────────────────────────
   const handleReintentar = () => {
-    if (clienteId) {
-      cargarDatos(clienteId);
+    if (user?.id) {
+      cargarDatos(user.id);
     } else {
       router.push('/tandas');
     }
   };
 
-  // ─── Formateadores ──────────────────────────────────────────────────────
+  // ─── Formateadores ────────────────────────────────────────
   const formatMoney = (amount) => {
     if (!amount) return '$0';
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
       currency: 'MXN',
-      minimumFractionDigits: 0
+      minimumFractionDigits: 0,
     }).format(amount);
   };
 
@@ -323,21 +484,23 @@ export default function UnirseTandaPage() {
     return new Date(date).toLocaleDateString('es-MX', {
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
     });
   };
 
   const getFechaEntrega = () => {
     if (!posicionFinal || !tanda) return 'Por determinar';
 
-    const fechaInicio = new Date(tanda.fechaInicio || tanda.startDate || new Date());
+    const fechaInicio = new Date(
+      tanda.fechaInicio || tanda.startDate || new Date()
+    );
     const semanasEspera = posicionFinal - 1;
 
     const freq = tanda.frecuencia || tanda.frequency;
     if (freq === 'semanal' || freq === 'weekly') {
-      fechaInicio.setDate(fechaInicio.getDate() + (semanasEspera * 7));
+      fechaInicio.setDate(fechaInicio.getDate() + semanasEspera * 7);
     } else if (freq === 'quincenal' || freq === 'biweekly') {
-      fechaInicio.setDate(fechaInicio.getDate() + (semanasEspera * 14));
+      fechaInicio.setDate(fechaInicio.getDate() + semanasEspera * 14);
     } else {
       fechaInicio.setMonth(fechaInicio.getMonth() + semanasEspera);
     }
@@ -347,7 +510,6 @@ export default function UnirseTandaPage() {
 
   const getPosicionTexto = () => {
     if (!posicionFinal) return '';
-
     if (posicionFinal === 1) return 'Administrador';
     if (posicionFinal <= 5) return 'Posición preferente';
     return `Posición ${posicionFinal}`;
@@ -362,475 +524,1112 @@ export default function UnirseTandaPage() {
 
   const PosicionIcono = useMemo(() => getPosicionIcono(), [posicionFinal]);
 
-  // ─── Steps ─────────────────────────────────────────────────────────────
-  const steps = useMemo(() => [
-    { num: 1, label: 'Información', icon: Target },
-    { num: 2, label: 'Términos', icon: FileText },
-    { num: 3, label: 'Gasolina', icon: Fuel },
-    { num: 4, label: 'Elegir #', icon: Hash },
-    { num: 5, label: 'Confirmar', icon: CheckCircle }
-  ], []);
+  const steps = useMemo(
+    () => [
+      { num: 1, label: 'Información', icon: Target },
+      { num: 2, label: 'Términos', icon: FileText },
+      { num: 3, label: 'Gasolina', icon: Fuel },
+      { num: 4, label: 'Elegir #', icon: Hash },
+      { num: 5, label: 'Confirmar', icon: CheckCircle },
+    ],
+    []
+  );
 
-  // ─── Estados de carga y error ──────────────────────────────────────────
-  if (loading) {
-    return (
-      <StoreLayout>
-        <div className="flex justify-center items-center min-h-[60vh]">
-          <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
-        </div>
-      </StoreLayout>
-    );
-  }
+  // Notificaciones dummy
+  const notifications = [
+    { id: 1, title: '¡Nueva colección!', description: 'Descubre la línea Otoño 2026', time: 'Hace 2 horas', read: false },
+    { id: 2, title: '¡Bienvenido!', description: 'Completa tu registro para empezar', time: 'Hace 5 horas', read: false },
+  ];
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
-  if (error && paso === 1 && !tanda) {
+  // ─── Estados de carga y error ─────────────────────────────
+  if (loading || authLoading) {
     return (
-      <StoreLayout>
-        <div className="max-w-2xl mx-auto px-4 pt-40 pb-10">
-          <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center shadow-sm">
-            <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <XCircle size={32} className="text-red-500" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Error</h2>
-            <p className="text-gray-500 text-sm mb-6">{error}</p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <button
-                onClick={handleReintentar}
-                className="inline-flex items-center gap-2 bg-[#6C3BFF] text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#5a2ee6] transition"
+      <>
+        <Head><title>Cargando | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <TerminalBar mode="rotating" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <span
+                className="font-serif text-[32px] block mb-5 select-none"
+                style={{ color: T.inkGhost }}
               >
-                <RefreshCw size={16} /> Reintentar
-              </button>
-              <Link href="/tandas" className="inline-flex items-center gap-2 border border-gray-200 text-gray-700 px-5 py-2.5 rounded-xl text-sm font-medium hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition">
-                <ArrowLeft size={16} /> Volver a tandas
-              </Link>
+                ʃƪʃƪ
+              </span>
+              <p
+                className="text-[11px] uppercase tracking-[0.28em]"
+                style={{ color: T.inkFaint, fontWeight: 500 }}
+              >
+                Cargando información
+              </p>
             </div>
           </div>
         </div>
-      </StoreLayout>
+      </>
     );
   }
 
+  // ─── Sin sesión ───────────────────────────────────────────
+  if (!user) {
+    return (
+      <>
+        <Head><title>Inicia sesión | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <BackButton fallback="/tandas" />
+          <TerminalBar mode="rotating" />
+          <Header />
+          <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-20 w-full">
+            <div className="text-center">
+              <div
+                className="inline-flex items-center justify-center mb-6"
+                style={{
+                  width: '64px',
+                  height: '64px',
+                  background: 'rgba(79, 46, 232, 0.06)',
+                  borderRadius: '12px',
+                }}
+              >
+                <AlertCircle size={28} strokeWidth={1.5} style={{ color: T.accent }} />
+              </div>
+              <h1
+                className="text-[32px] md:text-[40px] leading-tight tracking-[-0.03em] mb-3"
+                style={{ color: T.ink, fontWeight: 400 }}
+              >
+                Inicia sesión
+                <br />
+                <span className="font-serif italic" style={{ color: T.inkMid }}>
+                  para continuar.
+                </span>
+              </h1>
+              <p
+                className="text-[15px] leading-[1.6] mb-8 max-w-sm mx-auto"
+                style={{ color: T.inkSoft, fontWeight: 450 }}
+              >
+                Necesitas una cuenta para unirte a esta tanda.
+              </p>
+              <button
+                onClick={openLogin}
+                className="h-11 px-6 text-white text-[13.5px]"
+                style={{
+                  background: T.accent,
+                  borderRadius: '6px',
+                  fontWeight: 500,
+                  border: 'none',
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = T.accentDeep)}
+                onMouseLeave={(e) => (e.currentTarget.style.background = T.accent)}
+              >
+                Iniciar sesión
+              </button>
+            </div>
+          </main>
+          <Footer variant="minimal" />
+        </div>
+      </>
+    );
+  }
+
+  // ─── Error inicial ────────────────────────────────────────
+  if (error && paso === 1 && !tanda) {
+    return (
+      <>
+        <Head><title>Error | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <BackButton fallback="/tandas" />
+          <TerminalBar mode="rotating" />
+          <Header />
+          <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-20 w-full">
+            <div className="text-center">
+              <XCircle
+                size={32}
+                strokeWidth={1.5}
+                style={{ color: T.red, margin: '0 auto 16px' }}
+              />
+              <h1
+                className="text-[24px] mb-2"
+                style={{ color: T.ink, fontWeight: 400 }}
+              >
+                Error
+              </h1>
+              <p
+                className="text-[13.5px] mb-8"
+                style={{ color: T.inkSoft, fontWeight: 450 }}
+              >
+                {error}
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={handleReintentar}
+                  className="inline-flex items-center gap-2 h-11 px-6 text-white text-[13.5px]"
+                  style={{
+                    background: T.accent,
+                    borderRadius: '6px',
+                    fontWeight: 500,
+                    border: 'none',
+                    cursor: 'pointer',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = T.accentDeep)}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = T.accent)}
+                >
+                  <RefreshCw size={14} strokeWidth={1.75} /> Reintentar
+                </button>
+                <Link
+                  href="/tandas"
+                  className="inline-flex items-center justify-center gap-2 h-11 px-6 text-[13.5px]"
+                  style={{
+                    background: 'transparent',
+                    border: `1px solid ${T.line}`,
+                    borderRadius: '6px',
+                    color: T.inkMid,
+                    fontWeight: 500,
+                    textDecoration: 'none',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  <ChevronLeft size={14} strokeWidth={1.75} /> Volver a tandas
+                </Link>
+              </div>
+            </div>
+          </main>
+          <Footer variant="minimal" />
+        </div>
+      </>
+    );
+  }
+
+  // ─── Renderizado principal ────────────────────────────────
   return (
     <>
       <Head>
-        <title>{tanda ? `Unirse a ${tanda.nombre}` : 'Unirse a Tanda'} | MarketDesliz</title>
-        <meta name="description" content={`Únete a la tanda "${tanda?.nombre}" y comienza a ahorrar con MarketDesliz.`} />
+        <title>
+          {tanda ? `Unirse a ${tanda.nombre}` : 'Unirse a Tanda'} | MarketDesliz
+        </title>
+        <meta
+          name="description"
+          content={`Únete a la tanda "${tanda?.nombre}" y comienza a ahorrar con MarketDesliz.`}
+        />
+        <meta name="theme-color" content="#0F0F0F" />
       </Head>
 
-      <StoreLayout>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-40 pb-10">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+        <BackButton fallback="/tandas" />
+        <TerminalBar mode="rotating" />
+        <Header notifications={notifications} unreadCount={unreadCount} />
 
-            {/* Header de la tanda */}
-            <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-6 text-white">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                  <Target size={20} />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold">{tanda?.nombre || 'Tanda'}</h1>
-                  {tanda?.descripcion && <p className="text-white/80 text-sm">{tanda.descripcion}</p>}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-3">
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/20 rounded-full text-xs font-medium">
-                  <DollarSign size={12} /> {formatMoney(tanda?.montoTotal || tanda?.monto)} por turno
-                </span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/20 rounded-full text-xs font-medium">
-                  <Calendar size={12} /> {(tanda?.frecuencia || tanda?.frequency) === 'semanal' || (tanda?.frecuencia || tanda?.frequency) === 'weekly' ? 'Semanal' :
-                    (tanda?.frecuencia || tanda?.frequency) === 'quincenal' || (tanda?.frecuencia || tanda?.frequency) === 'biweekly' ? 'Quincenal' : 'Mensual'}
-                </span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/20 rounded-full text-xs font-medium">
-                  <Users size={12} /> {miembros.length}/{tanda?.cupoMaximo || tanda?.totalMembers || 0} participantes
-                </span>
-              </div>
+        <main className="flex-1 max-w-[900px] mx-auto px-6 md:px-14 py-12 md:py-16 w-full">
+
+          {/* ─── Hero editorial ──────────────────────────── */}
+          <section className="mb-10">
+            <p
+              className="text-[10px] uppercase tracking-[0.28em] mb-6"
+              style={{
+                color: T.inkFaint,
+                fontWeight: 500,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              Unirse a tanda · MarketDesliz
+            </p>
+
+            <h1
+              className="text-[36px] md:text-[52px] leading-[1.02] tracking-[-0.035em] max-w-3xl mb-5"
+              style={{
+                color: T.ink,
+                fontWeight: 400,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              {tanda?.nombre || 'Tanda'}
+              <span className="font-serif italic" style={{ color: T.inkMid }}>
+                {' '}— únete.
+              </span>
+            </h1>
+
+            {tanda?.descripcion && (
+              <p
+                className="text-[15px] md:text-[17px] leading-[1.5] max-w-xl mb-6"
+                style={{ color: T.inkSoft, fontWeight: 450 }}
+              >
+                {tanda.descripcion}
+              </p>
+            )}
+
+            {/* Meta de la tanda */}
+            <div
+              className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-5 mt-2"
+              style={{ borderTop: `1px solid ${T.line}` }}
+            >
+              <MetaItem
+                icon={DollarSign}
+                label="Por turno"
+                value={formatMoney(tanda?.montoTotal || tanda?.monto)}
+              />
+              <MetaItem
+                icon={Calendar}
+                label="Frecuencia"
+                value={
+                  (tanda?.frecuencia || tanda?.frequency) === 'semanal' ||
+                  (tanda?.frecuencia || tanda?.frequency) === 'weekly'
+                    ? 'Semanal'
+                    : (tanda?.frecuencia || tanda?.frequency) === 'quincenal' ||
+                      (tanda?.frecuencia || tanda?.frequency) === 'biweekly'
+                    ? 'Quincenal'
+                    : 'Mensual'
+                }
+              />
+              <MetaItem
+                icon={Users}
+                label="Participantes"
+                value={`${miembros.length} / ${tanda?.cupoMaximo || tanda?.totalMembers || 0}`}
+              />
+              <MetaItem
+                icon={Hash}
+                label="Nivel"
+                value={`Nivel ${tanda?.nivelRequerido || 1}`}
+              />
             </div>
+          </section>
 
-            <div className="p-6">
-              {/* ── Steps ────────────────────────────────────────────────── */}
-              <div className="flex justify-between mb-8">
-                {steps.map((step, idx) => {
-                  const StepIcon = step.icon;
-                  const isActive = paso >= step.num;
-                  const isCompleted = paso > step.num;
+          {/* ─── Steps ───────────────────────────────────── */}
+          <section className="mb-10">
+            <StepIndicator steps={steps} paso={paso} />
+          </section>
+
+          {/* ─── Errores / advertencias ─────────────────── */}
+          {error && paso !== 1 && (
+            <div className="mb-6">
+              <Callout variant="error" icon={AlertCircle}>
+                {error}
+              </Callout>
+            </div>
+          )}
+
+          {nivelPermitido && tanda?.nivelRequerido > nivelPermitido && (
+            <div className="mb-6">
+              <Callout variant="warning" icon={AlertCircle}>
+                <p
+                  className="mb-1"
+                  style={{ fontWeight: 500, letterSpacing: '-0.005em' }}
+                >
+                  Nivel no disponible
+                </p>
+                <p>
+                  Completa primero las tandas de nivel {nivelPermitido - 1} para
+                  desbloquear este nivel. Tu progreso actual: nivel máximo
+                  participado {nivelMaximoParticipado}.
+                </p>
+              </Callout>
+            </div>
+          )}
+
+          {/* ═══════════ PASO 1 · Información ═══════════ */}
+          {paso === 1 && (
+            <section className="flex flex-col gap-6">
+              {/* Progreso */}
+              <div
+                className="p-5"
+                style={{
+                  background: 'rgba(79, 46, 232, 0.04)',
+                  border: `1px solid rgba(79, 46, 232, 0.12)`,
+                  borderRadius: '8px',
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <TrendingUp size={13} strokeWidth={1.75} style={{ color: T.accent }} />
+                  <p
+                    className="text-[10px] uppercase tracking-[0.18em]"
+                    style={{ color: T.accent, fontWeight: 500 }}
+                  >
+                    Tu progreso en tandas
+                  </p>
+                </div>
+                <div className="flex justify-between items-baseline mb-3">
+                  <span
+                    className="text-[12px]"
+                    style={{ color: T.inkSoft, fontWeight: 450 }}
+                  >
+                    Nivel máximo alcanzado
+                  </span>
+                  <span
+                    className="text-[15px] tabular-nums"
+                    style={{
+                      color: T.accent,
+                      fontWeight: 500,
+                      fontFeatureSettings: '"tnum"',
+                    }}
+                  >
+                    Nivel {nivelMaximoParticipado || 1}
+                  </span>
+                </div>
+                <div
+                  className="w-full overflow-hidden mb-3"
+                  style={{
+                    height: '5px',
+                    background: 'rgba(15,15,15,0.06)',
+                    borderRadius: '3px',
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${Math.min(
+                        100,
+                        ((nivelMaximoParticipado || 0) / 10) * 100
+                      )}%`,
+                      background: T.accent,
+                      borderRadius: '3px',
+                      transition: `width 0.6s ${T.ease}`,
+                    }}
+                  />
+                </div>
+                <p
+                  className="text-[12px] leading-[1.55]"
+                  style={{ color: T.inkSoft, fontWeight: 450 }}
+                >
+                  {nivelMaximoParticipado === 0
+                    ? 'Esta será tu primera tanda (Nivel 1)'
+                    : `Puedes unirte a tandas hasta nivel ${
+                        nivelPermitido || nivelMaximoParticipado + 1
+                      }`}
+                </p>
+              </div>
+
+              {/* Stats grid */}
+              <div
+                className="grid grid-cols-2 md:grid-cols-4"
+                style={{
+                  background: T.bg,
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                }}
+              >
+                <StatCell
+                  icon={Users}
+                  label="Participantes"
+                  value={`${miembros.length} / ${
+                    tanda?.cupoMaximo || tanda?.totalMembers || 0
+                  }`}
+                  border={false}
+                />
+                <StatCell
+                  icon={TrendingUp}
+                  label="Disponibles"
+                  value={
+                    (tanda?.cupoMaximo || tanda?.totalMembers || 0) -
+                    miembros.length
+                  }
+                  accent
+                />
+                <StatCell icon={Fuel} label="Gasolina" value="$25" />
+                <StatCell icon={Hash} label="Tu posición" value="A elegir" />
+              </div>
+
+              {/* Miembros */}
+              <div>
+                <SectionLabel>Miembros actuales</SectionLabel>
+                <div
+                  className="flex flex-col max-h-72 overflow-y-auto"
+                  style={{
+                    border: `1px solid ${T.line}`,
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {miembros.map((m, idx) => (
+                    <div
+                      key={m.id}
+                      className="flex justify-between items-center px-4 py-3"
+                      style={{
+                        borderTop: idx === 0 ? 'none' : `1px solid ${T.line}`,
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="flex items-center justify-center shrink-0"
+                          style={{
+                            width: '30px',
+                            height: '30px',
+                            background:
+                              m.posicion === 1
+                                ? T.accent
+                                : 'rgba(15,15,15,0.05)',
+                            color: m.posicion === 1 ? '#FFFFFF' : T.inkMid,
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            fontFeatureSettings: '"tnum"',
+                          }}
+                        >
+                          {m.posicion}
+                        </div>
+                        <span
+                          className="text-[13px] flex items-center gap-1.5"
+                          style={{ color: T.ink, fontWeight: 500 }}
+                        >
+                          {m.posicion === 1
+                            ? 'MarketDesliz (Admin)'
+                            : `Participante ${m.posicion}`}
+                          {m.posicion <= 5 && m.posicion > 1 && (
+                            <Star
+                              size={11}
+                              strokeWidth={2}
+                              style={{ color: '#B8820E' }}
+                            />
+                          )}
+                        </span>
+                      </div>
+                      <StatusBadge
+                        icon={CheckCircle}
+                        label="Activo"
+                        color={T.green}
+                        bg="rgba(26, 127, 75, 0.08)"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* CTA */}
+              <PrimaryButton
+                onClick={handleUnirse}
+                disabled={
+                  procesando ||
+                  miembros.length >=
+                    (tanda?.cupoMaximo || tanda?.totalMembers || 0) ||
+                  tanda?.nivelRequerido >
+                    (nivelPermitido || nivelMaximoParticipado + 1)
+                }
+                loading={procesando}
+                icon={Target}
+              >
+                {procesando
+                  ? 'Procesando...'
+                  : miembros.length >=
+                    (tanda?.cupoMaximo || tanda?.totalMembers || 0)
+                  ? 'Tanda completa'
+                  : 'Continuar'}
+              </PrimaryButton>
+
+              <BackLink href="/tandas" label="Volver a tandas" />
+            </section>
+          )}
+
+          {/* ═══════════ PASO 2 · Términos ═══════════ */}
+          {paso === 2 && (
+            <section className="flex flex-col gap-6">
+              <div>
+                <SectionLabel>Términos y responsabilidades</SectionLabel>
+
+                <div
+                  className="p-5 max-h-80 overflow-y-auto"
+                  style={{
+                    background: T.bg,
+                    border: `1px solid ${T.line}`,
+                    borderRadius: '8px',
+                  }}
+                >
+                  <p
+                    className="text-[12.5px] mb-4"
+                    style={{ color: T.accent, fontWeight: 500 }}
+                  >
+                    Al unirte a esta tanda, aceptas:
+                  </p>
+                  <ul className="flex flex-col gap-3">
+                    {[
+                      'Realizar los pagos semanales de forma puntual',
+                      'La posición 1 es del administrador (MarketDesliz)',
+                      'No abandonar la tanda después de recibir el dinero',
+                      'Pagar la gasolina de $25 (único pago)',
+                      'Respetar el orden de turnos establecido',
+                      'Los pagos atrasados afectan a todo el grupo',
+                      'La posición se elige después del pago de gasolina',
+                      'No puedes elegir la posición #1',
+                    ].map((item, i) => (
+                      <li
+                        key={i}
+                        className="flex items-start gap-2.5 text-[12.5px] leading-[1.55]"
+                        style={{ color: T.inkSoft, fontWeight: 450 }}
+                      >
+                        <CheckCircle
+                          size={13}
+                          strokeWidth={2}
+                          style={{ color: T.green, flexShrink: 0, marginTop: 2 }}
+                        />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={aceptaTerminos}
+                  onChange={(e) => setAceptaTerminos(e.target.checked)}
+                  className="mt-0.5"
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    accentColor: T.accent,
+                    cursor: 'pointer',
+                  }}
+                />
+                <span
+                  className="text-[13px] leading-[1.55]"
+                  style={{ color: T.inkMid, fontWeight: 450 }}
+                >
+                  He leído y acepto los términos y condiciones, y acepto las
+                  responsabilidades como participante.
+                </span>
+              </label>
+
+              <PrimaryButton
+                onClick={() => setMostrarContrato(true)}
+                disabled={!aceptaTerminos}
+                icon={FileText}
+              >
+                Ver contrato digital
+              </PrimaryButton>
+
+              <BackLink onClick={() => setPaso(1)} label="Volver" />
+            </section>
+          )}
+
+          {/* ═══════════ PASO 3 · Gasolina ═══════════ */}
+          {paso === 3 && (
+            <section className="flex flex-col gap-6">
+              <div className="text-center">
+                <div
+                  className="inline-flex items-center justify-center mb-4"
+                  style={{
+                    width: '64px',
+                    height: '64px',
+                    background: 'rgba(184, 130, 14, 0.08)',
+                    borderRadius: '12px',
+                  }}
+                >
+                  <Fuel size={26} strokeWidth={1.5} style={{ color: '#B8820E' }} />
+                </div>
+                <h2
+                  className="text-[24px] md:text-[28px] leading-tight tracking-[-0.025em] mb-2"
+                  style={{ color: T.ink, fontWeight: 400 }}
+                >
+                  Pago único
+                  <span className="font-serif italic" style={{ color: T.inkMid }}>
+                    {' '}de inscripción.
+                  </span>
+                </h2>
+                <p
+                  className="text-[13.5px] leading-[1.55] max-w-md mx-auto"
+                  style={{ color: T.inkSoft, fontWeight: 450 }}
+                >
+                  Este pago cubre los gastos de administración de la tanda.
+                </p>
+              </div>
+
+              <div
+                className="flex items-center justify-center gap-2 py-5"
+                style={{
+                  background: 'rgba(26, 127, 75, 0.05)',
+                  border: `1px solid rgba(26, 127, 75, 0.15)`,
+                  borderRadius: '8px',
+                }}
+              >
+                <DollarSign size={18} strokeWidth={1.75} style={{ color: T.green }} />
+                <span
+                  className="text-[20px] tabular-nums tracking-[-0.02em]"
+                  style={{
+                    color: T.green,
+                    fontWeight: 500,
+                    fontFeatureSettings: '"tnum"',
+                  }}
+                >
+                  $25
+                </span>
+              </div>
+
+              <Callout variant="info" icon={AlertCircle}>
+                Después del pago podrás elegir tu número de posición.
+              </Callout>
+
+              <PrimaryButton
+                onClick={handlePagarGasolina}
+                disabled={procesando}
+                loading={procesando}
+                icon={Fuel}
+              >
+                {procesando ? 'Procesando pago...' : 'Pagar $25 y continuar'}
+              </PrimaryButton>
+
+              <BackLink onClick={() => setPaso(2)} label="Volver" />
+            </section>
+          )}
+
+          {/* ═══════════ PASO 4 · Elegir número ═══════════ */}
+          {paso === 4 && (
+            <section className="flex flex-col gap-6">
+              <div className="text-center">
+                <h2
+                  className="text-[24px] md:text-[28px] leading-tight tracking-[-0.025em] mb-2"
+                  style={{ color: T.ink, fontWeight: 400 }}
+                >
+                  Elige tu
+                  <span className="font-serif italic" style={{ color: T.inkMid }}>
+                    {' '}número.
+                  </span>
+                </h2>
+                <p
+                  className="text-[13.5px] leading-[1.55]"
+                  style={{ color: T.inkSoft, fontWeight: 450 }}
+                >
+                  Selecciona la posición que deseas en la tanda.
+                </p>
+              </div>
+
+              <Callout variant="warning" icon={AlertCircle}>
+                <strong style={{ fontWeight: 500 }}>Importante:</strong> La
+                posición #1 es del administrador (MarketDesliz) y no está
+                disponible. Elige entre los números disponibles.
+              </Callout>
+
+              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2.5">
+                {Array.from(
+                  {
+                    length:
+                      tanda?.cupoMaximo || tanda?.totalMembers || 0,
+                  },
+                  (_, i) => i + 1
+                ).map((num) => {
+                  const isAvailable = posicionesDisponibles.includes(num);
+                  const isSelected = posicionSeleccionada === num;
+                  const isAdmin = num === 1;
 
                   return (
-                    <div key={step.num} className="flex-1 text-center">
-                      <div className={`
-                        w-8 h-8 rounded-full flex items-center justify-center mx-auto mb-1 transition-all
-                        ${isActive ? 'bg-[#6C3BFF] text-white' : 'bg-gray-100 text-gray-400'}
-                        ${isCompleted ? 'bg-green-500 text-white' : ''}
-                      `}>
-                        {isCompleted ? <CheckCircle size={16} /> : <StepIcon size={16} />}
-                      </div>
-                      <span className={`text-xs ${isActive ? 'text-[#6C3BFF] font-medium' : 'text-gray-400'}`}>
-                        {step.label}
+                    <button
+                      key={num}
+                      onClick={() => {
+                        if (isAvailable) {
+                          setPosicionSeleccionada(num);
+                          setError('');
+                        } else if (isAdmin) {
+                          setError('La posición #1 es del administrador');
+                        } else {
+                          setError('Esta posición ya está ocupada');
+                        }
+                      }}
+                      disabled={!isAvailable && !isSelected}
+                      className="flex flex-col items-center justify-center transition-all duration-200 disabled:cursor-not-allowed"
+                      style={{
+                        padding: '14px 8px',
+                        background: isSelected
+                          ? T.accent
+                          : isAvailable
+                          ? 'rgba(26, 127, 75, 0.06)'
+                          : 'rgba(15,15,15,0.03)',
+                        border: `1px solid ${
+                          isSelected
+                            ? T.accent
+                            : isAvailable
+                            ? 'rgba(26, 127, 75, 0.2)'
+                            : T.line
+                        }`,
+                        borderRadius: '6px',
+                        color: isSelected
+                          ? '#FFFFFF'
+                          : isAvailable
+                          ? T.green
+                          : T.inkFaint,
+                        cursor:
+                          isAvailable || isSelected ? 'pointer' : 'not-allowed',
+                        WebkitTapHighlightColor: 'transparent',
+                        transitionTimingFunction: T.ease,
+                        transform: isSelected ? 'translateY(-2px)' : 'none',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (isAvailable && !isSelected) {
+                          e.currentTarget.style.background =
+                            'rgba(26, 127, 75, 0.12)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (isAvailable && !isSelected) {
+                          e.currentTarget.style.background =
+                            'rgba(26, 127, 75, 0.06)';
+                        }
+                      }}
+                    >
+                      <span
+                        className="tabular-nums"
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 500,
+                          fontFeatureSettings: '"tnum"',
+                          letterSpacing: '-0.01em',
+                        }}
+                      >
+                        {num}
                       </span>
-                    </div>
+                      <span
+                        className="uppercase"
+                        style={{
+                          fontSize: '8.5px',
+                          letterSpacing: '0.14em',
+                          marginTop: '4px',
+                          fontWeight: 600,
+                          opacity: 0.85,
+                        }}
+                      >
+                        {isAdmin
+                          ? 'Admin'
+                          : isAvailable
+                          ? 'Libre'
+                          : 'Ocupado'}
+                      </span>
+                    </button>
                   );
                 })}
               </div>
 
-              {/* ── Errores ──────────────────────────────────────────────── */}
-              {error && (
-                <div className="mb-4 p-3 bg-red-50 rounded-xl border border-red-200 flex items-center gap-2">
-                  <AlertCircle size={16} className="text-red-500 shrink-0" />
-                  <p className="text-sm text-red-600">{error}</p>
+              <PrimaryButton
+                onClick={handleSeleccionarPosicion}
+                disabled={!posicionSeleccionada || procesando}
+                loading={procesando}
+                icon={Hash}
+              >
+                {procesando
+                  ? 'Guardando...'
+                  : `Confirmar posición #${posicionSeleccionada || '?'}`}
+              </PrimaryButton>
+
+              <BackLink onClick={() => setPaso(3)} label="Volver" />
+            </section>
+          )}
+
+          {/* ═══════════ PASO 5 · Confirmación ═══════════ */}
+          {paso === 5 && (
+            <section className="flex flex-col gap-6">
+              <div className="text-center">
+                <div
+                  className="inline-flex items-center justify-center mb-4"
+                  style={{
+                    width: '72px',
+                    height: '72px',
+                    background: 'rgba(26, 127, 75, 0.08)',
+                    borderRadius: '14px',
+                  }}
+                >
+                  <CheckCircle
+                    size={32}
+                    strokeWidth={1.5}
+                    style={{ color: T.green }}
+                  />
                 </div>
-              )}
+                <h2
+                  className="text-[28px] md:text-[36px] leading-[1.05] tracking-[-0.03em] mb-3"
+                  style={{ color: T.ink, fontWeight: 400 }}
+                >
+                  Te has unido
+                  <span className="font-serif italic" style={{ color: T.inkMid }}>
+                    {' '}exitosamente.
+                  </span>
+                </h2>
+                <p
+                  className="text-[13.5px] leading-[1.55]"
+                  style={{ color: T.inkSoft, fontWeight: 450 }}
+                >
+                  Ya eres parte de la tanda {tanda?.nombre}.
+                </p>
+              </div>
 
-              {/* ── Advertencia de nivel progresivo ────────────────────── */}
-              {nivelPermitido && tanda?.nivelRequerido > nivelPermitido && (
-                <div className="mb-4 p-3 bg-yellow-50 rounded-xl border border-yellow-200">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle size={16} className="text-yellow-600 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium text-yellow-800">⚠️ Nivel no disponible</p>
-                      <p className="text-xs text-yellow-700">
-                        Completa primero las tandas de nivel {nivelPermitido - 1} para desbloquear este nivel.
-                        Tu progreso actual: nivel máximo participado {nivelMaximoParticipado}
-                      </p>
-                    </div>
-                  </div>
+              <div
+                className="grid grid-cols-2"
+                style={{
+                  background: T.bg,
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                }}
+              >
+                <StatCell
+                  icon={PosicionIcono || Hash}
+                  label="Tu posición"
+                  value={getPosicionTexto()}
+                  accent
+                  border={false}
+                />
+                <StatCell
+                  icon={Calendar}
+                  label="Entrega estimada"
+                  value={getFechaEntrega()}
+                />
+              </div>
+
+              <div
+                className="p-5"
+                style={{
+                  background: 'rgba(79, 46, 232, 0.04)',
+                  border: `1px solid rgba(79, 46, 232, 0.12)`,
+                  borderRadius: '8px',
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <ListChecks size={13} strokeWidth={1.75} style={{ color: T.accent }} />
+                  <p
+                    className="text-[10px] uppercase tracking-[0.18em]"
+                    style={{ color: T.accent, fontWeight: 500 }}
+                  >
+                    Próximos pasos
+                  </p>
                 </div>
-              )}
+                <ul className="flex flex-col gap-2">
+                  {[
+                    'Pago de gasolina completado',
+                    `Posición #${posicionFinal} confirmada`,
+                    'Espera a que comience la tanda',
+                    'Realiza tus pagos semanales puntualmente',
+                    `Recibirás tu dinero en la semana ${posicionFinal}`,
+                    'El cobrador te visitará en la fecha acordada',
+                  ].map((item, i) => (
+                    <li
+                      key={i}
+                      className="flex items-center gap-2.5 text-[12.5px] leading-[1.5]"
+                      style={{ color: T.accent, fontWeight: 450 }}
+                    >
+                      <CheckCircle size={12} strokeWidth={2.25} />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
-              {/* ─── PASO 1: Información ────────────────────────────────── */}
-              {paso === 1 && (
-                <>
-                  <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-4 mb-6">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                      <TrendingUp size={14} className="text-purple-600" /> Tu progreso en tandas
-                    </h4>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs text-gray-500">Nivel máximo alcanzado</span>
-                      <span className="text-sm font-bold text-purple-600">Nivel {nivelMaximoParticipado || 1}</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                      <div
-                        className="bg-purple-600 h-2 rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(100, ((nivelMaximoParticipado || 0) / 10) * 100)}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      {nivelMaximoParticipado === 0
-                        ? '📌 Esta será tu primera tanda (Nivel 1)'
-                        : `🎯 Puedes unirte a tandas hasta nivel ${nivelPermitido || nivelMaximoParticipado + 1}`}
-                    </p>
-                    {tanda?.nivelRequerido > (nivelPermitido || nivelMaximoParticipado + 1) && (
-                      <div className="mt-2 p-2 bg-yellow-100 rounded-lg">
-                        <p className="text-xs text-yellow-700 flex items-center gap-1">
-                          <AlertCircle size={12} /> Esta tanda requiere nivel {tanda.nivelRequerido}.
-                          Completa primero las tandas de nivel {nivelPermitido || nivelMaximoParticipado + 1}
-                        </p>
-                      </div>
-                    )}
-                  </div>
+              <Link
+                href="/tandas/mis-tandas"
+                className="flex items-center justify-center gap-2 h-11 text-white text-[13.5px]"
+                style={{
+                  background: T.accent,
+                  borderRadius: '6px',
+                  fontWeight: 500,
+                  textDecoration: 'none',
+                  WebkitTapHighlightColor: 'transparent',
+                  transitionTimingFunction: T.ease,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = T.accentDeep)}
+                onMouseLeave={(e) => (e.currentTarget.style.background = T.accent)}
+              >
+                <Target size={14} strokeWidth={1.75} /> Ver mis tandas
+              </Link>
 
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-gray-50 rounded-xl p-4 text-center">
-                      <Users size={18} className="text-gray-400 mx-auto mb-1" />
-                      <p className="text-xs text-gray-500">Participantes</p>
-                      <p className="text-xl font-bold text-gray-900">{miembros.length} / {tanda?.cupoMaximo || tanda?.totalMembers || 0}</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-4 text-center">
-                      <TrendingUp size={18} className="text-green-500 mx-auto mb-1" />
-                      <p className="text-xs text-gray-500">Disponibles</p>
-                      <p className="text-xl font-bold text-green-600">{(tanda?.cupoMaximo || tanda?.totalMembers || 0) - miembros.length}</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-4 text-center">
-                      <Fuel size={18} className="text-orange-500 mx-auto mb-1" />
-                      <p className="text-xs text-gray-500">Gasolina</p>
-                      <p className="text-xl font-bold text-gray-900">$25</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-4 text-center">
-                      <Hash size={18} className="text-purple-500 mx-auto mb-1" />
-                      <p className="text-xs text-gray-500">Tu posición</p>
-                      <p className="text-sm font-medium text-gray-700">A elegir después</p>
-                    </div>
-                  </div>
+              <BackLink href="/" label="Volver al inicio" />
+            </section>
+          )}
 
-                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><Users size={16} /> Miembros actuales</h3>
-                  <div className="space-y-2 max-h-60 overflow-y-auto mb-6">
-                    {miembros.map((m) => (
-                      <div key={m.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-[#6C3BFF] rounded-full flex items-center justify-center text-white font-bold text-sm">
-                            {m.posicion}
-                          </div>
-                          <span className="font-medium text-gray-900">
-                            {m.posicion === 1 ? 'MarketDesliz (Admin)' : `Participante ${m.posicion}`}
-                            {m.posicion <= 5 && m.posicion > 1 && <Star size={12} className="inline ml-1 text-yellow-500" />}
-                          </span>
-                        </div>
-                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                          <CheckCircle size={10} /> Activo
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+          {/* ─── Info pago en dos partes ─────────────────── */}
+          {tanda?.pagoEnDosPartes && (
+            <section className="mt-10">
+              <Callout variant="info" icon={CreditCard}>
+                <p className="mb-2" style={{ fontWeight: 500 }}>
+                  Pago en dos partes
+                </p>
+                <ul className="flex flex-col gap-1.5">
+                  <li>· Primera parte (50%): Al recibir tu turno</li>
+                  <li>· Segunda parte (50% restante): Al finalizar la tanda</li>
+                  <li>· Recibirás un recordatorio para la segunda parte</li>
+                </ul>
+              </Callout>
+            </section>
+          )}
+        </main>
 
-                  <button
-                    onClick={handleUnirse}
-                    disabled={procesando || miembros.length >= (tanda?.cupoMaximo || tanda?.totalMembers || 0) || (tanda?.nivelRequerido > (nivelPermitido || nivelMaximoParticipado + 1))}
-                    className="w-full bg-[#6C3BFF] text-white py-3 rounded-xl font-semibold hover:bg-[#5a2ee6] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {procesando ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <ArrowLeft size={16} className="rotate-180" />}
-                    {procesando ? 'Procesando...' : (miembros.length >= (tanda?.cupoMaximo || tanda?.totalMembers || 0) ? 'Tanda completa' : 'Continuar')}
-                  </button>
+        <Footer variant="minimal" />
+      </div>
 
-                  <Link href="/tandas" className="flex items-center justify-center gap-1 w-full mt-3 text-center text-sm text-gray-500 hover:text-[#6C3BFF] transition py-2">
-                    <ArrowLeft size={14} /> Volver a tandas
-                  </Link>
-                </>
-              )}
-
-              {/* ─── PASO 2: Términos ───────────────────────────────────── */}
-              {paso === 2 && (
-                <>
-                  <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><FileText size={18} className="text-[#6C3BFF]" /> Términos y responsabilidades</h2>
-
-                  <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-2 text-sm max-h-64 overflow-y-auto">
-                    <p className="font-semibold text-[#6C3BFF]">Al unirte a esta tanda, aceptas:</p>
-                    <ul className="space-y-2 text-gray-600">
-                      <li className="flex items-start gap-2"><CheckCircle size={14} className="text-green-500 mt-0.5" /> Realizar los pagos semanales de forma puntual</li>
-                      <li className="flex items-start gap-2"><CheckCircle size={14} className="text-green-500 mt-0.5" /> La posición 1 es del administrador (MarketDesliz)</li>
-                      <li className="flex items-start gap-2"><CheckCircle size={14} className="text-green-500 mt-0.5" /> No abandonar la tanda después de recibir el dinero</li>
-                      <li className="flex items-start gap-2"><CheckCircle size={14} className="text-green-500 mt-0.5" /> Pagar la gasolina de $25 (único pago)</li>
-                      <li className="flex items-start gap-2"><CheckCircle size={14} className="text-green-500 mt-0.5" /> Respetar el orden de turnos establecido</li>
-                      <li className="flex items-start gap-2"><CheckCircle size={14} className="text-green-500 mt-0.5" /> Los pagos atrasados afectan a todo el grupo</li>
-                      <li className="flex items-start gap-2"><CheckCircle size={14} className="text-green-500 mt-0.5" /> La posición se elige después del pago de gasolina</li>
-                      <li className="flex items-start gap-2"><CheckCircle size={14} className="text-green-500 mt-0.5" /> No puedes elegir la posición #1</li>
-                    </ul>
-                  </div>
-
-                  <label className="flex items-center gap-3 mb-6 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={aceptaTerminos}
-                      onChange={(e) => setAceptaTerminos(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-300 text-[#6C3BFF] focus:ring-[#6C3BFF]"
-                    />
-                    <span className="text-sm text-gray-600">He leído y acepto los términos y condiciones, y acepto las responsabilidades como participante</span>
-                  </label>
-
-                  <button
-                    onClick={() => setMostrarContrato(true)}
-                    disabled={!aceptaTerminos}
-                    className="w-full bg-[#6C3BFF] text-white py-3 rounded-xl font-semibold hover:bg-[#5a2ee6] transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Ver contrato digital
-                  </button>
-
-                  <button onClick={() => setPaso(1)} className="flex items-center justify-center gap-1 w-full mt-3 text-sm text-gray-500 hover:text-[#6C3BFF] transition py-2">
-                    <ArrowLeft size={14} /> Volver
-                  </button>
-                </>
-              )}
-
-              {/* ─── PASO 3: Gasolina ───────────────────────────────────── */}
-              {paso === 3 && (
-                <>
-                  <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                      <Fuel size={28} className="text-orange-600" />
-                    </div>
-                    <h2 className="text-xl font-bold text-gray-900">Pago único de inscripción</h2>
-                    <p className="text-sm text-gray-500 mt-1">Este pago cubre los gastos de administración de la tanda</p>
-                    <div className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-100 rounded-full mt-3">
-                      <DollarSign size={14} className="text-green-600" />
-                      <span className="font-bold text-green-700">GASOLINA: $25</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-purple-50 rounded-xl p-4 mb-6 border border-purple-100">
-                    <p className="text-sm text-purple-700 text-center">💡 Después del pago podrás elegir tu número de posición</p>
-                  </div>
-
-                  <button
-                    onClick={handlePagarGasolina}
-                    disabled={procesando}
-                    className="w-full bg-[#6C3BFF] text-white py-3 rounded-xl font-semibold hover:bg-[#5a2ee6] transition disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {procesando ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Fuel size={16} />}
-                    {procesando ? 'Procesando pago...' : 'Pagar $25 y continuar'}
-                  </button>
-
-                  <button onClick={() => setPaso(2)} className="flex items-center justify-center gap-1 w-full mt-3 text-sm text-gray-500 hover:text-[#6C3BFF] transition py-2">
-                    <ArrowLeft size={14} /> Volver
-                  </button>
-                </>
-              )}
-
-              {/* ─── PASO 4: Seleccionar número ─────────────────────────── */}
-              {paso === 4 && (
-                <>
-                  <h2 className="text-lg font-bold text-gray-900 text-center mb-2">🎯 Elige tu número</h2>
-                  <p className="text-center text-sm text-gray-500 mb-4">Selecciona la posición que deseas en la tanda</p>
-
-                  <div className="bg-yellow-50 rounded-xl p-3 mb-5 border border-yellow-100">
-                    <p className="text-xs text-yellow-700 text-center">
-                      ⚠️ <strong>Importante:</strong> La posición #1 es del administrador (MarketDesliz) y no está disponible.
-                      Elige entre los números disponibles en verde.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-3 mb-6">
-                    {Array.from({ length: tanda?.cupoMaximo || tanda?.totalMembers || 0 }, (_, i) => i + 1).map(num => {
-                      const isAvailable = posicionesDisponibles.includes(num);
-                      const isSelected = posicionSeleccionada === num;
-                      const isAdmin = num === 1;
-
-                      return (
-                        <button
-                          key={num}
-                          onClick={() => {
-                            if (isAvailable) {
-                              setPosicionSeleccionada(num);
-                              setError('');
-                            } else if (isAdmin) {
-                              setError('La posición #1 es del administrador');
-                            } else {
-                              setError('Esta posición ya está ocupada');
-                            }
-                          }}
-                          className={`
-                            p-3 rounded-xl text-center transition-all
-                            ${isSelected ? 'bg-[#6C3BFF] text-white shadow-md scale-105' : ''}
-                            ${isAvailable && !isSelected ? 'bg-green-100 text-green-700 border border-green-200 hover:bg-green-200' : ''}
-                            ${!isAvailable && !isAdmin ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}
-                            ${isAdmin && !isSelected ? 'bg-red-100 text-gray-400 cursor-not-allowed' : ''}
-                          `}
-                          disabled={!isAvailable && !isSelected}
-                        >
-                          <div className="text-xl font-bold">{num}</div>
-                          <div className="text-xs mt-1">
-                            {isAdmin ? 'Admin' : (isAvailable ? 'Disponible' : 'Ocupado')}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <button
-                    onClick={handleSeleccionarPosicion}
-                    disabled={!posicionSeleccionada || procesando}
-                    className="w-full bg-[#6C3BFF] text-white py-3 rounded-xl font-semibold hover:bg-[#5a2ee6] transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {procesando ? 'Guardando...' : `Confirmar posición #${posicionSeleccionada || '?'}`}
-                  </button>
-
-                  <button onClick={() => setPaso(3)} className="flex items-center justify-center gap-1 w-full mt-3 text-sm text-gray-500 hover:text-[#6C3BFF] transition py-2">
-                    <ArrowLeft size={14} /> Volver
-                  </button>
-                </>
-              )}
-
-              {/* ─── PASO 5: Confirmación final ─────────────────────────── */}
-              {paso === 5 && (
-                <>
-                  <div className="text-center mb-6">
-                    <div className="w-20 h-20 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      <CheckCircle size={40} className="text-green-600" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-gray-900">¡Te has unido exitosamente!</h2>
-                    <p className="text-sm text-gray-500 mt-1">Ya eres parte de la tanda {tanda?.nombre}</p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="bg-gray-50 rounded-xl p-4 text-center">
-                      {PosicionIcono && <PosicionIcono size={18} className="text-purple-500 mx-auto mb-1" />}
-                      <p className="text-xs text-gray-500">Tu posición</p>
-                      <p className="text-lg font-bold text-purple-600">{getPosicionTexto()}</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-4 text-center">
-                      <Calendar size={18} className="text-blue-500 mx-auto mb-1" />
-                      <p className="text-xs text-gray-500">Fecha estimada de entrega</p>
-                      <p className="text-sm font-bold text-gray-900">{getFechaEntrega()}</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-purple-50 rounded-xl p-4 mb-6 border border-purple-100">
-                    <h3 className="font-semibold text-purple-700 mb-2 flex items-center gap-2"><ListChecks size={16} /> Próximos pasos:</h3>
-                    <ul className="space-y-1 text-sm text-purple-700">
-                      <li className="flex items-center gap-2"><CheckCircle size={12} /> Pago de gasolina completado</li>
-                      <li className="flex items-center gap-2"><CheckCircle size={12} /> Posición #{posicionFinal} confirmada</li>
-                      <li className="flex items-center gap-2"><CheckCircle size={12} /> Espera a que comience la tanda</li>
-                      <li className="flex items-center gap-2"><CheckCircle size={12} /> Realiza tus pagos semanales puntualmente</li>
-                      <li className="flex items-center gap-2"><CheckCircle size={12} /> Recibirás tu dinero en la semana {posicionFinal}</li>
-                      <li className="flex items-center gap-2"><CheckCircle size={12} /> El cobrador te visitará en la fecha acordada</li>
-                    </ul>
-                  </div>
-
-                  <Link href="/tandas/mis-tandas" className="w-full bg-[#6C3BFF] text-white py-3 rounded-xl font-semibold hover:bg-[#5a2ee6] transition flex items-center justify-center gap-2">
-                    <Target size={16} /> Ver mis tandas
-                  </Link>
-
-                  <Link href="/" className="flex items-center justify-center gap-1 w-full mt-3 text-sm text-gray-500 hover:text-[#6C3BFF] transition py-2">
-                    <ArrowLeft size={14} /> Volver al inicio
-                  </Link>
-                </>
-              )}
-
-              {/* ─── Información de pago en dos partes ──────────────────── */}
-              {tanda?.pagoEnDosPartes && (
-                <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
-                  <h4 className="font-semibold text-blue-700 mb-2 flex items-center gap-2">
-                    <span>💰</span> Pago en dos partes
-                  </h4>
-                  <ul className="text-sm text-blue-600 space-y-1">
-                    <li>• Primera parte (50%): Al recibir tu turno</li>
-                    <li>• Segunda parte (50% restante): Al finalizar la tanda</li>
-                    <li>• Recibirás un recordatorio para la segunda parte</li>
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </StoreLayout>
-
-      {/* ─── Modal de contrato ───────────────────────────────────────────── */}
+      {/* ─── Modal de contrato ────────────────────────────── */}
       {mostrarContrato && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setMostrarContrato(false)}>
-          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4">
-              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <FileText size={18} className="text-[#6C3BFF]" /> Contrato de Participación
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(15,15,15,0.7)' }}
+          onClick={() => setMostrarContrato(false)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[80vh] overflow-y-auto flex flex-col"
+            style={{
+              background: T.bg,
+              border: `1px solid ${T.line}`,
+              borderRadius: '10px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              className="sticky top-0 px-6 py-5"
+              style={{
+                background: T.bg,
+                borderBottom: `1px solid ${T.line}`,
+              }}
+            >
+              <p
+                className="text-[10px] uppercase tracking-[0.28em] mb-2"
+                style={{
+                  color: T.inkFaint,
+                  fontWeight: 500,
+                  fontFeatureSettings: '"ss01"',
+                }}
+              >
+                Contrato
+              </p>
+              <h2
+                className="text-[22px] leading-tight tracking-[-0.025em]"
+                style={{ color: T.ink, fontWeight: 400 }}
+              >
+                Contrato
+                <span className="font-serif italic" style={{ color: T.inkMid }}>
+                  {' '}de participación.
+                </span>
               </h2>
             </div>
-            <div className="p-6 space-y-4 text-sm">
+
+            {/* Body */}
+            <div className="p-6 flex flex-col gap-6">
               <div>
-                <p className="font-semibold text-gray-900 mb-2">Responsabilidades del participante:</p>
-                <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                  <li>Realizar los pagos semanales de forma puntual en la fecha acordada.</li>
-                  <li>Mantener comunicación con el administrador ante cualquier eventualidad.</li>
-                  <li>Los pagos atrasados afectan a todo el grupo y pueden resultar en la pérdida de tu turno.</li>
-                  <li>Aceptar que la posición #1 es del administrador (MarketDesliz).</li>
-                  <li>El pago de gasolina de $25 es único y no reembolsable.</li>
+                <p
+                  className="text-[10px] uppercase tracking-[0.18em] mb-3"
+                  style={{ color: T.inkFaint, fontWeight: 500 }}
+                >
+                  Responsabilidades del participante
+                </p>
+                <ul className="flex flex-col gap-2">
+                  {[
+                    'Realizar los pagos semanales de forma puntual en la fecha acordada.',
+                    'Mantener comunicación con el administrador ante cualquier eventualidad.',
+                    'Los pagos atrasados afectan a todo el grupo y pueden resultar en la pérdida de tu turno.',
+                    'Aceptar que la posición #1 es del administrador (MarketDesliz).',
+                    'El pago de gasolina de $25 es único y no reembolsable.',
+                  ].map((item, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start gap-2.5 text-[12.5px] leading-[1.55]"
+                      style={{ color: T.inkSoft, fontWeight: 450 }}
+                    >
+                      <span
+                        style={{
+                          color: T.inkFaint,
+                          flexShrink: 0,
+                          fontFamily: 'ui-monospace, monospace',
+                        }}
+                      >
+                        →
+                      </span>
+                      {item}
+                    </li>
+                  ))}
                 </ul>
               </div>
+
               <div>
-                <p className="font-semibold text-gray-900 mb-2">Condiciones generales:</p>
-                <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                  <li>El orden de turnos se define por antigüedad y selección del participante.</li>
-                  <li>Cualquier incumplimiento puede resultar en la exclusión de futuras tandas.</li>
-                  <li>La información de los participantes es visible solo para miembros de la tanda.</li>
-                  <li>MarketDesliz actúa como administrador y facilitador del grupo.</li>
+                <p
+                  className="text-[10px] uppercase tracking-[0.18em] mb-3"
+                  style={{ color: T.inkFaint, fontWeight: 500 }}
+                >
+                  Condiciones generales
+                </p>
+                <ul className="flex flex-col gap-2">
+                  {[
+                    'El orden de turnos se define por antigüedad y selección del participante.',
+                    'Cualquier incumplimiento puede resultar en la exclusión de futuras tandas.',
+                    'La información de los participantes es visible solo para miembros de la tanda.',
+                    'MarketDesliz actúa como administrador y facilitador del grupo.',
+                  ].map((item, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start gap-2.5 text-[12.5px] leading-[1.55]"
+                      style={{ color: T.inkSoft, fontWeight: 450 }}
+                    >
+                      <span
+                        style={{
+                          color: T.inkFaint,
+                          flexShrink: 0,
+                          fontFamily: 'ui-monospace, monospace',
+                        }}
+                      >
+                        →
+                      </span>
+                      {item}
+                    </li>
+                  ))}
                 </ul>
               </div>
-              <p className="text-xs text-gray-400 pt-2">
-                Al aceptar, confirmas que has leído y comprendes todos los términos y condiciones.
+
+              <p
+                className="text-[11.5px] leading-[1.55] pt-2"
+                style={{
+                  color: T.inkFaint,
+                  fontWeight: 450,
+                  borderTop: `1px solid ${T.line}`,
+                  paddingTop: '16px',
+                }}
+              >
+                Al aceptar, confirmas que has leído y comprendes todos los
+                términos y condiciones.
               </p>
             </div>
-            <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 flex gap-3">
-              <button onClick={() => setMostrarContrato(false)} className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">Cancelar</button>
-              <button onClick={handleAceptarContrato} className="flex-1 px-4 py-2.5 bg-[#6C3BFF] text-white rounded-xl font-medium hover:bg-[#5a2ee6] transition">Aceptar y continuar</button>
+
+            {/* Footer */}
+            <div
+              className="sticky bottom-0 px-6 py-4 flex gap-2.5"
+              style={{
+                background: T.bg,
+                borderTop: `1px solid ${T.line}`,
+              }}
+            >
+              <button
+                onClick={() => setMostrarContrato(false)}
+                className="flex-1 h-11 text-[13px] transition-colors"
+                style={{
+                  background: 'transparent',
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '6px',
+                  color: T.inkMid,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = 'rgba(15,15,15,0.03)')
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = 'transparent')
+                }
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAceptarContrato}
+                className="flex-1 h-11 text-white text-[13px]"
+                style={{
+                  background: T.accent,
+                  borderRadius: '6px',
+                  fontWeight: 500,
+                  border: 'none',
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = T.accentDeep)}
+                onMouseLeave={(e) => (e.currentTarget.style.background = T.accent)}
+              >
+                Aceptar y continuar
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ─── Toast ────────────────────────────────────────────────────────── */}
+      {/* ─── Toast ────────────────────────────────────────── */}
       {toast && (
         <Toast
           message={toast.message}
@@ -838,6 +1637,138 @@ export default function UnirseTandaPage() {
           onClose={() => setToast(null)}
         />
       )}
+
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
+        }
+        .animate-blink { animation: blink 1s step-end infinite; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
+        }
+        .font-serif {
+          font-family: ui-serif, 'Iowan Old Style', 'Apple Garamond', 'Palatino', Georgia, 'Times New Roman', serif;
+        }
+        ::selection { background: rgba(79, 46, 232, 0.12); color: #0F0F0F; }
+        * { -webkit-tap-highlight-color: transparent; font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1; }
+      `}</style>
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// MetaItem — dato de la barra meta del hero
+// ─────────────────────────────────────────────────────────────────────────
+function MetaItem({ icon: Icon, label, value }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Icon size={13} strokeWidth={1.75} style={{ color: T.inkFaint }} />
+      <div className="flex items-baseline gap-1.5">
+        <span
+          className="text-[10px] uppercase tracking-[0.14em]"
+          style={{ color: T.inkFaint, fontWeight: 500 }}
+        >
+          {label}
+        </span>
+        <span
+          className="text-[13px] tabular-nums tracking-[-0.005em]"
+          style={{
+            color: T.ink,
+            fontWeight: 500,
+            fontFeatureSettings: '"tnum"',
+          }}
+        >
+          {value}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// PrimaryButton — botón principal del wizard
+// ─────────────────────────────────────────────────────────────────────────
+function PrimaryButton({
+  onClick,
+  disabled = false,
+  loading = false,
+  icon: Icon,
+  children,
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full flex items-center justify-center gap-2 h-11 text-white text-[13.5px]"
+      style={{
+        background: disabled ? 'rgba(15,15,15,0.15)' : T.accent,
+        borderRadius: '6px',
+        fontWeight: 500,
+        letterSpacing: '0.01em',
+        border: 'none',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        WebkitTapHighlightColor: 'transparent',
+        transitionTimingFunction: T.ease,
+        transition: 'background 0.2s',
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) e.currentTarget.style.background = T.accentDeep;
+      }}
+      onMouseLeave={(e) => {
+        if (!disabled) e.currentTarget.style.background = T.accent;
+      }}
+    >
+      {loading ? (
+        <div
+          className="border-2 border-white/40 border-t-white rounded-full animate-spin"
+          style={{ width: '14px', height: '14px' }}
+        />
+      ) : (
+        Icon && <Icon size={14} strokeWidth={1.75} />
+      )}
+      <span>{children}</span>
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// BackLink — enlace secundario de "volver"
+// ─────────────────────────────────────────────────────────────────────────
+function BackLink({ href, label, onClick }) {
+  const [hover, setHover] = useState(false);
+
+  const commonProps = {
+    onMouseEnter: () => setHover(true),
+    onMouseLeave: () => setHover(false),
+    className:
+      'flex items-center justify-center gap-1.5 w-full py-2 text-[12px] uppercase tracking-[0.16em]',
+    style: {
+      color: hover ? T.accent : T.inkFaint,
+      fontWeight: 500,
+      background: 'transparent',
+      border: 'none',
+      cursor: 'pointer',
+      textDecoration: 'none',
+      WebkitTapHighlightColor: 'transparent',
+      transition: `color 0.2s ${T.ease}`,
+    },
+  };
+
+  if (href) {
+    return (
+      <Link href={href} {...commonProps}>
+        <ChevronLeft size={12} strokeWidth={1.75} /> {label}
+      </Link>
+    );
+  }
+
+  return (
+    <button onClick={onClick} {...commonProps}>
+      <ChevronLeft size={12} strokeWidth={1.75} /> {label}
+    </button>
   );
 }

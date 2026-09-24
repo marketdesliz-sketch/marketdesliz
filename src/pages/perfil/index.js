@@ -6,9 +6,9 @@ import Link from 'next/link';
 import {
   User, Phone, Mail, Edit2, LogOut,
   Package, DollarSign, Target, QrCode, CreditCard,
-  MessageCircle, ChevronRight, AlertCircle, CheckCircle, Clock, X
+  MessageCircle, ChevronRight, AlertCircle, CheckCircle, Clock,
+  X, AlertTriangle, ShieldCheck,
 } from 'lucide-react';
-import StoreLayout from '../../layouts/StoreLayout';
 import pb from '../../lib/pocketbase';
 import { getClientKYC } from '../../lib/kycService';
 import { getClientTandas } from '../../lib/tandasService';
@@ -18,36 +18,281 @@ import ModalCompletarDatos from '../../components/ModalCompletarDatos';
 import { GoogleLogin } from '@react-oauth/google';
 import toast from 'react-hot-toast';
 import { parseJwt, addProviderToUser } from '../../lib/authService';
+import { T } from '../../lib/tokens';
+import TerminalBar from '../../components/TerminalBar';
+import Header from '../../components/Header';
+import Footer from '../../components/Footer';
+import BackButton from '../../components/BackButton';
 
-
+// ─────────────────────────────────────────────────────────────────────────
+// Helpers · SIN CAMBIOS
+// ─────────────────────────────────────────────────────────────────────────
 const formatMoney = (amount) => {
   if (!amount) return '$0';
   return new Intl.NumberFormat('es-MX', {
-    style: 'currency', currency: 'MXN',
-    minimumFractionDigits: 0, maximumFractionDigits: 0
+    style: 'currency',
+    currency: 'MXN',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(amount);
 };
 
 const formatDate = (date) => {
   if (!date) return 'No definida';
   return new Date(date).toLocaleDateString('es-MX', {
-    day: 'numeric', month: 'long', year: 'numeric'
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
   });
 };
 
-function FieldLabel({ children }) {
-  return <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{children}</label>;
+// ─────────────────────────────────────────────────────────────────────────
+// Sub-componentes UI
+// ─────────────────────────────────────────────────────────────────────────
+function SectionLabel({ children, accent = false }) {
+  return (
+    <p
+      className="text-[10px] md:text-[11px] uppercase tracking-[0.22em] mb-4"
+      style={{
+        color: accent ? T.accent : T.inkFaint,
+        fontWeight: 500,
+        fontFeatureSettings: '"ss01"',
+      }}
+    >
+      {children}
+    </p>
+  );
 }
 
-function Input({ className = '', ...props }) {
+function StatBlock({ value, label, sub, accent = false, border = true }) {
+  return (
+    <div
+      className="p-5"
+      style={{ borderLeft: border ? `1px solid ${T.line}` : 'none' }}
+    >
+      <p
+        className="text-[20px] md:text-[22px] tabular-nums tracking-[-0.02em] leading-none mb-2"
+        style={{
+          color: accent ? T.accent : T.ink,
+          fontWeight: 500,
+          fontFeatureSettings: '"tnum"',
+        }}
+      >
+        {value}
+      </p>
+      <p
+        className="text-[10px] uppercase tracking-[0.18em]"
+        style={{ color: T.inkFaint, fontWeight: 500 }}
+      >
+        {label}
+      </p>
+      {sub && (
+        <p
+          className="text-[10.5px] mt-1 tabular-nums"
+          style={{
+            color: T.inkGhost,
+            fontWeight: 450,
+            fontFeatureSettings: '"tnum"',
+          }}
+        >
+          {sub}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function WarningCallout({ icon: Icon = AlertTriangle, children }) {
+  return (
+    <div
+      className="flex items-start gap-3 p-5"
+      style={{
+        background: 'rgba(184, 130, 14, 0.06)',
+        border: `1px solid rgba(184, 130, 14, 0.18)`,
+        borderLeft: '2px solid #B8820E',
+        borderRadius: '8px',
+      }}
+    >
+      <Icon
+        size={16}
+        strokeWidth={1.75}
+        style={{ color: '#B8820E', flexShrink: 0, marginTop: 2 }}
+      />
+      <div className="flex-1 min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function FieldLabel({ children, required = false }) {
+  return (
+    <label
+      className="block text-[10px] uppercase tracking-[0.22em] mb-2"
+      style={{
+        color: T.inkFaint,
+        fontWeight: 500,
+        fontFeatureSettings: '"ss01"',
+      }}
+    >
+      {children}
+      {required && <span style={{ color: T.red, marginLeft: '3px' }}>*</span>}
+    </label>
+  );
+}
+
+function FieldInput({ className = '', ...props }) {
+  const [focus, setFocus] = useState(false);
   return (
     <input
-      className={`w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6C3BFF]/25 focus:border-[#6C3BFF] transition-all bg-white ${className}`}
       {...props}
+      className={`w-full outline-none transition-colors ${className}`}
+      onFocus={(e) => {
+        setFocus(true);
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setFocus(false);
+        props.onBlur?.(e);
+      }}
+      style={{
+        height: '42px',
+        padding: '0 14px',
+        background: 'transparent',
+        border: `1px solid ${focus ? 'rgba(15,15,15,0.24)' : T.line}`,
+        borderRadius: '6px',
+        color: T.ink,
+        fontSize: '13.5px',
+        fontWeight: 450,
+        letterSpacing: '-0.005em',
+        WebkitTapHighlightColor: 'transparent',
+        transitionTimingFunction: T.ease,
+        fontFamily: 'inherit',
+      }}
     />
   );
 }
 
+function FieldTextarea({ className = '', ...props }) {
+  const [focus, setFocus] = useState(false);
+  return (
+    <textarea
+      {...props}
+      className={`w-full outline-none resize-none transition-colors ${className}`}
+      onFocus={(e) => {
+        setFocus(true);
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setFocus(false);
+        props.onBlur?.(e);
+      }}
+      style={{
+        padding: '12px 14px',
+        background: 'transparent',
+        border: `1px solid ${focus ? 'rgba(15,15,15,0.24)' : T.line}`,
+        borderRadius: '6px',
+        color: T.ink,
+        fontSize: '13.5px',
+        fontWeight: 450,
+        lineHeight: 1.55,
+        WebkitTapHighlightColor: 'transparent',
+        transitionTimingFunction: T.ease,
+        fontFamily: 'inherit',
+      }}
+    />
+  );
+}
+
+function FieldSelect({ className = '', children, ...props }) {
+  const [focus, setFocus] = useState(false);
+  return (
+    <select
+      {...props}
+      className={`w-full outline-none appearance-none transition-colors ${className}`}
+      onFocus={(e) => {
+        setFocus(true);
+        props.onFocus?.(e);
+      }}
+      onBlur={(e) => {
+        setFocus(false);
+        props.onBlur?.(e);
+      }}
+      style={{
+        height: '42px',
+        padding: '0 14px',
+        background: 'transparent',
+        border: `1px solid ${focus ? 'rgba(15,15,15,0.24)' : T.line}`,
+        borderRadius: '6px',
+        color: T.ink,
+        fontSize: '13.5px',
+        fontWeight: 450,
+        cursor: 'pointer',
+        WebkitTapHighlightColor: 'transparent',
+        transitionTimingFunction: T.ease,
+        fontFamily: 'inherit',
+      }}
+    >
+      {children}
+    </select>
+  );
+}
+
+function ActionTile({ href, icon: Icon, label, external }) {
+  const [hover, setHover] = useState(false);
+
+  return (
+    <Link
+      href={href}
+      target={external ? '_blank' : undefined}
+      rel={external ? 'noopener noreferrer' : undefined}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="flex flex-col items-center justify-center gap-2.5 py-5 px-3 transition-all duration-300"
+      style={{
+        background: 'transparent',
+        border: `1px solid ${hover ? T.line : 'transparent'}`,
+        borderRadius: '8px',
+        textDecoration: 'none',
+        WebkitTapHighlightColor: 'transparent',
+        transitionTimingFunction: T.ease,
+      }}
+    >
+      <div
+        className="flex items-center justify-center transition-colors duration-300"
+        style={{
+          width: '40px',
+          height: '40px',
+          background: hover ? T.accent : 'rgba(15,15,15,0.04)',
+          borderRadius: '8px',
+          transitionTimingFunction: T.ease,
+        }}
+      >
+        <Icon
+          size={16}
+          strokeWidth={1.75}
+          style={{
+            color: hover ? '#FFFFFF' : T.inkMid,
+            transition: `color 0.3s ${T.ease}`,
+          }}
+        />
+      </div>
+      <span
+        className="text-[10.5px] text-center leading-tight transition-colors duration-300"
+        style={{
+          color: hover ? T.ink : T.inkMid,
+          fontWeight: 500,
+          letterSpacing: '-0.005em',
+          transitionTimingFunction: T.ease,
+        }}
+      >
+        {label}
+      </span>
+    </Link>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Página
+// ─────────────────────────────────────────────────────────────────────────
 export default function PerfilPage() {
   const router = useRouter();
   const [cliente, setCliente] = useState(null);
@@ -78,23 +323,39 @@ export default function PerfilPage() {
   const [googleLinking, setGoogleLinking] = useState(false);
 
   const [formData, setFormData] = useState({
-    nombre: '', telefonoAlternativo: '', email: '',
-    direccionCalle: '', direccionNumero: '', direccionInterior: '',
-    direccionEstado: '', direccionMunicipio: '', direccionLocalidad: '', direccionSector: '', direccionCp: '',
+    nombre: '',
+    telefonoAlternativo: '',
+    email: '',
+    direccionCalle: '',
+    direccionNumero: '',
+    direccionInterior: '',
+    direccionEstado: '',
+    direccionMunicipio: '',
+    direccionLocalidad: '',
+    direccionSector: '',
+    direccionCp: '',
     direccionReferencias: '',
-    diaPago: 'lunes'
+    diaPago: 'lunes',
   });
 
   const [stats, setStats] = useState({
-    totalCompras: 0, totalPagado: 0, deudaActual: 0,
-    siguientePago: null, tandasActivas: 0
+    totalCompras: 0,
+    totalPagado: 0,
+    deudaActual: 0,
+    siguientePago: null,
+    tandasActivas: 0,
   });
 
+  const notifications = [];
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // ─── Foto ───────────────────────────────────────────────
   const getFotoUrl = () => {
     if (!cliente?.foto) return null;
     return pb.files.getURL(cliente, cliente.foto);
   };
 
+  // ─── Verificaciones ─────────────────────────────────────
   const verificarPrimerIngreso = () => {
     const primerIngreso = localStorage.getItem('primerIngreso');
     const userIdGuardado = localStorage.getItem('userIdCompletarDatos');
@@ -104,11 +365,14 @@ export default function PerfilPage() {
     }
   };
 
+  // ─── Cargas ─────────────────────────────────────────────
   const cargarClientData = async (userId) => {
     try {
-      const clientRecord = await pb.collection('clients').getFirstListItem(`userId = "${userId}"`);
+      const clientRecord = await pb
+        .collection('clients')
+        .getFirstListItem(`userId = "${userId}"`);
       setClientData(clientRecord);
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         telefonoAlternativo: clientRecord.telefonoAlternativo || '',
         direccionCalle: clientRecord.direccionCalle || '',
@@ -120,9 +384,11 @@ export default function PerfilPage() {
         direccionSector: clientRecord.direccionSector || '',
         direccionCp: clientRecord.direccionCp || '',
         direccionReferencias: clientRecord.direccionReferencias || '',
-        diaPago: clientRecord.diaPago || 'lunes'
+        diaPago: clientRecord.diaPago || 'lunes',
       }));
-    } catch { setClientData(null); }
+    } catch {
+      setClientData(null);
+    }
   };
 
   const cargarDatos = async (clienteId) => {
@@ -130,55 +396,94 @@ export default function PerfilPage() {
     try {
       setLoading(true);
       const ordenesCliente = await pb.collection('orders').getFullList({
-        filter: `userId = "${clienteId}"`, sort: '-created', expand: 'productId'
+        filter: `userId = "${clienteId}"`,
+        sort: '-created',
+        expand: 'productId',
       });
       setOrdenes(ordenesCliente);
       const totalCompras = ordenesCliente.length;
-      const totalPagado = ordenesCliente.filter(o => o.estadoPago === 'completada').reduce((sum, o) => sum + (o.totalPagar || 0), 0);
-      const pendientes = ordenesCliente.filter(o => o.estadoPago === 'activa' || o.estadoPago === 'pendiente_pago');
+      const totalPagado = ordenesCliente
+        .filter((o) => o.estadoPago === 'completada')
+        .reduce((sum, o) => sum + (o.totalPagar || 0), 0);
+      const pendientes = ordenesCliente.filter(
+        (o) => o.estadoPago === 'activa' || o.estadoPago === 'pendiente_pago'
+      );
       setPagosPendientes(pendientes);
       const deudaActual = pendientes.reduce((sum, o) => {
         const pagado = (o.pagoSemanal || 0) * (o.pagosRealizados || 0);
-        const total = o.tipo === 'contado' ? o.totalPagar : (o.enganche || 0) + ((o.pagoSemanal || 0) * (o.semanasTotales || 0));
+        const total =
+          o.tipo === 'contado'
+            ? o.totalPagar
+            : (o.enganche || 0) + (o.pagoSemanal || 0) * (o.semanasTotales || 0);
         return sum + Math.max(0, total - pagado);
       }, 0);
-      const proximoPago = pendientes.find(o => o.estadoPago === 'activa');
-      setStats(prev => ({
-        ...prev, totalCompras, totalPagado, deudaActual,
-        siguientePago: proximoPago ? {
-          monto: proximoPago.tipo === 'contado' ? proximoPago.totalPagar : proximoPago.pagoSemanal,
-          fecha: proximoPago.fechaProximoPago || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          ordenId: proximoPago.id
-        } : null
+      const proximoPago = pendientes.find((o) => o.estadoPago === 'activa');
+      setStats((prev) => ({
+        ...prev,
+        totalCompras,
+        totalPagado,
+        deudaActual,
+        siguientePago: proximoPago
+          ? {
+              monto:
+                proximoPago.tipo === 'contado'
+                  ? proximoPago.totalPagar
+                  : proximoPago.pagoSemanal,
+              fecha:
+                proximoPago.fechaProximoPago ||
+                new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+              ordenId: proximoPago.id,
+            }
+          : null,
       }));
-    } catch (error) { console.error('Error cargando datos:', error); }
-    finally { setLoading(false); }
+    } catch (error) {
+      console.error('Error cargando datos:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const cargarKYC = async (clienteId) => {
-    try { const kyc = await getClientKYC(clienteId); setKycStatus(kyc?.estado || null); }
-    catch (error) { console.error('Error cargando KYC:', error); }
+    try {
+      const kyc = await getClientKYC(clienteId);
+      setKycStatus(kyc?.estado || null);
+    } catch (error) {
+      console.error('Error cargando KYC:', error);
+    }
   };
 
   const cargarTandas = async (clienteId) => {
     try {
       const misTandas = await getClientTandas(clienteId);
       setTandas(misTandas);
-      setStats(prev => ({ ...prev, tandasActivas: misTandas.filter(t => t.estadoPago === 'al_corriente').length }));
-    } catch (error) { console.error('Error cargando tandas:', error); }
+      setStats((prev) => ({
+        ...prev,
+        tandasActivas: misTandas.filter((t) => t.estadoPago === 'al_corriente')
+          .length,
+      }));
+    } catch (error) {
+      console.error('Error cargando tandas:', error);
+    }
   };
 
   const cargarNivel = async (clienteId) => {
-    try { const s = await getEstadisticasCliente(clienteId); setEstadisticasNivel(s); }
-    catch (error) { console.error('Error cargando nivel:', error); }
+    try {
+      const s = await getEstadisticasCliente(clienteId);
+      setEstadisticasNivel(s);
+    } catch (error) {
+      console.error('Error cargando nivel:', error);
+    }
   };
 
   const cargarAuthMethods = async (clienteId) => {
-    try { const methods = await getClientAuthMethods(clienteId); setAuthMethods(methods); }
-    catch (error) { console.error('Error cargando métodos de autenticación:', error); }
+    try {
+      const methods = await getClientAuthMethods(clienteId);
+      setAuthMethods(methods);
+    } catch (error) {
+      console.error('Error cargando métodos de autenticación:', error);
+    }
   };
 
-  // ─── Recargar todos los datos del cliente ────────────────────────────
   const recargarTodo = async (userId) => {
     if (!userId) return;
     await Promise.all([
@@ -187,15 +492,22 @@ export default function PerfilPage() {
       cargarKYC(userId),
       cargarTandas(userId),
       cargarNivel(userId),
-      cargarAuthMethods(userId)
+      cargarAuthMethods(userId),
     ]);
   };
 
+  // ─── Foto handlers ──────────────────────────────────────
   const handleFotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) { alert('La foto no debe exceder los 2MB'); return; }
-      if (!file.type.startsWith('image/')) { alert('Solo se permiten archivos de imagen'); return; }
+      if (file.size > 2 * 1024 * 1024) {
+        alert('La foto no debe exceder los 2MB');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        alert('Solo se permiten archivos de imagen');
+        return;
+      }
       setFotoFile(file);
       setEliminarFoto(false);
       const reader = new FileReader();
@@ -205,27 +517,37 @@ export default function PerfilPage() {
   };
 
   const handleEliminarFoto = () => {
-    if (cliente?.foto) { setEliminarFoto(true); setFotoFile(null); setFotoPreview(null); }
+    if (cliente?.foto) {
+      setEliminarFoto(true);
+      setFotoFile(null);
+      setFotoPreview(null);
+    }
   };
 
   const actualizarFoto = async (userId) => {
     if (eliminarFoto && cliente?.foto) {
-      const fd = new FormData(); fd.append('foto', null);
-      await pb.collection('users').update(userId, fd); return null;
+      const fd = new FormData();
+      fd.append('foto', null);
+      await pb.collection('users').update(userId, fd);
+      return null;
     }
     if (fotoFile) {
-      const fd = new FormData(); fd.append('foto', fotoFile);
-      const updated = await pb.collection('users').update(userId, fd); return updated.foto;
+      const fd = new FormData();
+      fd.append('foto', fotoFile);
+      const updated = await pb.collection('users').update(userId, fd);
+      return updated.foto;
     }
     return cliente?.foto;
   };
 
+  // ─── Guardar perfil ─────────────────────────────────────
   const handleSaveProfile = async () => {
     try {
       setSaving(true);
       await actualizarFoto(cliente.id);
       const updatedUser = await pb.collection('users').update(cliente.id, {
-        nombre: formData.nombre, email: formData.email
+        nombre: formData.nombre,
+        email: formData.email,
       });
       const clientUpdateData = {
         telefonoAlternativo: formData.telefonoAlternativo,
@@ -239,21 +561,35 @@ export default function PerfilPage() {
         direccionCp: formData.direccionCp,
         direccionReferencias: formData.direccionReferencias,
         diaPago: formData.diaPago,
-        datosCompletos: true
+        datosCompletos: true,
       };
       if (clientData) {
         await pb.collection('clients').update(clientData.id, clientUpdateData);
       } else {
         await pb.collection('clients').create({
-          userId: cliente.id, ...clientUpdateData,
-          nivel: 0, productosComprados: 0, productosPagados: 0, productosEnCurso: 0,
-          deudaActual: 0, limiteDeuda: 5000, estadoKyc: 'pendiente', trustScore: 0
+          userId: cliente.id,
+          ...clientUpdateData,
+          nivel: 0,
+          productosComprados: 0,
+          productosPagados: 0,
+          productosEnCurso: 0,
+          deudaActual: 0,
+          limiteDeuda: 5000,
+          estadoKyc: 'pendiente',
+          trustScore: 0,
         });
       }
       pb.authStore.save(pb.authStore.token, updatedUser);
       setCliente(updatedUser);
-      setFormData(prev => ({ ...prev, nombre: updatedUser.nombre || '', email: updatedUser.email || '' }));
-      setFotoFile(null); setFotoPreview(null); setEliminarFoto(false); setIsEditing(false);
+      setFormData((prev) => ({
+        ...prev,
+        nombre: updatedUser.nombre || '',
+        email: updatedUser.email || '',
+      }));
+      setFotoFile(null);
+      setFotoPreview(null);
+      setEliminarFoto(false);
+      setIsEditing(false);
       await recargarTodo(cliente.id);
       setShowSuccessModal(true);
       setTimeout(() => setShowSuccessModal(false), 2000);
@@ -261,73 +597,79 @@ export default function PerfilPage() {
       console.error('❌ Error detallado:', error);
       let mensajes = [];
       if (error.data?.data) {
-        mensajes = Object.entries(error.data.data).map(([campo, info]) => `${campo}: ${info.message}`);
-      } else { mensajes = [error.message || 'Error al actualizar perfil']; }
-      setErrorMessages(mensajes); setShowErrorModal(true);
-    } finally { setSaving(false); }
+        mensajes = Object.entries(error.data.data).map(
+          ([campo, info]) => `${campo}: ${info.message}`
+        );
+      } else {
+        mensajes = [error.message || 'Error al actualizar perfil'];
+      }
+      setErrorMessages(mensajes);
+      setShowErrorModal(true);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleLogout = () => { pb.authStore.clear(); router.push('/'); };
+  const handleLogout = () => {
+    pb.authStore.clear();
+    router.push('/');
+  };
 
   const handleDatosCompletados = async () => {
     setShowModalCompletar(false);
     localStorage.removeItem('primerIngreso');
     localStorage.removeItem('userIdCompletarDatos');
 
-    // ✅ REFRESCAR EL ESTADO CLIENTE DESDE AUTHSTORE
     const currentUser = pb.authStore.model;
     if (currentUser) {
       setCliente(currentUser);
-      // Actualizar también el formulario de edición con los nuevos datos
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         nombre: currentUser.nombre || '',
         email: currentUser.email || '',
       }));
-    };
+    }
 
-
-    // Recargar datos relacionados (dirección, órdenes, etc.)
     const userId = currentUser?.id || cliente?.id;
     if (userId) {
       await recargarTodo(userId);
     }
-  }
+  };
 
-
-
+  // ─── Agregar teléfono ───────────────────────────────────
   const handleAddPhone = async () => {
     const cleanPhone = phoneInput.replace(/\D/g, '');
     if (cleanPhone.length !== 10) {
       toast.error('Ingresa un número válido de 10 dígitos');
       return;
-    };
+    }
 
     try {
-      // ✅ VERIFICAR QUE EL TELÉFONO NO ESTÉ EN USO POR OTRO USUARIO
       const phoneRes = await fetch('/api/get-user-by-phone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telefono: cleanPhone, excludeUserId: cliente.id })
+        body: JSON.stringify({
+          telefono: cleanPhone,
+          excludeUserId: cliente.id,
+        }),
       });
       const phoneData = await phoneRes.json();
       if (phoneData.exists && phoneData.user.id !== cliente.id) {
-        toast.error('Este número de teléfono ya está registrado por otro usuario');
+        toast.error(
+          'Este número de teléfono ya está registrado por otro usuario'
+        );
         return;
       }
 
-      // 1. Actualizar teléfono en users
       await fetch('/api/update-user-phone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: cliente.id, phone: cleanPhone })
+        body: JSON.stringify({ userId: cliente.id, phone: cleanPhone }),
       });
-      // 2. Agregar provider phone
       await addProviderToUser(cliente.id, {
         provider: 'phone',
-        telefono: cleanPhone
+        telefono: cleanPhone,
       });
-      // 3. Actualizar cliente y clientData
       const updatedUser = await pb.collection('users').getOne(cliente.id);
       setCliente(updatedUser);
       cargarClientData(cliente.id);
@@ -340,20 +682,77 @@ export default function PerfilPage() {
     }
   };
 
+  // ─── KYC status ─────────────────────────────────────────
   const getKYCStatusInfo = () => {
-    if (!kycStatus) return { label: 'Pendiente', colorClass: 'bg-amber-50 text-amber-700 border-amber-100', icon: Clock, action: 'Iniciar verificación', link: '/kyc' };
-    if (kycStatus === 'pendiente') return { label: 'En revisión', colorClass: 'bg-blue-50 text-blue-700 border-blue-100', icon: Clock, action: 'Ver estado', link: '/kyc/estado' };
-    if (kycStatus === 'aprobado') return { label: 'Verificado', colorClass: 'bg-[#10b981]/8 text-[#10b981] border-[#10b981]/20', icon: CheckCircle, action: null, link: null };
-    if (kycStatus === 'rechazado') return { label: 'Rechazado', colorClass: 'bg-red-50 text-red-700 border-red-100', icon: AlertCircle, action: 'Reintentar', link: '/kyc' };
-    return { label: 'Desconocido', colorClass: 'bg-gray-50 text-gray-600 border-gray-100', icon: AlertCircle, action: 'Contactar', link: '/soporte' };
+    if (!kycStatus)
+      return {
+        label: 'Pendiente',
+        fg: '#B8820E',
+        bg: 'rgba(184, 130, 14, 0.06)',
+        border: 'rgba(184, 130, 14, 0.18)',
+        icon: Clock,
+        action: 'Iniciar verificación',
+        link: '/kyc',
+      };
+    if (kycStatus === 'pendiente')
+      return {
+        label: 'En revisión',
+        fg: T.accent,
+        bg: 'rgba(79, 46, 232, 0.06)',
+        border: 'rgba(79, 46, 232, 0.15)',
+        icon: Clock,
+        action: 'Ver estado',
+        link: '/kyc/estado',
+      };
+    if (kycStatus === 'aprobado')
+      return {
+        label: 'Verificado',
+        fg: T.green,
+        bg: 'rgba(26, 127, 75, 0.06)',
+        border: 'rgba(26, 127, 75, 0.18)',
+        icon: CheckCircle,
+        action: null,
+        link: null,
+      };
+    if (kycStatus === 'rechazado')
+      return {
+        label: 'Rechazado',
+        fg: T.red,
+        bg: 'rgba(197, 48, 48, 0.06)',
+        border: 'rgba(197, 48, 48, 0.18)',
+        icon: AlertCircle,
+        action: 'Reintentar',
+        link: '/kyc',
+      };
+    return {
+      label: 'Desconocido',
+      fg: T.inkSoft,
+      bg: 'rgba(15, 15, 15, 0.03)',
+      border: T.line,
+      icon: AlertCircle,
+      action: 'Contactar',
+      link: '/soporte',
+    };
   };
 
+  // ─── Init ───────────────────────────────────────────────
   useEffect(() => {
-    if (!pb.authStore.isValid) { router.push('/solicitar'); return; }
+    if (!pb.authStore.isValid) {
+      router.push('/solicitar');
+      return;
+    }
     const user = pb.authStore.model;
-    if (user?.role === 'vendedor') { router.push('/vendedor'); return; }
+    if (user?.role === 'vendedor') {
+      router.push('/vendedor');
+      return;
+    }
     setCliente(user);
-    if (user) setFormData(prev => ({ ...prev, nombre: user.nombre || '', email: user.email || '' }));
+    if (user)
+      setFormData((prev) => ({
+        ...prev,
+        nombre: user.nombre || '',
+        email: user.email || '',
+      }));
     cargarDatos(user?.id);
     cargarClientData(user?.id);
     cargarKYC(user?.id);
@@ -366,506 +765,1301 @@ export default function PerfilPage() {
   const kycInfo = getKYCStatusInfo();
   const KycIcon = kycInfo.icon;
 
+  // ─── Loading ────────────────────────────────────────────
   if (loading) {
     return (
-      <StoreLayout>
-        <div className="flex justify-center items-center min-h-[60vh]">
-          <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
+      <>
+        <Head><title>Cargando | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <TerminalBar mode="rotating" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <span
+                className="font-serif text-[32px] block mb-5 select-none"
+                style={{ color: T.inkGhost }}
+              >
+                ʃƪʃƪ
+              </span>
+              <p
+                className="text-[11px] uppercase tracking-[0.28em]"
+                style={{ color: T.inkFaint, fontWeight: 500 }}
+              >
+                Cargando perfil
+              </p>
+            </div>
+          </div>
         </div>
-      </StoreLayout>
+      </>
     );
   }
 
+  // ─── Render principal ───────────────────────────────────
   return (
     <>
-      <Head><title>Mi Perfil | MarketDesliz</title></Head>
+      <Head>
+        <title>Mi Perfil | MarketDesliz</title>
+        <meta name="theme-color" content="#0F0F0F" />
+      </Head>
 
-      <StoreLayout>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-32 pb-8">
+      <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+        <BackButton fallback="/" />
+        <TerminalBar mode="rotating" />
+        <Header notifications={notifications} unreadCount={unreadCount} />
 
-          {/* Header del perfil */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-5">
-              <div className="relative shrink-0">
-                <div className="w-18 h-18 rounded-2xl bg-[#6C3BFF]/10 overflow-hidden flex items-center justify-center" style={{ width: 72, height: 72 }}>
+        <main className="flex-1 max-w-[1080px] mx-auto px-6 md:px-14 py-12 md:py-16 w-full">
+
+          {/* ─── Hero editorial ─────────────────────────── */}
+          <section className="mb-10">
+            <p
+              className="text-[10px] uppercase tracking-[0.28em] mb-6"
+              style={{
+                color: T.inkFaint,
+                fontWeight: 500,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              Perfil · MarketDesliz
+            </p>
+
+            <h1
+              className="text-[36px] md:text-[56px] leading-[1.02] tracking-[-0.035em] max-w-2xl"
+              style={{
+                color: T.ink,
+                fontWeight: 400,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              Mi perfil
+              <br />
+              <span className="font-serif italic" style={{ color: T.inkMid }}>
+                y actividad.
+              </span>
+            </h1>
+          </section>
+
+          {/* ─── Header card: foto + datos + acciones ───── */}
+          <section className="mb-6">
+            <div
+              className="p-6 md:p-8"
+              style={{
+                background: T.bg,
+                border: `1px solid ${T.line}`,
+                borderRadius: '8px',
+              }}
+            >
+              <div className="flex flex-col sm:flex-row items-start gap-5">
+                {/* Foto */}
+                <div
+                  className="shrink-0 overflow-hidden flex items-center justify-center"
+                  style={{
+                    width: '72px',
+                    height: '72px',
+                    background: 'rgba(79, 46, 232, 0.08)',
+                    borderRadius: '12px',
+                  }}
+                >
                   {getFotoUrl() ? (
-                    <img src={getFotoUrl()} alt="Foto" className="w-full h-full object-cover" />
+                    <img
+                      src={getFotoUrl()}
+                      alt="Foto"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
                   ) : (
-                    <User size={32} className="text-[#6C3BFF]" />
+                    <User size={28} strokeWidth={1.5} style={{ color: T.accent }} />
                   )}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <h2
+                    className="text-[20px] md:text-[22px] truncate tracking-[-0.01em]"
+                    style={{ color: T.ink, fontWeight: 500 }}
+                  >
+                    {cliente?.nombre || 'Usuario'}
+                  </h2>
+                  <div className="flex flex-wrap gap-3 mt-2">
+                    {cliente?.telefono && (
+                      <span
+                        className="flex items-center gap-1.5 text-[12px] tabular-nums"
+                        style={{
+                          color: T.inkSoft,
+                          fontWeight: 450,
+                          fontFeatureSettings: '"tnum"',
+                        }}
+                      >
+                        <Phone size={12} strokeWidth={1.75} /> {cliente.telefono}
+                      </span>
+                    )}
+                    {cliente?.email && (
+                      <span
+                        className="flex items-center gap-1.5 text-[12px]"
+                        style={{ color: T.inkFaint, fontWeight: 450 }}
+                      >
+                        <Mail size={12} strokeWidth={1.75} /> {cliente.email}
+                      </span>
+                    )}
+                  </div>
+                  <p
+                    className="text-[11px] mt-2"
+                    style={{ color: T.inkFaint, fontWeight: 450 }}
+                  >
+                    Miembro desde {formatDate(cliente?.created)}
+                  </p>
+                </div>
+
+                {/* Buttons */}
+                <div className="flex gap-2 shrink-0 w-full sm:w-auto">
+                  <button
+                    onClick={() => setIsEditing(!isEditing)}
+                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 h-10 px-4 text-[12.5px] transition-colors"
+                    style={{
+                      background: isEditing ? 'transparent' : T.accent,
+                      color: isEditing ? T.inkMid : '#FFFFFF',
+                      border: `1px solid ${isEditing ? T.line : T.accent}`,
+                      borderRadius: '6px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                      transitionTimingFunction: T.ease,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isEditing)
+                        e.currentTarget.style.background = T.accentDeep;
+                      else
+                        e.currentTarget.style.background = 'rgba(15,15,15,0.03)';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isEditing) e.currentTarget.style.background = T.accent;
+                      else e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <Edit2 size={13} strokeWidth={1.75} />
+                    {isEditing ? 'Cancelar' : 'Editar'}
+                  </button>
+
+                  <button
+                    onClick={handleLogout}
+                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 h-10 px-4 text-[12.5px] transition-colors"
+                    style={{
+                      background: 'transparent',
+                      color: T.red,
+                      border: `1px solid rgba(197, 48, 48, 0.18)`,
+                      borderRadius: '6px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                      transitionTimingFunction: T.ease,
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background = 'rgba(197,48,48,0.04)')
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = 'transparent')
+                    }
+                  >
+                    <LogOut size={13} strokeWidth={1.75} /> Salir
+                  </button>
                 </div>
               </div>
 
-              <div className="flex-1 min-w-0">
-                <h1 className="text-xl font-bold text-gray-900 truncate">{cliente?.nombre || 'Usuario'}</h1>
-                <div className="flex flex-wrap gap-3 mt-1.5">
-                  {cliente?.telefono && (
-                    <span className="flex items-center gap-1 text-sm text-gray-500">
-                      <Phone size={13} /> {cliente.telefono}
-                    </span>
-                  )}
-                  {cliente?.email && (
-                    <span className="flex items-center gap-1 text-sm text-gray-400">
-                      <Mail size={13} /> {cliente.email}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-400 mt-1">Miembro desde {formatDate(cliente?.created)}</p>
-              </div>
-
-              <div className="flex gap-2 shrink-0">
-                <button
-                  onClick={() => setIsEditing(!isEditing)}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-colors border ${isEditing
-                    ? 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                    : 'border-[#6C3BFF] text-[#6C3BFF] hover:bg-[#6C3BFF]/5'
-                    }`}
+              {/* Auth methods */}
+              {authMethods?.methods?.length > 0 && (
+                <div
+                  className="mt-6 pt-5"
+                  style={{ borderTop: `1px solid ${T.line}` }}
                 >
-                  <Edit2 size={14} /> {isEditing ? 'Cancelar' : 'Editar'}
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-red-500 border border-red-100 hover:bg-red-50 transition-colors"
-                >
-                  <LogOut size={14} /> Salir
-                </button>
-              </div>
-            </div>
-
-            {authMethods?.methods?.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Acceso a tu cuenta</p>
-                <div className="flex flex-wrap gap-2">
-                  {authMethods.methods.map((method) => (
-                    <span
-                      key={method.id}  // ← Usamos el ID único del registro en user_providers
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${method.provider === 'google'
-                        ? 'bg-red-50 text-red-600'
-                        : method.provider === 'phone'
-                          ? 'bg-[#10b981]/10 text-[#10b981]'
-                          : 'bg-blue-50 text-blue-600'
-                        }`}
-                    >
-                      {method.provider === 'google' && <>Google {method.isPrimary && '(principal)'}</>}
-                      {method.provider === 'phone' && <>SMS {method.isPrimary && '(principal)'}</>}
-                      {method.provider === 'credentials' && <>Email {method.isPrimary && '(principal)'}</>}
-                    </span>
-                  ))}
+                  <p
+                    className="text-[10px] uppercase tracking-[0.22em] mb-3"
+                    style={{ color: T.inkFaint, fontWeight: 500 }}
+                  >
+                    Acceso a tu cuenta
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {authMethods.methods.map((method) => {
+                      const isGoogle = method.provider === 'google';
+                      const isPhone = method.provider === 'phone';
+                      const fg = isGoogle
+                        ? '#EA4335'
+                        : isPhone
+                        ? T.green
+                        : T.accent;
+                      const bg = isGoogle
+                        ? 'rgba(234, 67, 53, 0.06)'
+                        : isPhone
+                        ? 'rgba(26, 127, 75, 0.06)'
+                        : 'rgba(79, 46, 232, 0.06)';
+                      const label = isGoogle
+                        ? 'Google'
+                        : isPhone
+                        ? 'SMS'
+                        : 'Email';
+                      return (
+                        <span
+                          key={method.id}
+                          className="inline-flex items-center gap-1 px-2.5 py-1"
+                          style={{
+                            background: bg,
+                            color: fg,
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.12em',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {label} {method.isPrimary && '· principal'}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* ── AGREGAR TELÉFONO (si no tiene) ── */}
-          {cliente && !cliente.telefono && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-4">
-              <p className="text-sm text-yellow-700 mb-2 flex items-center gap-2">
-                📱 Aún no has registrado un número de teléfono. Esto te permitirá recibir notificaciones y ser contactado por el cobrador.
-              </p>
-              <button
-                onClick={() => setShowPhoneModal(true)}
-                className="bg-[#6C3BFF] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#5b2ee6] transition"
-              >
-                Agregar número de teléfono
-              </button>
-            </div>
-          )}
-
-          {/* ── VINCULAR GOOGLE (si no tiene) ── */}
-          {authMethods && !authMethods.hasGoogle && (
-            <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
-              <p className="text-sm text-gray-600 mb-3">
-                🔗 Vincula tu cuenta de Google para iniciar sesión más rápido.
-              </p>
-              <GoogleLogin
-                onSuccess={async (response) => {
-                  setGoogleLinking(true);
-                  try {
-                    const decoded = parseJwt(response.credential);
-                    await addProviderToUser(cliente.id, {
-                      provider: 'google',
-                      providerId: decoded.sub,
-                      email: decoded.email
-                    });
-                    toast.success('Cuenta de Google vinculada exitosamente');
-                    cargarAuthMethods(cliente.id);
-                  } catch (err) {
-                    console.error('Error vinculando Google:', err);
-                    toast.error('Error al vincular Google');
-                  } finally {
-                    setGoogleLinking(false);
-                  }
-                }}
-                onError={() => {
-                  toast.error('Error al vincular Google');
-                  setGoogleLinking(false);
-                }}
-                theme="outline"
-                size="large"
-                text="continue_with"
-                shape="rectangular"
-                width={400}
-                disabled={googleLinking}
-              />
-              {googleLinking && (
-                <p className="text-center text-xs text-gray-400 mt-2">
-                  <span className="inline-block w-3 h-3 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin mr-1" />
-                  Vinculando...
-                </p>
               )}
             </div>
+          </section>
+
+          {/* ─── Alert: sin teléfono ─────────────────────── */}
+          {cliente && !cliente.telefono && (
+            <section className="mb-6">
+              <WarningCallout>
+                <p
+                  className="text-[13px] leading-[1.55] mb-3"
+                  style={{ color: '#8A6109', fontWeight: 450 }}
+                >
+                  Aún no has registrado un número de teléfono. Esto te
+                  permitirá recibir notificaciones y ser contactado por el
+                  cobrador.
+                </p>
+                <button
+                  onClick={() => setShowPhoneModal(true)}
+                  className="inline-flex items-center gap-1.5 h-9 px-4 text-white text-[12.5px]"
+                  style={{
+                    background: T.accent,
+                    borderRadius: '6px',
+                    fontWeight: 500,
+                    border: 'none',
+                    cursor: 'pointer',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = T.accentDeep)}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = T.accent)}
+                >
+                  <Phone size={13} strokeWidth={1.75} /> Agregar número de teléfono
+                </button>
+              </WarningCallout>
+            </section>
           )}
 
-          {/* Modo edición */}
-          {isEditing && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
-              <h2 className="text-base font-bold text-gray-900 mb-5">Editar información personal</h2>
+          {/* ─── Vincular Google ─────────────────────────── */}
+          {authMethods && !authMethods.hasGoogle && (
+            <section className="mb-6">
+              <div
+                className="p-6"
+                style={{
+                  background: T.bg,
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '8px',
+                }}
+              >
+                <SectionLabel>Vincular cuenta</SectionLabel>
+                <p
+                  className="text-[13px] leading-[1.55] mb-4"
+                  style={{ color: T.inkSoft, fontWeight: 450 }}
+                >
+                  Vincula tu cuenta de Google para iniciar sesión más rápido.
+                </p>
+                <GoogleLogin
+                  onSuccess={async (response) => {
+                    setGoogleLinking(true);
+                    try {
+                      const decoded = parseJwt(response.credential);
+                      await addProviderToUser(cliente.id, {
+                        provider: 'google',
+                        providerId: decoded.sub,
+                        email: decoded.email,
+                      });
+                      toast.success('Cuenta de Google vinculada exitosamente');
+                      cargarAuthMethods(cliente.id);
+                    } catch (err) {
+                      console.error('Error vinculando Google:', err);
+                      toast.error('Error al vincular Google');
+                    } finally {
+                      setGoogleLinking(false);
+                    }
+                  }}
+                  onError={() => {
+                    toast.error('Error al vincular Google');
+                    setGoogleLinking(false);
+                  }}
+                  theme="outline"
+                  size="large"
+                  text="continue_with"
+                  shape="rectangular"
+                  width={400}
+                  disabled={googleLinking}
+                />
+                {googleLinking && (
+                  <p
+                    className="text-[11.5px] mt-3 flex items-center gap-2"
+                    style={{ color: T.inkFaint, fontWeight: 450 }}
+                  >
+                    <span
+                      className="border-2 rounded-full animate-spin"
+                      style={{
+                        width: '12px',
+                        height: '12px',
+                        borderColor: T.line,
+                        borderTopColor: T.accent,
+                        display: 'inline-block',
+                      }}
+                    />
+                    Vinculando…
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
 
-              <div className="mb-6 pb-5 border-b border-gray-100">
-                <FieldLabel>Foto de perfil</FieldLabel>
-                <div className="flex items-center gap-5 mt-2">
-                  <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
-                    {fotoPreview ? (
-                      <img src={fotoPreview} alt="Preview" className="w-full h-full object-cover" />
-                    ) : getFotoUrl() ? (
-                      <img src={getFotoUrl()} alt="Foto actual" className="w-full h-full object-cover" />
-                    ) : (
-                      <User size={24} className="text-gray-400" />
-                    )}
+          {/* ─── Modo edición ────────────────────────────── */}
+          {isEditing && (
+            <section className="mb-8">
+              <div
+                className="p-6 md:p-8"
+                style={{
+                  background: T.bg,
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '8px',
+                }}
+              >
+                <SectionLabel accent>Editar información</SectionLabel>
+
+                {/* Foto */}
+                <div
+                  className="mb-6 pb-6"
+                  style={{ borderBottom: `1px solid ${T.line}` }}
+                >
+                  <FieldLabel>Foto de perfil</FieldLabel>
+                  <div className="flex items-center gap-5 mt-2">
+                    <div
+                      className="shrink-0 overflow-hidden flex items-center justify-center"
+                      style={{
+                        width: '64px',
+                        height: '64px',
+                        background: 'rgba(15,15,15,0.04)',
+                        borderRadius: '10px',
+                      }}
+                    >
+                      {fotoPreview ? (
+                        <img
+                          src={fotoPreview}
+                          alt="Preview"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : getFotoUrl() ? (
+                        <img
+                          src={getFotoUrl()}
+                          alt="Foto actual"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <User size={22} strokeWidth={1.5} style={{ color: T.inkFaint }} />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFotoChange}
+                        className="text-[11.5px] file:mr-3 file:py-1.5 file:px-3 file:border-0 file:text-[11.5px] file:font-medium file:cursor-pointer"
+                        style={{
+                          color: T.inkSoft,
+                        }}
+                      />
+                      <p
+                        className="text-[10.5px] mt-1.5"
+                        style={{ color: T.inkFaint, fontWeight: 450 }}
+                      >
+                        JPG, PNG — máx. 2MB
+                      </p>
+                      {cliente?.foto && !fotoPreview && (
+                        <button
+                          type="button"
+                          onClick={handleEliminarFoto}
+                          className="text-[11px] mt-1.5 transition-colors"
+                          style={{
+                            color: T.red,
+                            fontWeight: 500,
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            WebkitTapHighlightColor: 'transparent',
+                          }}
+                        >
+                          Eliminar foto
+                        </button>
+                      )}
+                      {eliminarFoto && (
+                        <p
+                          className="text-[10.5px] mt-1"
+                          style={{ color: T.red, fontWeight: 450 }}
+                        >
+                          Foto marcada para eliminar
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Datos personales */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
+                  <div>
+                    <FieldLabel>Nombre completo</FieldLabel>
+                    <FieldInput
+                      value={formData.nombre}
+                      onChange={(e) =>
+                        setFormData({ ...formData, nombre: e.target.value })
+                      }
+                      placeholder="Juan Pérez"
+                    />
                   </div>
                   <div>
-                    <input
-                      type="file" accept="image/*" onChange={handleFotoChange}
-                      className="text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[#6C3BFF]/8 file:text-[#6C3BFF] hover:file:bg-[#6C3BFF]/15 cursor-pointer"
+                    <FieldLabel>Teléfono alternativo</FieldLabel>
+                    <FieldInput
+                      type="tel"
+                      value={formData.telefonoAlternativo}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          telefonoAlternativo: e.target.value
+                            .replace(/\D/g, '')
+                            .slice(0, 10),
+                        })
+                      }
+                      placeholder="55 1234 5678"
                     />
-                    <p className="text-[10px] text-gray-400 mt-1">JPG, PNG — máx. 2MB</p>
-                    {cliente?.foto && !fotoPreview && (
-                      <button type="button" onClick={handleEliminarFoto} className="text-xs text-red-500 hover:text-red-700 mt-1.5">
-                        Eliminar foto
-                      </button>
-                    )}
-                    {eliminarFoto && <p className="text-[10px] text-red-500 mt-1">Foto marcada para eliminar</p>}
+                  </div>
+                  <div>
+                    <FieldLabel>Correo electrónico</FieldLabel>
+                    <FieldInput
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
+                      placeholder="correo@ejemplo.com"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Día de pago preferente</FieldLabel>
+                    <FieldSelect
+                      value={formData.diaPago}
+                      onChange={(e) =>
+                        setFormData({ ...formData, diaPago: e.target.value })
+                      }
+                    >
+                      <option value="lunes">Lunes</option>
+                      <option value="martes">Martes</option>
+                    </FieldSelect>
                   </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-                <div>
-                  <FieldLabel>Nombre completo</FieldLabel>
-                  <Input value={formData.nombre} onChange={(e) => setFormData({ ...formData, nombre: e.target.value })} placeholder="Juan Pérez" />
+                {/* Dirección */}
+                <SectionLabel>Dirección</SectionLabel>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  {[
+                    ['Calle', 'direccionCalle', 'Av. Independencia'],
+                    ['Número exterior', 'direccionNumero', '123'],
+                    ['Número interior', 'direccionInterior', 'B'],
+                    ['Estado *', 'direccionEstado', 'Veracruz'],
+                    ['Municipio *', 'direccionMunicipio', 'Perote'],
+                    ['Localidad/Pueblo *', 'direccionLocalidad', 'Juan Marcos'],
+                    ['Sector / Colonia *', 'direccionSector', 'Centro'],
+                    ['Código Postal', 'direccionCp', '91270'],
+                  ].map(([label, field, placeholder]) => (
+                    <div key={field}>
+                      <FieldLabel>{label}</FieldLabel>
+                      <FieldInput
+                        value={formData[field]}
+                        onChange={(e) =>
+                          setFormData({ ...formData, [field]: e.target.value })
+                        }
+                        placeholder={placeholder}
+                      />
+                    </div>
+                  ))}
+                  <div className="sm:col-span-2">
+                    <FieldLabel>Referencias del domicilio</FieldLabel>
+                    <FieldTextarea
+                      value={formData.direccionReferencias}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          direccionReferencias: e.target.value,
+                        })
+                      }
+                      rows="2"
+                      placeholder="Casa azul, junto a la tienda..."
+                    />
+                  </div>
                 </div>
-                <div>
-                  <FieldLabel>Teléfono alternativo</FieldLabel>
-                  <Input type="tel" value={formData.telefonoAlternativo}
-                    onChange={(e) => setFormData({ ...formData, telefonoAlternativo: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                    placeholder="55 1234 5678" />
-                </div>
-                <div>
-                  <FieldLabel>Correo electrónico</FieldLabel>
-                  <Input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="correo@ejemplo.com" />
-                </div>
-                <div>
-                  <FieldLabel>Día de pago preferente</FieldLabel>
-                  <select
-                    value={formData.diaPago}
-                    onChange={(e) => setFormData({ ...formData, diaPago: e.target.value })}
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6C3BFF]/25 focus:border-[#6C3BFF] transition-all bg-white"
+
+                {/* Botones */}
+                <div className="flex flex-col sm:flex-row gap-2.5 mt-8 pt-6" style={{ borderTop: `1px solid ${T.line}` }}>
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    disabled={saving}
+                    className="flex-1 h-11 text-[13px] transition-colors disabled:opacity-50"
+                    style={{
+                      background: 'transparent',
+                      border: `1px solid ${T.line}`,
+                      borderRadius: '6px',
+                      color: T.inkMid,
+                      fontWeight: 500,
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                      transitionTimingFunction: T.ease,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!saving)
+                        e.currentTarget.style.background = 'rgba(15,15,15,0.03)';
+                    }}
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = 'transparent')
+                    }
                   >
-                    <option value="lunes">Lunes</option>
-                    <option value="martes">Martes</option>
-                  </select>
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={saving}
+                    className="flex-1 h-11 text-white text-[13px] disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      background: T.accent,
+                      borderRadius: '6px',
+                      fontWeight: 500,
+                      border: 'none',
+                      cursor: saving ? 'not-allowed' : 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                      transitionTimingFunction: T.ease,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!saving) e.currentTarget.style.background = T.accentDeep;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!saving) e.currentTarget.style.background = T.accent;
+                    }}
+                  >
+                    {saving ? 'Guardando…' : 'Guardar cambios'}
+                  </button>
                 </div>
               </div>
-
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Dirección</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {[
-                  ['Calle', 'direccionCalle', 'Av. Independencia'],
-                  ['Número exterior', 'direccionNumero', '123'],
-                  ['Número interior', 'direccionInterior', 'B'],
-                  ['Estado *', 'direccionEstado', 'Veracruz'],
-                  ['Municipio *', 'direccionMunicipio', 'Perote'],
-                  ['Localidad/Pueblo *', 'direccionLocalidad', 'Juan Marcos'],
-                  ['Sector / Colonia *', 'direccionSector', 'Centro'],
-                  ['Código Postal', 'direccionCp', '91270'],
-                ].map(([label, field, placeholder]) => (
-                  <div key={field}>
-                    <FieldLabel>{label}</FieldLabel>
-                    <Input
-                      value={formData[field]}
-                      onChange={(e) => setFormData({ ...formData, [field]: e.target.value })}
-                      placeholder={placeholder}
-                    />
-                  </div>
-                ))}
-                <div className="sm:col-span-2">
-                  <FieldLabel>Referencias del domicilio</FieldLabel>
-                  <textarea
-                    value={formData.direccionReferencias}
-                    onChange={(e) => setFormData({ ...formData, direccionReferencias: e.target.value })}
-                    rows="2"
-                    placeholder="Casa azul, junto a la tienda..."
-                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6C3BFF]/25 focus:border-[#6C3BFF] transition-all resize-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <button onClick={() => setIsEditing(false)} className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold text-sm transition-colors">
-                  Cancelar
-                </button>
-                <button onClick={handleSaveProfile} disabled={saving} className="flex-1 py-2.5 bg-[#6C3BFF] hover:bg-[#5b2ee6] disabled:bg-gray-300 text-white rounded-xl font-bold text-sm transition-colors">
-                  {saving ? 'Guardando...' : 'Guardar cambios'}
-                </button>
-              </div>
-            </div>
+            </section>
           )}
 
-          {/* Vista normal */}
+          {/* ─── Vista normal ────────────────────────────── */}
           {!isEditing && (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-                {[
-                  { label: 'Compras', value: stats.totalCompras, color: 'text-gray-900' },
-                  { label: 'Total pagado', value: formatMoney(stats.totalPagado), color: 'text-[#10b981]' },
-                  { label: 'Saldo pendiente', value: formatMoney(stats.deudaActual), color: 'text-red-500' },
-                  {
-                    label: 'Próximo pago', value: formatMoney(stats.siguientePago?.monto || 0), color: 'text-[#6C3BFF]',
-                    sub: stats.siguientePago?.fecha ? formatDate(stats.siguientePago.fecha) : null
-                  },
-                  { label: 'Tandas activas', value: stats.tandasActivas, color: 'text-orange-500' },
-                ].map(({ label, value, color, sub }) => (
-                  <div key={label} className="bg-white rounded-2xl border border-gray-100 p-4 text-center shadow-sm">
-                    <p className={`text-xl font-bold ${color}`}>{value}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{label}</p>
-                    {sub && <p className="text-[10px] text-gray-300 mt-0.5">{sub}</p>}
-                  </div>
-                ))}
-              </div>
-
-              {estadisticasNivel && (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Tu nivel</p>
-                      <p className="text-2xl font-bold text-orange-500">Nivel {estadisticasNivel.nivelActual}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gray-400">Próximo nivel</p>
-                      <p className="text-sm font-semibold text-gray-700">Faltan {estadisticasNivel.productosFaltantes} productos</p>
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-1.5">
-                    <div
-                      className="bg-orange-400 h-1.5 rounded-full transition-all"
-                      style={{ width: `${Math.min(100, (estadisticasNivel.productosPagados / (estadisticasNivel.productosPagados + estadisticasNivel.productosFaltantes)) * 100)}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between mt-3">
-                    <p className="text-xs text-gray-400">
-                      Tandas hasta <span className="text-[#6C3BFF] font-semibold">{formatMoney(estadisticasNivel.tandaDisponible)}</span>
-                    </p>
-                    {estadisticasNivel.productosEnCurso > 0 && (
-                      <p className="text-xs text-orange-500">{estadisticasNivel.productosEnCurso} producto(s) en curso</p>
-                    )}
-                  </div>
+              {/* Stats */}
+              <section className="mb-6">
+                <SectionLabel>Resumen</SectionLabel>
+                <div
+                  className="grid grid-cols-2 md:grid-cols-5"
+                  style={{
+                    background: T.bg,
+                    border: `1px solid ${T.line}`,
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <StatBlock
+                    value={stats.totalCompras}
+                    label="Compras"
+                    border={false}
+                  />
+                  <StatBlock
+                    value={formatMoney(stats.totalPagado)}
+                    label="Total pagado"
+                  />
+                  <StatBlock
+                    value={formatMoney(stats.deudaActual)}
+                    label="Saldo pendiente"
+                  />
+                  <StatBlock
+                    value={formatMoney(stats.siguientePago?.monto || 0)}
+                    label="Próximo pago"
+                    sub={
+                      stats.siguientePago?.fecha
+                        ? formatDate(stats.siguientePago.fecha)
+                        : null
+                    }
+                    accent
+                  />
+                  <StatBlock
+                    value={stats.tandasActivas}
+                    label="Tandas activas"
+                  />
                 </div>
+              </section>
+
+              {/* Nivel */}
+              {estadisticasNivel && (
+                <section className="mb-6">
+                  <SectionLabel>Tu nivel</SectionLabel>
+                  <div
+                    className="p-6"
+                    style={{
+                      background: T.bg,
+                      border: `1px solid ${T.line}`,
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
+                      <div>
+                        <p
+                          className="text-[10px] uppercase tracking-[0.18em] mb-2"
+                          style={{ color: T.inkFaint, fontWeight: 500 }}
+                        >
+                          Nivel actual
+                        </p>
+                        <p
+                          className="text-[32px] tabular-nums tracking-[-0.02em] leading-none"
+                          style={{
+                            color: T.accent,
+                            fontWeight: 500,
+                            fontFeatureSettings: '"tnum"',
+                          }}
+                        >
+                          {estadisticasNivel.nivelActual}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p
+                          className="text-[10px] uppercase tracking-[0.18em] mb-2"
+                          style={{ color: T.inkFaint, fontWeight: 500 }}
+                        >
+                          Próximo nivel
+                        </p>
+                        <p
+                          className="text-[13px] tabular-nums"
+                          style={{
+                            color: T.inkMid,
+                            fontWeight: 500,
+                            fontFeatureSettings: '"tnum"',
+                          }}
+                        >
+                          Faltan {estadisticasNivel.productosFaltantes} productos
+                        </p>
+                      </div>
+                    </div>
+                    <div
+                      className="w-full overflow-hidden"
+                      style={{
+                        height: '5px',
+                        background: 'rgba(15,15,15,0.04)',
+                        borderRadius: '3px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${Math.min(
+                            100,
+                            (estadisticasNivel.productosPagados /
+                              (estadisticasNivel.productosPagados +
+                                estadisticasNivel.productosFaltantes)) *
+                              100
+                          )}%`,
+                          background: T.accent,
+                          borderRadius: '3px',
+                          transition: `width 0.6s ${T.ease}`,
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between flex-wrap gap-2 mt-4">
+                      <p
+                        className="text-[11.5px]"
+                        style={{ color: T.inkSoft, fontWeight: 450 }}
+                      >
+                        Tandas hasta{' '}
+                        <span
+                          className="tabular-nums"
+                          style={{
+                            color: T.accent,
+                            fontWeight: 500,
+                            fontFeatureSettings: '"tnum"',
+                          }}
+                        >
+                          {formatMoney(estadisticasNivel.tandaDisponible)}
+                        </span>
+                      </p>
+                      {estadisticasNivel.productosEnCurso > 0 && (
+                        <p
+                          className="text-[11.5px] tabular-nums"
+                          style={{
+                            color: '#B8820E',
+                            fontWeight: 450,
+                            fontFeatureSettings: '"tnum"',
+                          }}
+                        >
+                          {estadisticasNivel.productosEnCurso} producto(s) en curso
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </section>
               )}
 
-              <div className={`bg-white rounded-2xl border shadow-sm p-5 mb-5 ${kycInfo.colorClass}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${kycInfo.colorClass}`}>
-                      <KycIcon size={18} />
+              {/* KYC */}
+              <section className="mb-6">
+                <SectionLabel>Verificación</SectionLabel>
+                <div
+                  className="p-6"
+                  style={{
+                    background: T.bg,
+                    border: `1px solid ${T.line}`,
+                    borderRadius: '8px',
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-4">
+                      <div
+                        className="flex items-center justify-center shrink-0"
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          background: kycInfo.bg,
+                          borderRadius: '10px',
+                        }}
+                      >
+                        <KycIcon
+                          size={18}
+                          strokeWidth={1.75}
+                          style={{ color: kycInfo.fg }}
+                        />
+                      </div>
+                      <div>
+                        <p
+                          className="text-[14px]"
+                          style={{ color: T.ink, fontWeight: 500 }}
+                        >
+                          Verificación KYC
+                        </p>
+                        <span
+                          className="inline-flex items-center gap-1 mt-1 px-2 py-0.5"
+                          style={{
+                            background: kycInfo.bg,
+                            color: kycInfo.fg,
+                            borderRadius: '4px',
+                            fontSize: '9.5px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.14em',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {kycInfo.label}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-sm">Verificación KYC</p>
-                      <p className="text-xs opacity-80">{kycInfo.label}</p>
-                    </div>
+                    {kycInfo.link && (
+                      <Link
+                        href={kycInfo.link}
+                        className="inline-flex items-center gap-1 text-[12px] transition-colors"
+                        style={{
+                          color: T.accent,
+                          fontWeight: 500,
+                          textDecoration: 'none',
+                          WebkitTapHighlightColor: 'transparent',
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.textDecoration = 'underline')
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.textDecoration = 'none')
+                        }
+                      >
+                        {kycInfo.action} <ChevronRight size={12} strokeWidth={1.75} />
+                      </Link>
+                    )}
                   </div>
-                  {kycInfo.link && (
-                    <Link href={kycInfo.link} className="flex items-center gap-1 text-xs font-semibold hover:underline">
-                      {kycInfo.action} <ChevronRight size={13} />
-                    </Link>
+                  {!kycStatus && (
+                    <p
+                      className="text-[12px] leading-[1.55] mt-4"
+                      style={{ color: T.inkSoft, fontWeight: 450 }}
+                    >
+                      Necesitas verificar tu identidad para poder unirte a
+                      tandas.
+                    </p>
+                  )}
+                  {kycStatus === 'rechazado' && (
+                    <p
+                      className="text-[12px] leading-[1.55] mt-4"
+                      style={{ color: T.inkSoft, fontWeight: 450 }}
+                    >
+                      Tus documentos no fueron aprobados. Por favor, vuelve a
+                      subirlos.
+                    </p>
                   )}
                 </div>
-                {!kycStatus && (
-                  <p className="text-xs opacity-70 mt-3">Necesitas verificar tu identidad para poder unirte a tandas.</p>
-                )}
-                {kycStatus === 'rechazado' && (
-                  <p className="text-xs opacity-70 mt-3">Tus documentos no fueron aprobados. Por favor, vuelve a subirlos.</p>
-                )}
-              </div>
+              </section>
 
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-6">
-                {[
-                  { href: '/perfil/ordenes', icon: Package, label: 'Mis órdenes' },
-                  { href: '/perfil/pagos', icon: DollarSign, label: 'Mis pagos' },
-                  { href: '/tandas/mis-tandas', icon: Target, label: 'Mis tandas' },
-                  { href: '/perfil/qr', icon: QrCode, label: 'Mi QR' },
-                  { href: '/perfil/tarjeta', icon: CreditCard, label: 'Mi tarjeta' },
-                  { href: 'https://wa.me/522821414939', icon: MessageCircle, label: 'Soporte', external: true },
-                ].map(({ href, icon: Icon, label, external }) => (
+              {/* Quick actions */}
+              <section className="mb-6">
+                <SectionLabel>Accesos</SectionLabel>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  {[
+                    { href: '/perfil/ordenes', icon: Package, label: 'Mis órdenes' },
+                    { href: '/perfil/pagos', icon: DollarSign, label: 'Mis pagos' },
+                    { href: '/tandas/mis-tandas', icon: Target, label: 'Mis tandas' },
+                    { href: '/perfil/qr', icon: QrCode, label: 'Mi QR' },
+                    { href: '/perfil/tarjeta', icon: CreditCard, label: 'Mi tarjeta' },
+                    {
+                      href: 'https://wa.me/522821414939',
+                      icon: MessageCircle,
+                      label: 'Soporte',
+                      external: true,
+                    },
+                  ].map((item) => (
+                    <ActionTile key={item.href} {...item} />
+                  ))}
+                </div>
+              </section>
+
+              {/* Órdenes activas */}
+              <section className="mb-8">
+                <div className="flex items-baseline justify-between mb-4">
+                  <SectionLabel>Órdenes activas</SectionLabel>
                   <Link
-                    key={href}
-                    href={href}
-                    target={external ? '_blank' : undefined}
-                    rel={external ? 'noopener noreferrer' : undefined}
-                    className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col items-center gap-2 hover:shadow-md hover:border-[#6C3BFF]/20 transition-all group"
+                    href="/perfil/ordenes"
+                    className="text-[11px] uppercase tracking-[0.18em] transition-colors"
+                    style={{
+                      color: T.inkSoft,
+                      fontWeight: 500,
+                      textDecoration: 'none',
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = T.accent)}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = T.inkSoft)}
                   >
-                    <div className="w-10 h-10 bg-[#6C3BFF]/8 rounded-xl flex items-center justify-center group-hover:bg-[#6C3BFF]/15 transition-colors">
-                      <Icon size={18} className="text-[#6C3BFF]" />
-                    </div>
-                    <span className="text-[10px] font-semibold text-gray-600 text-center leading-tight">{label}</span>
-                  </Link>
-                ))}
-              </div>
-
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                  <h2 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
-                    <Package size={16} className="text-[#6C3BFF]" /> Órdenes activas
-                  </h2>
-                  <Link href="/perfil/ordenes" className="text-xs text-[#6C3BFF] font-medium flex items-center gap-1 hover:gap-2 transition-all">
-                    Ver todas <ChevronRight size={13} />
+                    Ver todas →
                   </Link>
                 </div>
 
-                {pagosPendientes.length === 0 ? (
-                  <div className="py-12 text-center">
-                    <CheckCircle size={36} className="text-gray-200 mx-auto mb-3" />
-                    <p className="text-sm text-gray-400 mb-2">No tienes órdenes pendientes</p>
-                    <Link href="/productos" className="text-xs text-[#6C3BFF] font-medium hover:underline">
-                      Ver productos →
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-gray-50">
-                    {pagosPendientes.map((orden) => (
-                      <div key={orden.id} className="px-6 py-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <p className="font-semibold text-sm text-gray-900 truncate">
-                              {orden.expand?.productId?.nombre || orden.productName || orden.productId}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-0.5">
-                              {orden.tipo === 'contado' ? 'Compra de contado' : 'Compra a crédito'}
-                            </p>
-                            <div className="mt-2 space-y-0.5">
+                <div
+                  style={{
+                    background: T.bg,
+                    border: `1px solid ${T.line}`,
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {pagosPendientes.length === 0 ? (
+                    <div className="py-16 px-6 text-center">
+                      <CheckCircle
+                        size={28}
+                        strokeWidth={1.5}
+                        style={{
+                          color: T.inkGhost,
+                          margin: '0 auto 12px',
+                        }}
+                      />
+                      <p
+                        className="text-[13px] mb-3"
+                        style={{ color: T.inkSoft, fontWeight: 450 }}
+                      >
+                        No tienes órdenes pendientes
+                      </p>
+                      <Link
+                        href="/productos"
+                        className="text-[12px] transition-colors"
+                        style={{
+                          color: T.accent,
+                          fontWeight: 500,
+                          textDecoration: 'underline',
+                          textUnderlineOffset: '3px',
+                          textDecorationThickness: '1px',
+                        }}
+                      >
+                        Ver productos →
+                      </Link>
+                    </div>
+                  ) : (
+                    <div>
+                      {pagosPendientes.map((orden, idx) => (
+                        <div
+                          key={orden.id}
+                          className="px-5 py-4"
+                          style={{
+                            borderTop: idx === 0 ? 'none' : `1px solid ${T.line}`,
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <p
+                                className="text-[14px] truncate"
+                                style={{ color: T.ink, fontWeight: 500 }}
+                              >
+                                {orden.expand?.productId?.nombre ||
+                                  orden.productName ||
+                                  orden.productId}
+                              </p>
+                              <p
+                                className="text-[11.5px] mt-1"
+                                style={{ color: T.inkFaint, fontWeight: 450 }}
+                              >
+                                {orden.tipo === 'contado'
+                                  ? 'Compra de contado'
+                                  : 'Compra a crédito'}
+                              </p>
                               {orden.tipo === 'credito' && (
-                                <p className="text-xs text-gray-500">
+                                <p
+                                  className="text-[11.5px] mt-2 tabular-nums"
+                                  style={{
+                                    color: T.inkSoft,
+                                    fontWeight: 450,
+                                    fontFeatureSettings: '"tnum"',
+                                  }}
+                                >
                                   {formatMoney(orden.pagoSemanal)}/sem
-                                  <span className="text-gray-300 mx-1">·</span>
+                                  <span style={{ color: T.inkGhost }}> · </span>
                                   {orden.semanasTotales} semanas
                                 </p>
                               )}
-                              <p className="text-sm font-bold text-[#6C3BFF]">
-                                {formatMoney(orden.tipo === 'contado'
-                                  ? orden.totalPagar
-                                  : (orden.enganche || 0) + ((orden.pagoSemanal || 0) * (orden.semanasTotales || 0))
+                              <p
+                                className="text-[16px] mt-2 tabular-nums tracking-[-0.01em]"
+                                style={{
+                                  color: T.accent,
+                                  fontWeight: 500,
+                                  fontFeatureSettings: '"tnum"',
+                                }}
+                              >
+                                {formatMoney(
+                                  orden.tipo === 'contado'
+                                    ? orden.totalPagar
+                                    : (orden.enganche || 0) +
+                                        (orden.pagoSemanal || 0) *
+                                          (orden.semanasTotales || 0)
                                 )}
                               </p>
                             </div>
+                            <EstadoOrdenBadge estado={orden.estadoPago} />
                           </div>
-                          <span className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-bold ${orden.estadoPago === 'completada' ? 'bg-[#10b981]/10 text-[#10b981]' :
-                            orden.estadoPago === 'activa' ? 'bg-blue-50 text-blue-600' :
-                              'bg-amber-50 text-amber-600'
-                            }`}>
-                            {orden.estadoPago === 'completada' ? 'Completada' :
-                              orden.estadoPago === 'activa' ? 'Activa' : 'Pendiente'}
-                          </span>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
             </>
           )}
-        </div>
+        </main>
 
-        {/* Modales */}
-        {showSuccessModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-sm p-7 text-center shadow-2xl">
-              <div className="w-14 h-14 bg-[#10b981] rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle size={28} className="text-white" />
-              </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">¡Perfil actualizado!</h3>
-              <p className="text-sm text-gray-500">Tus datos han sido guardados correctamente.</p>
+        <Footer variant="minimal" />
+      </div>
+
+      {/* ─── Modal éxito ─────────────────────────────────── */}
+      {showSuccessModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(15,15,15,0.7)' }}
+        >
+          <div
+            className="p-8 text-center max-w-sm w-full"
+            style={{
+              background: T.bg,
+              border: `1px solid ${T.line}`,
+              borderRadius: '10px',
+            }}
+          >
+            <div
+              className="inline-flex items-center justify-center mb-5"
+              style={{
+                width: '56px',
+                height: '56px',
+                background: 'rgba(26, 127, 75, 0.08)',
+                borderRadius: '14px',
+              }}
+            >
+              <CheckCircle
+                size={26}
+                strokeWidth={1.5}
+                style={{ color: T.green }}
+              />
             </div>
+            <h3
+              className="text-[22px] leading-tight tracking-[-0.02em] mb-2"
+              style={{ color: T.ink, fontWeight: 400 }}
+            >
+              Perfil actualizado
+            </h3>
+            <p
+              className="text-[13px] leading-[1.55]"
+              style={{ color: T.inkSoft, fontWeight: 450 }}
+            >
+              Tus datos han sido guardados correctamente.
+            </p>
           </div>
-        )}
+        </div>
+      )}
 
-        {showErrorModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-gray-900">Error al actualizar</h3>
-                <button onClick={() => setShowErrorModal(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400">
-                  <X size={16} />
-                </button>
+      {/* ─── Modal error ─────────────────────────────────── */}
+      {showErrorModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(15,15,15,0.7)' }}
+          onClick={() => setShowErrorModal(false)}
+        >
+          <div
+            className="p-6 max-w-sm w-full"
+            style={{
+              background: T.bg,
+              border: `1px solid ${T.line}`,
+              borderRadius: '10px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div className="flex items-center gap-3">
+                <AlertTriangle
+                  size={18}
+                  strokeWidth={1.75}
+                  style={{ color: T.red, flexShrink: 0 }}
+                />
+                <h3
+                  className="text-[16px] leading-tight tracking-[-0.01em]"
+                  style={{ color: T.ink, fontWeight: 500 }}
+                >
+                  Error al actualizar
+                </h3>
               </div>
-              <div className="bg-red-50 border border-red-100 rounded-xl p-4 mb-4 max-h-40 overflow-auto space-y-1">
-                {errorMessages.map((msg, idx) => (
-                  <p key={idx} className="text-sm text-red-600">{msg}</p>
-                ))}
-              </div>
-              <button onClick={() => setShowErrorModal(false)} className="w-full bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white py-2.5 rounded-xl font-bold text-sm transition-colors">
-                Entendido
+              <button
+                onClick={() => setShowErrorModal(false)}
+                className="flex items-center justify-center shrink-0"
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  background: 'rgba(15,15,15,0.03)',
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '6px',
+                  color: T.inkMid,
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+                aria-label="Cerrar"
+              >
+                <X size={12} strokeWidth={1.75} />
+              </button>
+            </div>
+            <div
+              className="p-3.5 mb-5 max-h-40 overflow-auto"
+              style={{
+                background: 'rgba(197, 48, 48, 0.04)',
+                border: `1px solid rgba(197, 48, 48, 0.15)`,
+                borderRadius: '6px',
+              }}
+            >
+              {errorMessages.map((msg, idx) => (
+                <p
+                  key={idx}
+                  className="text-[12px] leading-[1.55] mb-1 last:mb-0"
+                  style={{ color: T.red, fontWeight: 450 }}
+                >
+                  {msg}
+                </p>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowErrorModal(false)}
+              className="w-full h-11 text-white text-[13px]"
+              style={{
+                background: T.accent,
+                borderRadius: '6px',
+                fontWeight: 500,
+                border: 'none',
+                cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = T.accentDeep)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = T.accent)}
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modal completar datos (compartido) ──────────── */}
+      <ModalCompletarDatos
+        isOpen={showModalCompletar}
+        onClose={() => {
+          setShowModalCompletar(false);
+          localStorage.removeItem('primerIngreso');
+          localStorage.removeItem('userIdCompletarDatos');
+        }}
+        userId={userIdCompletar}
+        onDatosCompletados={handleDatosCompletados}
+      />
+
+      {/* ─── Modal agregar teléfono ──────────────────────── */}
+      {showPhoneModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(15,15,15,0.7)' }}
+          onClick={() => setShowPhoneModal(false)}
+        >
+          <div
+            className="p-6 max-w-md w-full"
+            style={{
+              background: T.bg,
+              border: `1px solid ${T.line}`,
+              borderRadius: '10px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <SectionLabel accent>Agregar teléfono</SectionLabel>
+            <h3
+              className="text-[22px] leading-tight tracking-[-0.02em] mb-3"
+              style={{ color: T.ink, fontWeight: 400 }}
+            >
+              Tu número
+              <span className="font-serif italic" style={{ color: T.inkMid }}>
+                {' '}de contacto.
+              </span>
+            </h3>
+            <p
+              className="text-[13px] leading-[1.55] mb-5"
+              style={{ color: T.inkSoft, fontWeight: 450 }}
+            >
+              Ingresa tu número para recibir notificaciones y ser contactado
+              por el cobrador.
+            </p>
+            <input
+              type="tel"
+              value={phoneInput}
+              onChange={(e) =>
+                setPhoneInput(e.target.value.replace(/\D/g, '').slice(0, 10))
+              }
+              placeholder="55 1234 5678"
+              autoFocus
+              className="w-full text-center outline-none transition-colors tabular-nums"
+              style={{
+                height: '56px',
+                background: T.bg,
+                border: `1px solid ${T.line}`,
+                borderRadius: '6px',
+                color: T.ink,
+                fontSize: '20px',
+                fontWeight: 500,
+                letterSpacing: '0.1em',
+                fontFeatureSettings: '"tnum"',
+                fontFamily: 'ui-monospace, monospace',
+              }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = T.accent)}
+              onBlur={(e) => (e.currentTarget.style.borderColor = T.line)}
+            />
+            <div className="flex gap-2.5 mt-5">
+              <button
+                onClick={() => {
+                  setShowPhoneModal(false);
+                  setPhoneInput('');
+                }}
+                className="flex-1 h-11 text-[13px] transition-colors"
+                style={{
+                  background: 'transparent',
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '6px',
+                  color: T.inkMid,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                  transitionTimingFunction: T.ease,
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = 'rgba(15,15,15,0.03)')
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = 'transparent')
+                }
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddPhone}
+                className="flex-1 h-11 text-white text-[13px]"
+                style={{
+                  background: T.accent,
+                  borderRadius: '6px',
+                  fontWeight: 500,
+                  border: 'none',
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                  transitionTimingFunction: T.ease,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = T.accentDeep)}
+                onMouseLeave={(e) => (e.currentTarget.style.background = T.accent)}
+              >
+                Agregar
               </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        <ModalCompletarDatos
-          isOpen={showModalCompletar}
-          onClose={() => {
-            setShowModalCompletar(false);
-            localStorage.removeItem('primerIngreso');
-            localStorage.removeItem('userIdCompletarDatos');
-          }}
-          userId={userIdCompletar}
-          onDatosCompletados={handleDatosCompletados}
-        />
-
-        {/* ── MODAL AGREGAR TELÉFONO ── */}
-        {showPhoneModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
-              <h3 className="text-lg font-bold text-center mb-2">Agregar número de teléfono</h3>
-              <p className="text-sm text-gray-500 text-center mb-4">
-                Ingresa tu número para recibir notificaciones y ser contactado por el cobrador.
-              </p>
-              <input
-                type="tel"
-                value={phoneInput}
-                onChange={(e) => setPhoneInput(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder="55 1234 5678"
-                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-center text-lg mb-4 focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent transition"
-                autoFocus
-              />
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowPhoneModal(false);
-                    setPhoneInput('');
-                  }}
-                  className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold text-sm transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleAddPhone}
-                  className="flex-1 py-2.5 bg-[#6C3BFF] hover:bg-[#5b2ee6] text-white rounded-xl font-semibold text-sm transition-colors"
-                >
-                  Agregar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </StoreLayout>
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
+        }
+        .animate-blink { animation: blink 1s step-end infinite; }
+        body {
+          font-family:
+            -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display',
+            'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
+        }
+        .font-serif {
+          font-family:
+            ui-serif, 'Iowan Old Style', 'Apple Garamond', 'Palatino',
+            Georgia, 'Times New Roman', serif;
+        }
+        ::selection {
+          background: rgba(79, 46, 232, 0.12);
+          color: #0F0F0F;
+        }
+        * {
+          -webkit-tap-highlight-color: transparent;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
+        }
+      `}</style>
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// EstadoOrdenBadge · badge de estado de orden
+// ─────────────────────────────────────────────────────────────────────────
+function EstadoOrdenBadge({ estado }) {
+  const map = {
+    completada: { label: 'Completada', fg: T.green, bg: 'rgba(26, 127, 75, 0.08)' },
+    activa: { label: 'Activa', fg: T.accent, bg: 'rgba(79, 46, 232, 0.08)' },
+    pendiente_pago: { label: 'Pendiente', fg: '#B8820E', bg: 'rgba(184, 130, 14, 0.08)' },
+  };
+  const c = map[estado] || map.pendiente_pago;
+
+  return (
+    <span
+      className="shrink-0 inline-flex items-center px-2.5 py-1"
+      style={{
+        background: c.bg,
+        color: c.fg,
+        borderRadius: '4px',
+        fontSize: '10px',
+        textTransform: 'uppercase',
+        letterSpacing: '0.12em',
+        fontWeight: 600,
+      }}
+    >
+      {c.label}
+    </span>
   );
 }

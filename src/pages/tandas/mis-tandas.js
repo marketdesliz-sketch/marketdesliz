@@ -4,46 +4,110 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
 import {
-  Target,
-  ArrowLeft,
-  DollarSign,
-  Calendar,
-  Clock,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  TrendingUp,
-  Wallet,
-  Eye,
-  FileText,
-  ChevronRight,
-  Award,
-  Crown,
-  Star,
-  CalendarDays,
-  CreditCard,
-  Percent,
-  History,
-  Zap,
-  Filter,
-  RefreshCw,
-  Bell
+  Target, DollarSign, Calendar, Clock, CheckCircle, XCircle,
+  AlertCircle, Eye, FileText, ChevronLeft, ChevronRight,
+  Award, Crown, Star, CalendarDays, History, Filter, RefreshCw,
+  Bell, Lock,
 } from 'lucide-react';
-import StoreLayout from '../../layouts/StoreLayout';
 import pb from '../../lib/pocketbase';
 import {
   getClientTandas,
   getTandaPayments,
-  getMiembroById
+  getMiembroById,
 } from '../../lib/tandasService';
 import {
   enviarRecordatorioManual,
-  getEstadoPagoMiembro
+  getEstadoPagoMiembro,
 } from '../../lib/tandaPagosService';
+import { useAuth } from '../../contexts/AuthContext';
+import { T } from '../../lib/tokens';
+import TerminalBar from '../../components/TerminalBar';
+import Header from '../../components/Header';
+import Footer from '../../components/Footer';
+import BackButton from '../../components/BackButton';
 
+// ─────────────────────────────────────────────────────────────────────────
+// Sub-componentes UI
+// ─────────────────────────────────────────────────────────────────────────
+function SectionLabel({ children, accent = false }) {
+  return (
+    <p
+      className="text-[10px] md:text-[11px] uppercase tracking-[0.22em] mb-4"
+      style={{
+        color: accent ? T.accent : T.inkFaint,
+        fontWeight: 500,
+        fontFeatureSettings: '"ss01"',
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function StatBlock({ icon: Icon, label, value, accent = false, border = true }) {
+  return (
+    <div
+      className="p-5 md:p-6"
+      style={{
+        borderLeft: border ? `1px solid ${T.line}` : 'none',
+      }}
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <Icon
+          size={13}
+          strokeWidth={1.75}
+          style={{ color: accent ? T.accent : T.inkFaint }}
+        />
+        <p
+          className="text-[10px] uppercase tracking-[0.18em]"
+          style={{ color: T.inkFaint, fontWeight: 500 }}
+        >
+          {label}
+        </p>
+      </div>
+      <p
+        className="text-[24px] md:text-[28px] tabular-nums tracking-[-0.02em] leading-none"
+        style={{
+          color: accent ? T.accent : T.ink,
+          fontWeight: 500,
+          fontFeatureSettings: '"tnum"',
+        }}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function StatusBadge({ icon: Icon, label, color, bg }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 shrink-0"
+      style={{
+        background: bg,
+        color,
+        borderRadius: '4px',
+        fontSize: '10px',
+        textTransform: 'uppercase',
+        letterSpacing: '0.12em',
+        fontWeight: 600,
+      }}
+    >
+      <Icon size={10} strokeWidth={2.25} />
+      {label}
+    </span>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Página — lógica SIN CAMBIOS
+// ─────────────────────────────────────────────────────────────────────────
 export default function MisTandasPage() {
   const router = useRouter();
   const { estado = 'todas', page = 1 } = router.query;
+
+  // ─── Auth desde el contexto ────────────────────────────
+  const { user, loading: authLoading, openLogin } = useAuth();
 
   const [tandas, setTandas] = useState([]);
   const [filteredTandas, setFilteredTandas] = useState([]);
@@ -60,39 +124,35 @@ export default function MisTandasPage() {
     totalRecibido: 0,
     tandasActivas: 0,
     tandasCompletadas: 0,
-    tandasPendientes: 0
+    tandasPendientes: 0,
   });
   const itemsPerPage = 10;
 
   // ─── Cargar datos ──────────────────────────────────────────────────────
   const cargarMisTandas = useCallback(async () => {
+    if (!user) return;
+
     try {
       setLoading(true);
       setError(null);
-      const user = pb.authStore.model;
-      if (!user) {
-        router.push('/solicitar?redirect=' + encodeURIComponent(router.asPath));
-        return;
-      }
 
       const misTandas = await getClientTandas(user.id);
 
-      // Calcular estadísticas reales
       let totalInvertido = 0;
       let totalRecibido = 0;
       let activas = 0;
       let completadas = 0;
       let pendientes = 0;
 
-      // Para cada tanda, obtener los pagos reales y calcular montos
       const tandasConPagos = await Promise.all(
         misTandas.map(async (tanda) => {
           try {
             const pagosData = await getTandaPayments(tanda.id);
-            const pagosRealizados = pagosData.filter(p => p.estado === 'pagado');
-            const totalPagado = pagosRealizados.reduce((sum, p) => sum + (p.monto || 0), 0);
-
-            // Obtener estado de pago en dos partes
+            const pagosRealizados = pagosData.filter((p) => p.estado === 'pagado');
+            const totalPagado = pagosRealizados.reduce(
+              (sum, p) => sum + (p.monto || 0),
+              0
+            );
             const estadoPago = await getEstadoPagoMiembro(tanda.id);
 
             return {
@@ -101,7 +161,7 @@ export default function MisTandasPage() {
               totalPagado,
               pagosRealizadosCount: pagosRealizados.length,
               estadoPagoCompleto: estadoPago,
-              montoTotalTanda: tanda.monto || 0
+              montoTotalTanda: tanda.monto || 0,
             };
           } catch (e) {
             console.warn('Error obteniendo pagos para tanda', tanda.id, e);
@@ -111,7 +171,7 @@ export default function MisTandasPage() {
               totalPagado: 0,
               pagosRealizadosCount: 0,
               estadoPagoCompleto: { estadoCompleto: false },
-              montoTotalTanda: tanda.monto || 0
+              montoTotalTanda: tanda.monto || 0,
             };
           }
         })
@@ -119,8 +179,7 @@ export default function MisTandasPage() {
 
       setTandas(tandasConPagos);
 
-      // Calcular estadísticas
-      tandasConPagos.forEach(t => {
+      tandasConPagos.forEach((t) => {
         const estado = t.estadoPago || 'pendiente';
         if (estado === 'pagado' || t.estadoPagoCompleto?.estadoCompleto) {
           completadas++;
@@ -142,22 +201,21 @@ export default function MisTandasPage() {
         totalRecibido,
         tandasActivas: activas,
         tandasCompletadas: completadas,
-        tandasPendientes: pendientes
+        tandasPendientes: pendientes,
       });
-
     } catch (err) {
       console.error('Error cargando mis tandas:', err);
       setError('No pudimos cargar tus tandas. Intenta de nuevo.');
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [user]);
 
   // ─── Aplicar filtro y paginación ──────────────────────────────────────
   const tandasFiltradas = useMemo(() => {
     let result = tandas;
     if (filtroEstado !== 'todas') {
-      result = result.filter(t => {
+      result = result.filter((t) => {
         const estado = t.estadoPago || 'pendiente';
         if (filtroEstado === 'activas') {
           return estado === 'al_corriente' || estado === 'pendiente';
@@ -166,14 +224,16 @@ export default function MisTandasPage() {
           return estado === 'pagado' || t.estadoPagoCompleto?.estadoCompleto;
         }
         if (filtroEstado === 'pendientes') {
-          return estado === 'pendiente' || (t.pagoPrimeraParte && !t.pagoSegundaParte);
+          return (
+            estado === 'pendiente' ||
+            (t.pagoPrimeraParte && !t.pagoSegundaParte)
+          );
         }
         return true;
       });
     }
-    // Ordenar: primero activas, luego pendientes, luego completadas
     result.sort((a, b) => {
-      const order = { 'al_corriente': 0, 'pendiente': 1, 'pagado': 2 };
+      const order = { al_corriente: 0, pendiente: 1, pagado: 2 };
       const aOrder = order[a.estadoPago] ?? 1;
       const bOrder = order[b.estadoPago] ?? 1;
       return aOrder - bOrder;
@@ -181,32 +241,40 @@ export default function MisTandasPage() {
     return result;
   }, [tandas, filtroEstado]);
 
-  // Paginación
   const totalPages = Math.ceil(tandasFiltradas.length / itemsPerPage);
   const paginatedTandas = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return tandasFiltradas.slice(start, start + itemsPerPage);
   }, [tandasFiltradas, currentPage]);
 
-  // ─── Cargar datos al montar ──────────────────────────────────────────
+  // ─── Cargar datos cuando auth esté listo y haya usuario ──────────────
   useEffect(() => {
-    if (!pb.authStore.isValid) {
-      router.push('/solicitar?redirect=' + encodeURIComponent(router.asPath));
+    if (authLoading) return;
+
+    if (!user) {
+      // Sin sesión → abrir el dropdown de login
+      setLoading(false);
+      openLogin();
       return;
     }
+
     cargarMisTandas();
-  }, []);
+  }, [authLoading, user, cargarMisTandas, openLogin]);
 
   // ─── Sincronizar filtro y página con URL ─────────────────────────────
   useEffect(() => {
     const query = {
       estado: filtroEstado !== 'todas' ? filtroEstado : undefined,
-      page: currentPage > 1 ? currentPage : undefined
+      page: currentPage > 1 ? currentPage : undefined,
     };
-    Object.keys(query).forEach(k => {
+    Object.keys(query).forEach((k) => {
       if (query[k] === undefined) delete query[k];
     });
-    router.push({ pathname: '/tandas/mis-tandas', query }, undefined, { shallow: true });
+    router.push(
+      { pathname: '/tandas/mis-tandas', query },
+      undefined,
+      { shallow: true }
+    );
   }, [filtroEstado, currentPage, router]);
 
   // ─── Funciones de acción ──────────────────────────────────────────────
@@ -214,7 +282,7 @@ export default function MisTandasPage() {
     try {
       const result = await enviarRecordatorioManual(tandaMemberId);
       if (result.success) {
-        setToast({ message: '✅ Recordatorio enviado correctamente', type: 'success' });
+        setToast({ message: 'Recordatorio enviado correctamente', type: 'success' });
       } else {
         setToast({ message: 'No se pudo enviar el recordatorio', type: 'error' });
       }
@@ -226,7 +294,6 @@ export default function MisTandasPage() {
 
   const verDetallesPagos = async (tanda) => {
     try {
-      // Ya tenemos los pagos en la tanda, usarlos
       setPagos(tanda.pagos || []);
       setSelectedTanda(tanda);
       setShowPagosModal(true);
@@ -242,7 +309,7 @@ export default function MisTandasPage() {
     return new Intl.NumberFormat('es-MX', {
       style: 'currency',
       currency: 'MXN',
-      minimumFractionDigits: 0
+      minimumFractionDigits: 0,
     }).format(amount);
   };
 
@@ -251,33 +318,77 @@ export default function MisTandasPage() {
     return new Date(date).toLocaleDateString('es-MX', {
       day: 'numeric',
       month: 'short',
-      year: 'numeric'
+      year: 'numeric',
     });
   };
 
   const getStatusInfo = (estado, posicion, pagoCompleto) => {
     const statusMap = {
-      'pendiente': { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-700', icon: Clock },
-      'al_corriente': { label: 'Al corriente', color: 'bg-green-100 text-green-700', icon: CheckCircle },
-      'pagado': { label: 'Completada', color: 'bg-blue-100 text-blue-700', icon: CheckCircle },
-      'atrasado': { label: 'Atrasada', color: 'bg-red-100 text-red-700', icon: AlertCircle }
+      pendiente: {
+        label: 'Pendiente',
+        color: '#B8820E',
+        bg: 'rgba(184, 130, 14, 0.08)',
+        icon: Clock,
+      },
+      al_corriente: {
+        label: 'Al corriente',
+        color: T.green,
+        bg: 'rgba(26, 127, 75, 0.08)',
+        icon: CheckCircle,
+      },
+      pagado: {
+        label: 'Completada',
+        color: T.accent,
+        bg: 'rgba(79, 46, 232, 0.08)',
+        icon: CheckCircle,
+      },
+      atrasado: {
+        label: 'Atrasada',
+        color: T.red,
+        bg: 'rgba(197, 48, 48, 0.08)',
+        icon: AlertCircle,
+      },
     };
 
     if (posicion === 1) {
-      return { label: 'Administrador', color: 'bg-purple-100 text-purple-700', icon: Crown };
+      return {
+        label: 'Administrador',
+        color: T.accent,
+        bg: 'rgba(79, 46, 232, 0.08)',
+        icon: Crown,
+      };
     }
 
-    // Si el pago está completo (dos partes), mostrar como completada
     if (pagoCompleto?.estadoCompleto) {
-      return { label: 'Completada', color: 'bg-blue-100 text-blue-700', icon: CheckCircle };
+      return {
+        label: 'Completada',
+        color: T.accent,
+        bg: 'rgba(79, 46, 232, 0.08)',
+        icon: CheckCircle,
+      };
     }
 
-    // Si tiene primera parte pero no segunda, mostrar "Pendiente segunda parte"
-    if (estado === 'al_corriente' && pagoCompleto?.tienePrimeraParte && !pagoCompleto?.tieneSegundaParte) {
-      return { label: 'Pendiente 2ª parte', color: 'bg-yellow-100 text-yellow-700', icon: AlertCircle };
+    if (
+      estado === 'al_corriente' &&
+      pagoCompleto?.tienePrimeraParte &&
+      !pagoCompleto?.tieneSegundaParte
+    ) {
+      return {
+        label: 'Pendiente 2ª parte',
+        color: '#B8820E',
+        bg: 'rgba(184, 130, 14, 0.08)',
+        icon: AlertCircle,
+      };
     }
 
-    return statusMap[estado] || { label: estado, color: 'bg-gray-100 text-gray-600', icon: FileText };
+    return (
+      statusMap[estado] || {
+        label: estado,
+        color: T.inkSoft,
+        bg: 'rgba(15, 15, 15, 0.05)',
+        icon: FileText,
+      }
+    );
   };
 
   const getProgresoPagos = (tanda) => {
@@ -301,36 +412,152 @@ export default function MisTandasPage() {
     return Math.max(0, semanasTotales - pagosRealizados);
   };
 
+  // Notificaciones dummy
+  const notifications = [
+    { id: 1, title: '¡Nueva colección!', description: 'Descubre la línea Otoño 2026', time: 'Hace 2 horas', read: false },
+    { id: 2, title: '¡Bienvenido!', description: 'Completa tu registro para empezar', time: 'Hace 5 horas', read: false },
+  ];
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
   // ─── Estados de carga y error ─────────────────────────────────────────
-  if (loading) {
+  if (loading || authLoading) {
     return (
-      <StoreLayout>
-        <div className="flex justify-center items-center min-h-[60vh]">
-          <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
+      <>
+        <Head><title>Cargando | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <TerminalBar mode="rotating" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <span
+                className="font-serif text-[32px] block mb-5 select-none"
+                style={{ color: T.inkGhost }}
+              >
+                ʃƪʃƪ
+              </span>
+              <p
+                className="text-[11px] uppercase tracking-[0.28em]"
+                style={{ color: T.inkFaint, fontWeight: 500 }}
+              >
+                Cargando tus tandas
+              </p>
+            </div>
+          </div>
         </div>
-      </StoreLayout>
+      </>
     );
   }
 
+  // ─── Sin sesión ────────────────────────────────────────────────────────
+  if (!user) {
+    return (
+      <>
+        <Head><title>Inicia sesión | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <BackButton fallback="/tandas" />
+          <TerminalBar mode="rotating" />
+          <Header />
+          <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-20 w-full">
+            <div className="text-center">
+              <div
+                className="inline-flex items-center justify-center mb-6"
+                style={{
+                  width: '64px',
+                  height: '64px',
+                  background: 'rgba(79, 46, 232, 0.06)',
+                  borderRadius: '12px',
+                }}
+              >
+                <Lock size={28} strokeWidth={1.5} style={{ color: T.accent }} />
+              </div>
+              <h1
+                className="text-[32px] md:text-[40px] leading-tight tracking-[-0.03em] mb-3"
+                style={{ color: T.ink, fontWeight: 400 }}
+              >
+                Inicia sesión
+                <br />
+                <span className="font-serif italic" style={{ color: T.inkMid }}>
+                  para ver tus tandas.
+                </span>
+              </h1>
+              <p
+                className="text-[15px] leading-[1.6] mb-8 max-w-sm mx-auto"
+                style={{ color: T.inkSoft, fontWeight: 450 }}
+              >
+                Necesitas una cuenta para acceder a tu historial de tandas.
+              </p>
+              <button
+                onClick={openLogin}
+                className="h-11 px-6 text-white text-[13.5px]"
+                style={{
+                  background: T.accent,
+                  borderRadius: '6px',
+                  fontWeight: 500,
+                  border: 'none',
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = T.accentDeep)}
+                onMouseLeave={(e) => (e.currentTarget.style.background = T.accent)}
+              >
+                Iniciar sesión
+              </button>
+            </div>
+          </main>
+          <Footer variant="minimal" />
+        </div>
+      </>
+    );
+  }
+
+  // ─── Error ─────────────────────────────────────────────────────────────
   if (error) {
     return (
-      <StoreLayout>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-40 pb-10">
-          <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <XCircle size={32} className="text-red-500" />
+      <>
+        <Head><title>Error | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <BackButton fallback="/tandas" />
+          <TerminalBar mode="rotating" />
+          <Header />
+          <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-20 w-full">
+            <div className="text-center">
+              <XCircle
+                size={32}
+                strokeWidth={1.5}
+                style={{ color: T.red, margin: '0 auto 16px' }}
+              />
+              <h1
+                className="text-[24px] mb-2"
+                style={{ color: T.ink, fontWeight: 400 }}
+              >
+                Error al cargar
+              </h1>
+              <p
+                className="text-[13.5px] mb-8"
+                style={{ color: T.inkSoft, fontWeight: 450 }}
+              >
+                {error}
+              </p>
+              <button
+                onClick={cargarMisTandas}
+                className="inline-flex items-center gap-2 h-11 px-6 text-white text-[13.5px]"
+                style={{
+                  background: T.accent,
+                  borderRadius: '6px',
+                  fontWeight: 500,
+                  border: 'none',
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = T.accentDeep)}
+                onMouseLeave={(e) => (e.currentTarget.style.background = T.accent)}
+              >
+                <RefreshCw size={14} strokeWidth={1.75} /> Reintentar
+              </button>
             </div>
-            <h3 className="text-base font-semibold text-gray-700 mb-1">Error al cargar tus tandas</h3>
-            <p className="text-sm text-gray-400 mb-4">{error}</p>
-            <button
-              onClick={cargarMisTandas}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#6C3BFF] text-white rounded-xl font-medium hover:bg-[#5a2ee6] transition"
-            >
-              <RefreshCw size={16} /> Reintentar
-            </button>
-          </div>
+          </main>
+          <Footer variant="minimal" />
         </div>
-      </StoreLayout>
+      </>
     );
   }
 
@@ -339,111 +566,216 @@ export default function MisTandasPage() {
     <>
       <Head>
         <title>Mis Tandas | MarketDesliz</title>
-        <meta name="description" content="Gestiona tus tandas activas y revisa el progreso de tus pagos." />
+        <meta
+          name="description"
+          content="Gestiona tus tandas activas y revisa el progreso de tus pagos."
+        />
+        <meta name="theme-color" content="#0F0F0F" />
       </Head>
 
-      <StoreLayout>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-40 pb-10">
+      <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+        <BackButton fallback="/tandas" />
+        <TerminalBar mode="rotating" />
+        <Header notifications={notifications} unreadCount={unreadCount} />
 
-          {/* Header */}
-          <div className="mb-8">
-            <Link href="/perfil" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#6C3BFF] transition mb-4">
-              <ArrowLeft size={14} /> Volver a mi perfil
-            </Link>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#6C3BFF]/10 rounded-xl flex items-center justify-center">
-                <Target size={20} className="text-[#6C3BFF]" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Mis Tandas</h1>
-                <p className="text-sm text-gray-500">Gestiona tus tandas activas y revisa tu progreso</p>
-              </div>
-            </div>
-          </div>
+        <main className="flex-1 max-w-[1280px] mx-auto px-6 md:px-14 py-12 md:py-16 w-full">
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm text-center">
-              <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-2">
-                <Target size={18} className="text-purple-600" />
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{stats.tandasActivas}</p>
-              <p className="text-xs text-gray-500">Tandas activas</p>
-            </div>
+          {/* ─── Hero editorial ──────────────────────────── */}
+          <section className="mb-12">
+            <p
+              className="text-[10px] uppercase tracking-[0.28em] mb-6"
+              style={{
+                color: T.inkFaint,
+                fontWeight: 500,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              Mis tandas · MarketDesliz
+            </p>
 
-            <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm text-center">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-2">
-                <CheckCircle size={18} className="text-green-600" />
-              </div>
-              <p className="text-2xl font-bold text-green-600">{stats.tandasCompletadas}</p>
-              <p className="text-xs text-gray-500">Tandas completadas</p>
-            </div>
+            <h1
+              className="text-[40px] md:text-[64px] leading-[1] tracking-[-0.035em] max-w-3xl mb-6"
+              style={{
+                color: T.ink,
+                fontWeight: 400,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              Tus tandas
+              <span className="font-serif italic" style={{ color: T.inkMid }}>
+                {' '}en curso.
+              </span>
+            </h1>
 
-            <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm text-center">
-              <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center mx-auto mb-2">
-                <Clock size={18} className="text-yellow-600" />
-              </div>
-              <p className="text-2xl font-bold text-yellow-600">{stats.tandasPendientes}</p>
-              <p className="text-xs text-gray-500">Pendientes</p>
-            </div>
+            <p
+              className="text-[16px] md:text-[20px] leading-[1.5] max-w-xl mb-8"
+              style={{ color: T.inkSoft, fontWeight: 450 }}
+            >
+              Revisa el progreso de tus pagos y el estado de cada grupo.
+            </p>
 
-            <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm text-center">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-2">
-                <DollarSign size={18} className="text-blue-600" />
-              </div>
-              <p className="text-xl font-bold text-blue-600">{formatMoney(stats.totalRecibido)}</p>
-              <p className="text-xs text-gray-500">Total recibido</p>
+            <div className="flex flex-wrap items-center gap-4">
+              <Link
+                href="/tandas"
+                className="inline-flex items-center gap-2 h-11 px-5 text-white text-[13px]"
+                style={{
+                  background: T.accent,
+                  borderRadius: '6px',
+                  fontWeight: 500,
+                  letterSpacing: '0.01em',
+                  WebkitTapHighlightColor: 'transparent',
+                  transitionTimingFunction: T.ease,
+                  textDecoration: 'none',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = T.accentDeep)}
+                onMouseLeave={(e) => (e.currentTarget.style.background = T.accent)}
+              >
+                <Target size={14} strokeWidth={1.75} /> Explorar tandas
+              </Link>
             </div>
-          </div>
+          </section>
 
-          {/* ── Filtros ────────────────────────────────────────────────── */}
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-            <div className="flex items-center gap-2">
-              <Filter size={16} className="text-gray-400" />
-              <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
-                {['todas', 'activas', 'pendientes', 'completadas'].map((opcion) => (
-                  <button
-                    key={opcion}
-                    onClick={() => setFiltroEstado(opcion)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition ${
-                      filtroEstado === opcion
-                        ? 'bg-white text-[#6C3BFF] shadow-sm'
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    {opcion.charAt(0).toUpperCase() + opcion.slice(1)}
-                  </button>
-                ))}
-              </div>
+          {/* ─── Stats ───────────────────────────────────── */}
+          <section className="mb-12">
+            <SectionLabel>Resumen</SectionLabel>
+            <div
+              className="grid grid-cols-2 md:grid-cols-4"
+              style={{
+                background: T.bg,
+                border: `1px solid ${T.line}`,
+                borderRadius: '8px',
+                overflow: 'hidden',
+              }}
+            >
+              <StatBlock
+                icon={Target}
+                label="Tandas activas"
+                value={stats.tandasActivas}
+                border={false}
+              />
+              <StatBlock
+                icon={CheckCircle}
+                label="Completadas"
+                value={stats.tandasCompletadas}
+              />
+              <StatBlock
+                icon={Clock}
+                label="Pendientes"
+                value={stats.tandasPendientes}
+              />
+              <StatBlock
+                icon={DollarSign}
+                label="Total recibido"
+                value={formatMoney(stats.totalRecibido)}
+                accent
+              />
             </div>
-            <div className="text-sm text-gray-400">
-              {tandasFiltradas.length} {tandasFiltradas.length === 1 ? 'tanda' : 'tandas'}
-            </div>
-          </div>
+          </section>
 
-          {/* ── Lista de tandas ──────────────────────────────────────── */}
+          {/* ─── Filtros ─────────────────────────────────── */}
+          <section className="mb-8">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div
+                  className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em]"
+                  style={{ color: T.inkFaint, fontWeight: 500 }}
+                >
+                  <Filter size={11} strokeWidth={1.75} />
+                  Filtrar
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {['todas', 'activas', 'pendientes', 'completadas'].map((opcion) => {
+                    const isActive = filtroEstado === opcion;
+                    return (
+                      <button
+                        key={opcion}
+                        onClick={() => setFiltroEstado(opcion)}
+                        className="h-8 px-3 text-[12px] transition-colors"
+                        style={{
+                          background: isActive ? T.ink : 'transparent',
+                          color: isActive ? T.bg : T.inkMid,
+                          border: `1px solid ${isActive ? T.ink : T.line}`,
+                          borderRadius: '6px',
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          WebkitTapHighlightColor: 'transparent',
+                          transitionTimingFunction: T.ease,
+                        }}
+                      >
+                        {opcion.charAt(0).toUpperCase() + opcion.slice(1)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <span
+                className="text-[11px] tabular-nums"
+                style={{
+                  color: T.inkFaint,
+                  fontWeight: 500,
+                  fontFeatureSettings: '"tnum"',
+                }}
+              >
+                {tandasFiltradas.length}{' '}
+                {tandasFiltradas.length === 1 ? 'tanda' : 'tandas'}
+              </span>
+            </div>
+          </section>
+
+          {/* ─── Lista de tandas ─────────────────────────── */}
           {tandasFiltradas.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Target size={32} className="text-gray-300" />
-              </div>
-              <h3 className="text-base font-semibold text-gray-700 mb-1">
-                {filtroEstado !== 'todas' ? `No tienes tandas ${filtroEstado}` : 'No estás en ninguna tanda'}
-              </h3>
-              <p className="text-sm text-gray-400 mb-4">
+            <div
+              className="flex flex-col items-center justify-center py-20 px-6 text-center"
+              style={{
+                background: 'rgba(15, 15, 15, 0.02)',
+                border: `1px solid ${T.line}`,
+                borderRadius: '8px',
+              }}
+            >
+              <Target
+                size={32}
+                strokeWidth={1.5}
+                style={{ color: T.inkGhost, marginBottom: '16px' }}
+              />
+              <h3
+                className="text-[15px] mb-1"
+                style={{ color: T.ink, fontWeight: 500 }}
+              >
                 {filtroEstado !== 'todas'
-                  ? 'Cambia el filtro para ver otras tandas'
-                  : 'Únete a una tanda y comienza a ahorrar'}
+                  ? `No tienes tandas ${filtroEstado}`
+                  : 'No estás en ninguna tanda'}
+              </h3>
+              <p
+                className="text-[13px] max-w-md mb-6"
+                style={{ color: T.inkSoft, fontWeight: 450 }}
+              >
+                {filtroEstado !== 'todas'
+                  ? 'Cambia el filtro para ver otras tandas.'
+                  : 'Únete a una tanda y comienza a ahorrar.'}
               </p>
               {filtroEstado === 'todas' && (
-                <Link href="/tandas" className="inline-flex items-center gap-2 bg-[#6C3BFF] text-white px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#5a2ee6] transition">
-                  <Target size={16} /> Explorar tandas
+                <Link
+                  href="/tandas"
+                  className="inline-flex items-center gap-2 h-10 px-5 text-white text-[13px]"
+                  style={{
+                    background: T.accent,
+                    borderRadius: '6px',
+                    fontWeight: 500,
+                    textDecoration: 'none',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = T.accentDeep)}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = T.accent)}
+                >
+                  <Target size={14} strokeWidth={1.75} /> Explorar tandas
                 </Link>
               )}
             </div>
           ) : (
             <>
-              <div className="space-y-4">
+              <div className="flex flex-col gap-4 md:gap-5">
                 {paginatedTandas.map((tanda) => {
                   const status = getStatusInfo(
                     tanda.estadoPago || tanda.estado,
@@ -454,125 +786,283 @@ export default function MisTandasPage() {
                   const progreso = getProgresoPagos(tanda);
                   const semanasRestantes = getSemanasRestantes(tanda);
                   const esAdmin = tanda.posicion === 1;
-                  const pagoSemanal = tanda.pagoSemanal || (tanda.monto / (tanda.semanasTotales || 12));
+                  const pagoSemanal =
+                    tanda.pagoSemanal ||
+                    tanda.monto / (tanda.semanasTotales || 12);
                   const diasRestantes = getDiasRestantes(tanda.proximoPago);
-                  const tienePendienteSegundaParte = tanda.estadoPagoCompleto?.tienePrimeraParte && !tanda.estadoPagoCompleto?.tieneSegundaParte;
+                  const tienePendienteSegundaParte =
+                    tanda.estadoPagoCompleto?.tienePrimeraParte &&
+                    !tanda.estadoPagoCompleto?.tieneSegundaParte;
 
                   return (
-                    <div key={tanda.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-200">
-                      <div className="p-5">
+                    <div
+                      key={tanda.id}
+                      className="flex flex-col"
+                      style={{
+                        background: T.bg,
+                        border: `1px solid ${T.line}`,
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div className="p-5 md:p-6">
                         {/* Header */}
-                        <div className="flex flex-wrap justify-between items-start gap-3 mb-4">
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="font-bold text-gray-900 text-lg">{tanda.tandaNombre}</h3>
+                        <div className="flex flex-wrap justify-between items-start gap-3 mb-5">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-2">
+                              <h3
+                                className="text-[15.5px] leading-snug tracking-[-0.005em]"
+                                style={{ color: T.ink, fontWeight: 500 }}
+                              >
+                                {tanda.tandaNombre}
+                              </h3>
                               {esAdmin && (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                                  <Crown size={10} /> Administrador
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5"
+                                  style={{
+                                    background: 'rgba(79, 46, 232, 0.08)',
+                                    color: T.accent,
+                                    borderRadius: '3px',
+                                    fontSize: '9px',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.15em',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  <Crown size={9} strokeWidth={2.25} /> Admin
                                 </span>
                               )}
                               {tanda.posicion <= 5 && !esAdmin && (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
-                                  <Star size={10} /> Posición preferente
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5"
+                                  style={{
+                                    background: 'rgba(184, 130, 14, 0.08)',
+                                    color: '#B8820E',
+                                    borderRadius: '3px',
+                                    fontSize: '9px',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.15em',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  <Star size={9} strokeWidth={2.25} /> Preferente
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
+                            <p
+                              className="text-[12px] flex items-center gap-2 flex-wrap tabular-nums"
+                              style={{
+                                color: T.inkSoft,
+                                fontWeight: 450,
+                                fontFeatureSettings: '"tnum"',
+                              }}
+                            >
                               <span>Posición #{tanda.posicion}</span>
-                              <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                              <span
+                                style={{
+                                  width: '3px',
+                                  height: '3px',
+                                  background: T.inkGhost,
+                                  borderRadius: '50%',
+                                }}
+                              />
                               <span>{formatMoney(tanda.monto)}</span>
                               {diasRestantes !== null && diasRestantes >= 0 && (
                                 <>
-                                  <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                                  <span className={`text-xs ${diasRestantes <= 2 ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
-                                    {diasRestantes === 0 ? 'Hoy' : `${diasRestantes} días`}
+                                  <span
+                                    style={{
+                                      width: '3px',
+                                      height: '3px',
+                                      background: T.inkGhost,
+                                      borderRadius: '50%',
+                                    }}
+                                  />
+                                  <span
+                                    style={{
+                                      color:
+                                        diasRestantes <= 2 ? T.red : T.inkFaint,
+                                      fontWeight: diasRestantes <= 2 ? 500 : 450,
+                                    }}
+                                  >
+                                    {diasRestantes === 0
+                                      ? 'Hoy'
+                                      : `${diasRestantes} días`}
                                   </span>
                                 </>
                               )}
                             </p>
                           </div>
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${status.color}`}>
-                            <StatusIcon size={10} /> {status.label}
-                          </span>
+                          <StatusBadge
+                            icon={StatusIcon}
+                            label={status.label}
+                            color={status.color}
+                            bg={status.bg}
+                          />
                         </div>
 
                         {/* Progreso */}
-                        <div className="mb-4">
-                          <div className="flex justify-between text-sm mb-1">
-                            <span className="text-gray-500">Progreso de pagos</span>
-                            <span className="font-medium text-gray-700">{Math.round(progreso)}%</span>
+                        <div className="mb-5">
+                          <div className="flex justify-between items-baseline mb-2">
+                            <span
+                              className="text-[10px] uppercase tracking-[0.18em]"
+                              style={{ color: T.inkFaint, fontWeight: 500 }}
+                            >
+                              Progreso de pagos
+                            </span>
+                            <span
+                              className="text-[12px] tabular-nums"
+                              style={{
+                                color: T.ink,
+                                fontWeight: 500,
+                                fontFeatureSettings: '"tnum"',
+                              }}
+                            >
+                              {Math.round(progreso)}%
+                            </span>
                           </div>
-                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="w-full overflow-hidden"
+                            style={{
+                              height: '5px',
+                              background: 'rgba(15,15,15,0.04)',
+                              borderRadius: '3px',
+                            }}
+                          >
                             <div
-                              className="h-full bg-[#6C3BFF] rounded-full transition-all duration-300"
-                              style={{ width: `${progreso}%` }}
+                              style={{
+                                height: '100%',
+                                width: `${progreso}%`,
+                                background: T.accent,
+                                borderRadius: '3px',
+                                transition: `width 0.6s ${T.ease}`,
+                              }}
                             />
                           </div>
-                          <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <div className="flex justify-between text-[11px] mt-2 tabular-nums" style={{ color: T.inkFaint, fontWeight: 450, fontFeatureSettings: '"tnum"' }}>
                             <span>{tanda.pagosRealizadosCount || 0} pagos realizados</span>
                             <span>{semanasRestantes} semanas restantes</span>
                           </div>
                         </div>
 
-                        {/* Estado de pago en dos partes */}
+                        {/* Aviso 2ª parte */}
                         {tienePendienteSegundaParte && (
-                          <div className="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-yellow-600">💰</span>
-                                <span className="text-sm text-yellow-700">
-                                  Pago pendiente: Segunda parte (50%)
-                                </span>
-                              </div>
-                              <button
-                                onClick={() => enviarRecordatorio(tanda.id)}
-                                className="flex items-center gap-1 text-xs bg-yellow-500 text-white px-3 py-1 rounded-lg hover:bg-yellow-600 transition"
+                          <div
+                            className="flex items-center justify-between gap-3 px-3 py-2.5 mb-5"
+                            style={{
+                              background: 'rgba(184, 130, 14, 0.06)',
+                              borderLeft: '2px solid #B8820E',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <AlertCircle
+                                size={13}
+                                strokeWidth={1.75}
+                                style={{ color: '#B8820E', flexShrink: 0 }}
+                              />
+                              <span
+                                className="text-[11.5px] leading-[1.5]"
+                                style={{ color: '#8A6109', fontWeight: 450 }}
                               >
-                                <Bell size={12} /> Recordarme
-                              </button>
+                                Pago pendiente: segunda parte (50%)
+                              </span>
                             </div>
+                            <button
+                              onClick={() => enviarRecordatorio(tanda.id)}
+                              className="flex items-center gap-1.5 h-8 px-3 text-[11.5px] shrink-0"
+                              style={{
+                                background: '#B8820E',
+                                color: '#FFFFFF',
+                                borderRadius: '4px',
+                                fontWeight: 500,
+                                border: 'none',
+                                cursor: 'pointer',
+                                WebkitTapHighlightColor: 'transparent',
+                              }}
+                            >
+                              <Bell size={11} strokeWidth={2} /> Recordarme
+                            </button>
                           </div>
                         )}
 
-                        {/* Grid de información */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-4">
-                          <div className="bg-gray-50 rounded-xl p-2 text-center">
-                            <CalendarDays size={14} className="text-gray-400 mx-auto mb-1" />
-                            <p className="text-xs text-gray-500">Fecha de ingreso</p>
-                            <p className="text-xs font-medium text-gray-700">{formatDate(tanda.joinedAt)}</p>
-                          </div>
-                          <div className="bg-gray-50 rounded-xl p-2 text-center">
-                            <DollarSign size={14} className="text-gray-400 mx-auto mb-1" />
-                            <p className="text-xs text-gray-500">Pago semanal</p>
-                            <p className="text-xs font-bold text-purple-600">{formatMoney(pagoSemanal)}</p>
-                          </div>
-                          <div className="bg-gray-50 rounded-xl p-2 text-center">
-                            <Calendar size={14} className="text-gray-400 mx-auto mb-1" />
-                            <p className="text-xs text-gray-500">Próximo pago</p>
-                            <p className="text-xs font-medium text-gray-700">
-                              {tanda.proximoPago ? formatDate(tanda.proximoPago) : 'Por definir'}
-                            </p>
-                          </div>
-                          <div className="bg-gray-50 rounded-xl p-2 text-center">
-                            <TrophyIcon size={14} className="text-gray-400 mx-auto mb-1" />
-                            <p className="text-xs text-gray-500">Entrega estimada</p>
-                            <p className="text-xs font-medium text-gray-700">{tanda.entregaEstimada || `Semana ${tanda.posicion}`}</p>
-                          </div>
+                        {/* Grid info */}
+                        <div
+                          className="grid grid-cols-2 md:grid-cols-4 mb-5"
+                          style={{
+                            border: `1px solid ${T.line}`,
+                            borderRadius: '6px',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <InfoCell
+                            label="Fecha de ingreso"
+                            value={formatDate(tanda.joinedAt)}
+                            border={false}
+                          />
+                          <InfoCell
+                            label="Pago semanal"
+                            value={formatMoney(pagoSemanal)}
+                            accent
+                          />
+                          <InfoCell
+                            label="Próximo pago"
+                            value={
+                              tanda.proximoPago
+                                ? formatDate(tanda.proximoPago)
+                                : 'Por definir'
+                            }
+                          />
+                          <InfoCell
+                            label="Entrega estimada"
+                            value={
+                              tanda.entregaEstimada || `Semana ${tanda.posicion}`
+                            }
+                          />
                         </div>
 
-                        {/* Botones de acción */}
-                        <div className="flex gap-3 pt-2">
+                        {/* Botones */}
+                        <div className="flex gap-2.5">
                           <button
                             onClick={() => verDetallesPagos(tanda)}
-                            className="flex-1 flex items-center justify-center gap-2 bg-gray-100 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-200 transition"
+                            className="flex-1 flex items-center justify-center gap-2 h-11 text-[13px] transition-colors"
+                            style={{
+                              background: 'rgba(15,15,15,0.03)',
+                              color: T.inkMid,
+                              border: `1px solid ${T.line}`,
+                              borderRadius: '6px',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              WebkitTapHighlightColor: 'transparent',
+                              transitionTimingFunction: T.ease,
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.background = 'rgba(15,15,15,0.06)')
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.background = 'rgba(15,15,15,0.03)')
+                            }
                           >
-                            <History size={14} /> Ver pagos
+                            <History size={14} strokeWidth={1.75} /> Ver pagos
                           </button>
                           <Link
                             href={`/tandas/${tanda.tandaId}`}
-                            className="flex-1 flex items-center justify-center gap-2 bg-[#6C3BFF] text-white py-2.5 rounded-xl text-sm font-medium hover:bg-[#5a2ee6] transition"
+                            className="flex-1 flex items-center justify-center gap-2 h-11 text-white text-[13px]"
+                            style={{
+                              background: T.accent,
+                              borderRadius: '6px',
+                              fontWeight: 500,
+                              textDecoration: 'none',
+                              WebkitTapHighlightColor: 'transparent',
+                              transitionTimingFunction: T.ease,
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.background = T.accentDeep)
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.background = T.accent)
+                            }
                           >
-                            <Eye size={14} /> Ver detalles
+                            <Eye size={14} strokeWidth={1.75} /> Ver detalles
                           </Link>
                         </div>
                       </div>
@@ -583,128 +1073,274 @@ export default function MisTandasPage() {
 
               {/* Paginación */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-8">
+                <div className="flex items-center justify-center gap-3 mt-12">
                   <button
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
+                    className="flex items-center gap-1.5 h-9 px-4 text-[12.5px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{
+                      background: 'transparent',
+                      border: `1px solid ${T.line}`,
+                      borderRadius: '6px',
+                      color: T.inkMid,
+                      fontWeight: 500,
+                      cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (currentPage > 1) {
+                        e.currentTarget.style.borderColor = T.accent;
+                        e.currentTarget.style.color = T.accent;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = T.line;
+                      e.currentTarget.style.color = T.inkMid;
+                    }}
                   >
-                    Anterior
+                    <ChevronLeft size={13} strokeWidth={1.75} /> Anterior
                   </button>
-                  <span className="px-4 py-2 text-sm text-gray-500">
+
+                  <span
+                    className="px-3 text-[12px] tabular-nums"
+                    style={{
+                      color: T.inkFaint,
+                      fontWeight: 500,
+                      fontFeatureSettings: '"tnum"',
+                    }}
+                  >
                     {currentPage} / {totalPages}
                   </span>
+
                   <button
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
                     disabled={currentPage === totalPages}
-                    className="px-4 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 disabled:opacity-40 hover:border-[#6C3BFF] hover:text-[#6C3BFF] transition-colors"
+                    className="flex items-center gap-1.5 h-9 px-4 text-[12.5px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{
+                      background: 'transparent',
+                      border: `1px solid ${T.line}`,
+                      borderRadius: '6px',
+                      color: T.inkMid,
+                      fontWeight: 500,
+                      cursor:
+                        currentPage === totalPages ? 'not-allowed' : 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (currentPage < totalPages) {
+                        e.currentTarget.style.borderColor = T.accent;
+                        e.currentTarget.style.color = T.accent;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = T.line;
+                      e.currentTarget.style.color = T.inkMid;
+                    }}
                   >
-                    Siguiente
+                    Siguiente <ChevronRight size={13} strokeWidth={1.75} />
                   </button>
                 </div>
               )}
             </>
           )}
+        </main>
 
-          {/* Botón para explorar más tandas */}
-          {tandas.length > 0 && (
-            <div className="mt-8 text-center">
-              <Link
-                href="/tandas"
-                className="inline-flex items-center gap-2 text-sm text-[#6C3BFF] hover:underline transition"
-              >
-                <Target size={14} /> Explorar más tandas <ChevronRight size={14} />
-              </Link>
-            </div>
-          )}
-        </div>
-      </StoreLayout>
+        <Footer />
+      </div>
 
-      {/* ── Modal de pagos ──────────────────────────────────────────────── */}
+      {/* ─── Modal de pagos ──────────────────────────────── */}
       {showPagosModal && selectedTanda && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowPagosModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(15,15,15,0.7)' }}
+          onClick={() => setShowPagosModal(false)}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            style={{
+              background: T.bg,
+              border: `1px solid ${T.line}`,
+              borderRadius: '10px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header del modal */}
+            <div
+              className="sticky top-0 flex justify-between items-start gap-4 px-6 py-5"
+              style={{
+                background: T.bg,
+                borderBottom: `1px solid ${T.line}`,
+              }}
+            >
               <div>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-[#6C3BFF]/10 rounded-lg flex items-center justify-center">
-                    <FileText size={16} className="text-[#6C3BFF]" />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900">Historial de pagos</h3>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">{selectedTanda.tandaNombre} - Posición #{selectedTanda.posicion}</p>
+                <p
+                  className="text-[10px] uppercase tracking-[0.28em] mb-2"
+                  style={{ color: T.inkFaint, fontWeight: 500, fontFeatureSettings: '"ss01"' }}
+                >
+                  Historial
+                </p>
+                <h3
+                  className="text-[20px] leading-tight tracking-[-0.02em]"
+                  style={{ color: T.ink, fontWeight: 400 }}
+                >
+                  Pagos
+                  <span className="font-serif italic" style={{ color: T.inkMid }}>
+                    {' '}de la tanda.
+                  </span>
+                </h3>
+                <p
+                  className="text-[12px] mt-1.5"
+                  style={{ color: T.inkSoft, fontWeight: 450 }}
+                >
+                  {selectedTanda.tandaNombre} · Posición #{selectedTanda.posicion}
+                </p>
               </div>
-              <button onClick={() => setShowPagosModal(false)} className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-200 transition">×</button>
+              <button
+                onClick={() => setShowPagosModal(false)}
+                className="flex items-center justify-center shrink-0"
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  background: 'rgba(15,15,15,0.03)',
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '6px',
+                  color: T.inkMid,
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                  fontSize: '16px',
+                }}
+                aria-label="Cerrar"
+              >
+                ×
+              </button>
             </div>
 
             <div className="p-6">
-              {/* Resumen de pagos */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="text-center p-3 bg-green-50 rounded-xl">
-                  <CheckCircle size={18} className="text-green-600 mx-auto mb-1" />
-                  <div className="text-xl font-bold text-green-600">
-                    {pagos.filter(p => p.estado === 'pagado').length}
-                  </div>
-                  <div className="text-xs text-gray-500">Pagos realizados</div>
-                </div>
-                <div className="text-center p-3 bg-yellow-50 rounded-xl">
-                  <Clock size={18} className="text-yellow-600 mx-auto mb-1" />
-                  <div className="text-xl font-bold text-yellow-600">
-                    {pagos.filter(p => p.estado === 'pendiente').length}
-                  </div>
-                  <div className="text-xs text-gray-500">Pendientes</div>
-                </div>
-                <div className="text-center p-3 bg-purple-50 rounded-xl">
-                  <DollarSign size={18} className="text-purple-600 mx-auto mb-1" />
-                  <div className="text-xl font-bold text-purple-600">
-                    {formatMoney(pagos.reduce((sum, p) => sum + (p.monto || 0), 0))}
-                  </div>
-                  <div className="text-xs text-gray-500">Total</div>
-                </div>
+              {/* Resumen */}
+              <div
+                className="grid grid-cols-3 mb-6"
+                style={{
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '6px',
+                  overflow: 'hidden',
+                }}
+              >
+                <MiniStat
+                  icon={CheckCircle}
+                  color={T.green}
+                  value={pagos.filter((p) => p.estado === 'pagado').length}
+                  label="Pagados"
+                  border={false}
+                />
+                <MiniStat
+                  icon={Clock}
+                  color="#B8820E"
+                  value={pagos.filter((p) => p.estado === 'pendiente').length}
+                  label="Pendientes"
+                />
+                <MiniStat
+                  icon={DollarSign}
+                  color={T.accent}
+                  value={formatMoney(
+                    pagos.reduce((sum, p) => sum + (p.monto || 0), 0)
+                  )}
+                  label="Total"
+                />
               </div>
 
-              {/* Tabla de pagos */}
               {pagos.length === 0 ? (
-                <div className="text-center py-8">
-                  <FileText size={40} className="text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No hay pagos registrados</p>
+                <div className="text-center py-10">
+                  <FileText
+                    size={32}
+                    strokeWidth={1.5}
+                    style={{ color: T.inkGhost, margin: '0 auto 12px' }}
+                  />
+                  <p
+                    className="text-[13px]"
+                    style={{ color: T.inkSoft, fontWeight: 450 }}
+                  >
+                    No hay pagos registrados
+                  </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-50 border-b border-gray-100">
-                      <tr>
-                        <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Semana</th>
-                        <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Monto</th>
-                        <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Fecha límite</th>
-                        <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Fecha pago</th>
-                        <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${T.line}` }}>
+                        <Th>Semana</Th>
+                        <Th>Monto</Th>
+                        <Th>Vencimiento</Th>
+                        <Th>Fecha pago</Th>
+                        <Th>Estado</Th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody>
                       {pagos.map((pago) => {
                         const isPaid = pago.estado === 'pagado';
                         const isLate = pago.estado === 'atrasado';
 
                         return (
-                          <tr key={pago.id} className="hover:bg-gray-50 transition">
-                            <td className="px-3 py-3 font-mono text-sm font-medium text-gray-900">#{pago.semana || pago.roundNumber || 'N/A'}</td>
-                            <td className="px-3 py-3 font-semibold text-gray-900">{formatMoney(pago.monto)}</td>
-                            <td className="px-3 py-3 text-sm text-gray-500">{formatDate(pago.fechaVencimiento || pago.dueDate)}</td>
-                            <td className="px-3 py-3 text-sm text-gray-500">{pago.fechaPago ? formatDate(pago.fechaPago) : '—'}</td>
-                            <td className="px-3 py-3">
+                          <tr
+                            key={pago.id}
+                            style={{ borderBottom: `1px solid ${T.line}` }}
+                          >
+                            <td
+                              className="py-3 pr-3 text-[13px] tabular-nums"
+                              style={{
+                                color: T.ink,
+                                fontWeight: 500,
+                                fontFamily: 'ui-monospace, monospace',
+                                fontFeatureSettings: '"tnum"',
+                              }}
+                            >
+                              #{pago.semana || pago.roundNumber || 'N/A'}
+                            </td>
+                            <td
+                              className="py-3 pr-3 text-[13px] tabular-nums"
+                              style={{
+                                color: T.ink,
+                                fontWeight: 500,
+                                fontFeatureSettings: '"tnum"',
+                              }}
+                            >
+                              {formatMoney(pago.monto)}
+                            </td>
+                            <td
+                              className="py-3 pr-3 text-[12.5px]"
+                              style={{ color: T.inkSoft, fontWeight: 450 }}
+                            >
+                              {formatDate(pago.fechaVencimiento || pago.dueDate)}
+                            </td>
+                            <td
+                              className="py-3 pr-3 text-[12.5px]"
+                              style={{ color: T.inkSoft, fontWeight: 450 }}
+                            >
+                              {pago.fechaPago ? formatDate(pago.fechaPago) : '—'}
+                            </td>
+                            <td className="py-3">
                               {isPaid ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                  <CheckCircle size={10} /> Pagado
-                                </span>
+                                <StatusBadge
+                                  icon={CheckCircle}
+                                  label="Pagado"
+                                  color={T.green}
+                                  bg="rgba(26, 127, 75, 0.08)"
+                                />
                               ) : isLate ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                                  <AlertCircle size={10} /> Atrasado
-                                </span>
+                                <StatusBadge
+                                  icon={AlertCircle}
+                                  label="Atrasado"
+                                  color={T.red}
+                                  bg="rgba(197, 48, 48, 0.08)"
+                                />
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
-                                  <Clock size={10} /> Pendiente
-                                </span>
+                                <StatusBadge
+                                  icon={Clock}
+                                  label="Pendiente"
+                                  color="#B8820E"
+                                  bg="rgba(184, 130, 14, 0.08)"
+                                />
                               )}
                             </td>
                           </tr>
@@ -715,27 +1351,58 @@ export default function MisTandasPage() {
                 </div>
               )}
 
-              {selectedTanda.estadoPagoCompleto?.tienePrimeraParte && !selectedTanda.estadoPagoCompleto?.tieneSegundaParte && (
-                <div className="mt-4 p-3 bg-yellow-50 rounded-xl border border-yellow-200">
-                  <p className="text-sm text-yellow-700 flex items-center gap-2">
-                    <AlertCircle size={16} /> Pendiente: segunda parte del pago (50% restante)
-                  </p>
-                  <button
-                    onClick={() => {
-                      enviarRecordatorio(selectedTanda.id);
-                      setShowPagosModal(false);
+              {selectedTanda.estadoPagoCompleto?.tienePrimeraParte &&
+                !selectedTanda.estadoPagoCompleto?.tieneSegundaParte && (
+                  <div
+                    className="mt-5 px-3 py-3"
+                    style={{
+                      background: 'rgba(184, 130, 14, 0.06)',
+                      borderLeft: '2px solid #B8820E',
+                      borderRadius: '4px',
                     }}
-                    className="mt-2 text-xs bg-yellow-500 text-white px-3 py-1 rounded-lg hover:bg-yellow-600 transition"
                   >
-                    <Bell size={12} className="inline mr-1" /> Recordar segunda parte
-                  </button>
-                </div>
-              )}
+                    <p
+                      className="text-[12px] leading-[1.55] flex items-center gap-2 mb-2"
+                      style={{ color: '#8A6109', fontWeight: 450 }}
+                    >
+                      <AlertCircle size={13} strokeWidth={1.75} />
+                      Pendiente: segunda parte del pago (50% restante)
+                    </p>
+                    <button
+                      onClick={() => {
+                        enviarRecordatorio(selectedTanda.id);
+                        setShowPagosModal(false);
+                      }}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 text-[11.5px]"
+                      style={{
+                        background: '#B8820E',
+                        color: '#FFFFFF',
+                        borderRadius: '4px',
+                        fontWeight: 500,
+                        border: 'none',
+                        cursor: 'pointer',
+                        WebkitTapHighlightColor: 'transparent',
+                      }}
+                    >
+                      <Bell size={11} strokeWidth={2} /> Recordar segunda parte
+                    </button>
+                  </div>
+                )}
 
               <div className="mt-6 text-center">
                 <button
                   onClick={() => setShowPagosModal(false)}
-                  className="text-sm text-gray-500 hover:text-[#6C3BFF] transition"
+                  className="text-[12px] uppercase tracking-[0.18em]"
+                  style={{
+                    color: T.inkFaint,
+                    fontWeight: 500,
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = T.accent)}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = T.inkFaint)}
                 >
                   Cerrar
                 </button>
@@ -745,7 +1412,7 @@ export default function MisTandasPage() {
         </div>
       )}
 
-      {/* ── Toast ────────────────────────────────────────────────────────── */}
+      {/* ─── Toast ────────────────────────────────────────── */}
       {toast && (
         <Toast
           message={toast.message}
@@ -753,36 +1420,112 @@ export default function MisTandasPage() {
           onClose={() => setToast(null)}
         />
       )}
+
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
+        }
+        .animate-blink { animation: blink 1s step-end infinite; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
+        }
+        .font-serif {
+          font-family: ui-serif, 'Iowan Old Style', 'Apple Garamond', 'Palatino', Georgia, 'Times New Roman', serif;
+        }
+        ::selection { background: rgba(79, 46, 232, 0.12); color: #0F0F0F; }
+        * { -webkit-tap-highlight-color: transparent; font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1; }
+      `}</style>
     </>
   );
 }
 
-// ─── Componente TrophyIcon ──────────────────────────────────────────────
-function TrophyIcon({ size = 14, className = "" }) {
+// ─────────────────────────────────────────────────────────────────────────
+// InfoCell — celda del grid de datos
+// ─────────────────────────────────────────────────────────────────────────
+function InfoCell({ label, value, accent = false, border = true }) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
+    <div
+      className="p-3.5"
+      style={{
+        borderLeft: border ? `1px solid ${T.line}` : 'none',
+        borderTop: '1px solid transparent',
+      }}
     >
-      <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-      <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-      <path d="M4 22h16" />
-      <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-      <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-      <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-    </svg>
+      <p
+        className="text-[9.5px] uppercase tracking-[0.16em] mb-1.5"
+        style={{ color: T.inkFaint, fontWeight: 500 }}
+      >
+        {label}
+      </p>
+      <p
+        className="text-[12.5px] tabular-nums tracking-[-0.005em]"
+        style={{
+          color: accent ? T.accent : T.ink,
+          fontWeight: 500,
+          fontFeatureSettings: '"tnum"',
+        }}
+      >
+        {value}
+      </p>
+    </div>
   );
 }
 
-// ─── Componente Toast ────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// MiniStat — stat pequeño del modal
+// ─────────────────────────────────────────────────────────────────────────
+function MiniStat({ icon: Icon, color, value, label, border = true }) {
+  return (
+    <div
+      className="p-4 text-center"
+      style={{ borderLeft: border ? `1px solid ${T.line}` : 'none' }}
+    >
+      <Icon
+        size={14}
+        strokeWidth={1.75}
+        style={{ color, margin: '0 auto 6px' }}
+      />
+      <p
+        className="text-[18px] tabular-nums leading-none mb-1.5"
+        style={{
+          color,
+          fontWeight: 500,
+          fontFeatureSettings: '"tnum"',
+        }}
+      >
+        {value}
+      </p>
+      <p
+        className="text-[9.5px] uppercase tracking-[0.16em]"
+        style={{ color: T.inkFaint, fontWeight: 500 }}
+      >
+        {label}
+      </p>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Th — header de tabla
+// ─────────────────────────────────────────────────────────────────────────
+function Th({ children }) {
+  return (
+    <th
+      className="text-left py-3 pr-3 text-[9.5px] uppercase tracking-[0.18em]"
+      style={{ color: T.inkFaint, fontWeight: 500 }}
+    >
+      {children}
+    </th>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Toast — restyleado con tokens
+// ─────────────────────────────────────────────────────────────────────────
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
@@ -790,15 +1533,31 @@ function Toast({ message, type, onClose }) {
   }, [onClose]);
 
   const colors = {
-    success: 'bg-green-50 border-green-200 text-green-800',
-    error: 'bg-red-50 border-red-200 text-red-800',
-    warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-    info: 'bg-blue-50 border-blue-200 text-blue-800'
+    success: { fg: T.green, bg: 'rgba(26, 127, 75, 0.06)' },
+    error: { fg: T.red, bg: 'rgba(197, 48, 48, 0.06)' },
+    warning: { fg: '#B8820E', bg: 'rgba(184, 130, 14, 0.06)' },
+    info: { fg: T.accent, bg: 'rgba(79, 46, 232, 0.06)' },
   };
 
+  const c = colors[type] || colors.info;
+
   return (
-    <div className={`fixed bottom-4 right-4 z-50 p-4 rounded-xl border shadow-lg max-w-sm ${colors[type] || colors.info}`}>
-      <p className="text-sm">{message}</p>
+    <div
+      className="fixed bottom-4 right-4 z-50 px-4 py-3 max-w-sm"
+      style={{
+        background: T.bg,
+        border: `1px solid ${T.line}`,
+        borderLeft: `2px solid ${c.fg}`,
+        borderRadius: '6px',
+        boxShadow: '0 4px 20px rgba(15,15,15,0.08)',
+      }}
+    >
+      <p
+        className="text-[12.5px] leading-[1.5]"
+        style={{ color: c.fg, fontWeight: 500 }}
+      >
+        {message}
+      </p>
     </div>
   );
 }

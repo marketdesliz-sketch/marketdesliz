@@ -3,11 +3,68 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { ChevronRight, Download, Copy, CheckCircle, User, Phone, Fingerprint, QrCode as QrIcon } from 'lucide-react';
-import StoreLayout from '../../layouts/StoreLayout';
+import {
+  ChevronRight, Download, Copy, CheckCircle,
+  User, Phone, Fingerprint, QrCode as QrIcon, Lock,
+} from 'lucide-react';
 import pb from '../../lib/pocketbase';
 import QRCode from 'qrcode';
+import { T } from '../../lib/tokens';
+import TerminalBar from '../../components/TerminalBar';
+import Header from '../../components/Header';
+import Footer from '../../components/Footer';
+import BackButton from '../../components/BackButton';
 
+// ─────────────────────────────────────────────────────────────────────────
+// Sub-componentes UI
+// ─────────────────────────────────────────────────────────────────────────
+function SectionLabel({ children, accent = false }) {
+  return (
+    <p
+      className="text-[10px] md:text-[11px] uppercase tracking-[0.22em] mb-4"
+      style={{
+        color: accent ? T.accent : T.inkFaint,
+        fontWeight: 500,
+        fontFeatureSettings: '"ss01"',
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function InfoRow({ icon: Icon, label, value, mono = false }) {
+  return (
+    <div className="flex items-center gap-3 py-3">
+      <Icon
+        size={13}
+        strokeWidth={1.75}
+        style={{ color: T.inkFaint, flexShrink: 0 }}
+      />
+      <span
+        className="text-[10px] uppercase tracking-[0.18em] shrink-0"
+        style={{ color: T.inkFaint, fontWeight: 500, minWidth: '72px' }}
+      >
+        {label}
+      </span>
+      <span
+        className={`text-[13px] truncate ${mono ? 'tabular-nums' : ''}`}
+        style={{
+          color: T.ink,
+          fontWeight: 500,
+          fontFeatureSettings: mono ? '"tnum"' : undefined,
+          fontFamily: mono ? 'ui-monospace, monospace' : 'inherit',
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Página
+// ─────────────────────────────────────────────────────────────────────────
 export default function PerfilQRPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
@@ -16,22 +73,26 @@ export default function PerfilQRPage() {
   const [copiado, setCopiado] = useState(false);
   const [descargando, setDescargando] = useState(false);
 
+  const notifications = [];
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
   useEffect(() => {
     if (!pb.authStore.isValid) {
       router.push('/solicitar');
       return;
     }
     const currentUser = pb.authStore.model;
-    
+
     if (currentUser?.role === 'vendedor') {
       router.push('/vendedor/qr');
       return;
     }
-    
+
     setUser(currentUser);
     generarQR(currentUser.id);
   }, []);
 
+  // ─── Generar QR · SIN CAMBIOS (color → T.accent) ────────
   const generarQR = async (userId) => {
     try {
       const qrData = JSON.stringify({
@@ -39,17 +100,17 @@ export default function PerfilQRPage() {
         id: userId,
         nombre: user?.nombre || '',
         telefono: user?.telefono || '',
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
+
       const qrCodeUrl = await QRCode.toDataURL(qrData, {
         width: 300,
         margin: 2,
         color: {
-          dark: '#6C3BFF',
-          light: '#ffffff'
+          dark: T.accent,
+          light: '#ffffff',
         },
-        errorCorrectionLevel: 'H'
+        errorCorrectionLevel: 'H',
       });
       setQrCode(qrCodeUrl);
     } catch (error) {
@@ -59,6 +120,7 @@ export default function PerfilQRPage() {
     }
   };
 
+  // ─── Copiar enlace · SIN CAMBIOS ────────────────────────
   const copiarLink = () => {
     const link = `${window.location.origin}/cobrador/scan?client=${user.id}`;
     navigator.clipboard.writeText(link);
@@ -66,6 +128,7 @@ export default function PerfilQRPage() {
     setTimeout(() => setCopiado(false), 2000);
   };
 
+  // ─── Descargar QR · SIN CAMBIOS ─────────────────────────
   const descargarQR = () => {
     if (!qrCode) return;
     setDescargando(true);
@@ -76,106 +139,262 @@ export default function PerfilQRPage() {
     setTimeout(() => setDescargando(false), 1000);
   };
 
+  // ─── Loading ────────────────────────────────────────────
   if (loading) {
     return (
-      <StoreLayout>
-        <div className="flex justify-center items-center min-h-[60vh]">
-          <div className="w-8 h-8 border-2 border-[#6C3BFF] border-t-transparent rounded-full animate-spin" />
-        </div>
-      </StoreLayout>
-    );
-  }
-
-  return (
-    <>
-      <Head>
-        <title>Mi Código QR | MarketDesliz</title>
-      </Head>
-
-      <StoreLayout>
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-40 pb-8">
-          {/* Header */}
-          <div className="mb-6">
-            <Link href="/perfil" className="inline-flex items-center gap-1 text-sm text-[#6C3BFF] hover:gap-2 transition-all mb-4 group">
-              <ChevronRight size={14} className="rotate-180 group-hover:-translate-x-0.5 transition-transform" /> Volver a mi perfil
-            </Link>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#6C3BFF]/10 rounded-xl flex items-center justify-center">
-                <QrIcon size={20} className="text-[#6C3BFF]" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Mi código QR</h1>
-                <p className="text-sm text-gray-400">Presenta este código al cobrador para realizar tus pagos</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="p-8 text-center">
-              {/* QR Code */}
-              <div className="flex justify-center mb-6">
-                {qrCode && (
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#6C3BFF]/20 to-[#6C3BFF]/5 rounded-2xl blur-xl -z-10" />
-                    <img
-                      src={qrCode}
-                      alt="Código QR del cliente"
-                      className="w-64 h-64 border-2 border-gray-100 rounded-2xl p-3 bg-white shadow-lg"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Botones de acción */}
-              <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                <button
-                  onClick={descargarQR}
-                  disabled={descargando}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#6C3BFF] hover:bg-[#5b2ee6] disabled:bg-gray-300 text-white rounded-xl font-semibold text-sm transition-colors"
-                >
-                  <Download size={16} />
-                  {descargando ? 'Descargando...' : 'Descargar QR'}
-                </button>
-                <button
-                  onClick={copiarLink}
-                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold text-sm transition-colors"
-                >
-                  {copiado ? <CheckCircle size={16} /> : <Copy size={16} />}
-                  {copiado ? 'Enlace copiado' : 'Copiar enlace'}
-                </button>
-              </div>
-
-              {/* Información del cliente */}
-              <div className="bg-gray-50 rounded-2xl p-5 mb-6 text-left border border-gray-100">
-                <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2 text-sm">
-                  <User size={14} className="text-[#6C3BFF]" /> Datos del cliente
-                </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <User size={12} className="text-gray-400" />
-                    <span className="text-gray-500">Nombre:</span>
-                    <span className="text-gray-900 font-medium">{user?.nombre || 'No especificado'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Phone size={12} className="text-gray-400" />
-                    <span className="text-gray-500">Teléfono:</span>
-                    <span className="text-gray-900 font-medium">{user?.telefono || 'No especificado'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Fingerprint size={12} className="text-gray-400" />
-                    <span className="text-gray-500">ID:</span>
-                    <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 font-mono">{user?.id}</code>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-xs text-gray-400">
-                El cobrador puede escanear este código o usar el enlace para ver tus pagos pendientes
+      <>
+        <Head><title>Cargando | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <TerminalBar mode="rotating" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <span
+                className="font-serif text-[32px] block mb-5 select-none"
+                style={{ color: T.inkGhost }}
+              >
+                ʃƪʃƪ
+              </span>
+              <p
+                className="text-[11px] uppercase tracking-[0.28em]"
+                style={{ color: T.inkFaint, fontWeight: 500 }}
+              >
+                Generando código
               </p>
             </div>
           </div>
         </div>
-      </StoreLayout>
+      </>
+    );
+  }
+
+  // ─── Render principal ───────────────────────────────────
+  return (
+    <>
+      <Head>
+        <title>Mi Código QR | MarketDesliz</title>
+        <meta name="theme-color" content="#0F0F0F" />
+      </Head>
+
+      <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+        <BackButton fallback="/perfil" />
+        <TerminalBar mode="rotating" />
+        <Header notifications={notifications} unreadCount={unreadCount} />
+
+        <main className="flex-1 max-w-[720px] mx-auto px-6 md:px-14 py-12 md:py-16 w-full">
+
+          {/* ─── Hero editorial ─────────────────────────── */}
+          <section className="mb-10">
+            <p
+              className="text-[10px] uppercase tracking-[0.28em] mb-6"
+              style={{
+                color: T.inkFaint,
+                fontWeight: 500,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              Perfil · Código QR
+            </p>
+
+            <h1
+              className="text-[40px] md:text-[56px] leading-[1.02] tracking-[-0.035em] max-w-2xl"
+              style={{
+                color: T.ink,
+                fontWeight: 400,
+                fontFeatureSettings: '"ss01"',
+              }}
+            >
+              Tu código QR
+              <br />
+              <span className="font-serif italic" style={{ color: T.inkMid }}>
+                de cliente.
+              </span>
+            </h1>
+
+            <p
+              className="text-[15px] md:text-[17px] leading-[1.55] mt-5 max-w-xl"
+              style={{ color: T.inkSoft, fontWeight: 450 }}
+            >
+              Presenta este código al cobrador para realizar tus pagos.
+            </p>
+          </section>
+
+          {/* ─── Card QR ─────────────────────────────────── */}
+          <section className="mb-6">
+            <div
+              className="overflow-hidden"
+              style={{
+                background: T.bg,
+                border: `1px solid ${T.line}`,
+                borderRadius: '8px',
+              }}
+            >
+              <div className="p-8 md:p-10 text-center">
+
+                {/* QR */}
+                {qrCode && (
+                  <div className="flex justify-center mb-8">
+                    <img
+                      src={qrCode}
+                      alt="Código QR del cliente"
+                      className="bg-white"
+                      style={{
+                        width: '256px',
+                        height: '256px',
+                        padding: '12px',
+                        border: `1px solid ${T.line}`,
+                        borderRadius: '8px',
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Botones */}
+                <div className="flex flex-col sm:flex-row gap-2.5 mb-8">
+                  <button
+                    onClick={descargarQR}
+                    disabled={descargando}
+                    className="flex-1 inline-flex items-center justify-center gap-2 h-11 text-white text-[13px] disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      background: T.accent,
+                      borderRadius: '6px',
+                      fontWeight: 500,
+                      border: 'none',
+                      cursor: descargando ? 'not-allowed' : 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                      transitionTimingFunction: T.ease,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!descargando)
+                        e.currentTarget.style.background = T.accentDeep;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!descargando)
+                        e.currentTarget.style.background = T.accent;
+                    }}
+                  >
+                    <Download size={14} strokeWidth={1.75} />
+                    {descargando ? 'Descargando…' : 'Descargar QR'}
+                  </button>
+
+                  <button
+                    onClick={copiarLink}
+                    className="flex-1 inline-flex items-center justify-center gap-2 h-11 text-[13px] transition-colors"
+                    style={{
+                      background: 'transparent',
+                      border: `1px solid ${T.line}`,
+                      borderRadius: '6px',
+                      color: copiado ? T.green : T.inkMid,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                      transitionTimingFunction: T.ease,
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background = 'rgba(15,15,15,0.03)')
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = 'transparent')
+                    }
+                  >
+                    {copiado ? (
+                      <CheckCircle size={14} strokeWidth={1.75} />
+                    ) : (
+                      <Copy size={14} strokeWidth={1.75} />
+                    )}
+                    {copiado ? 'Enlace copiado' : 'Copiar enlace'}
+                  </button>
+                </div>
+
+                {/* Info del cliente */}
+                <div className="text-left">
+                  <SectionLabel>Datos del cliente</SectionLabel>
+                  <div
+                    style={{
+                      border: `1px solid ${T.line}`,
+                      borderRadius: '6px',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: '0 16px',
+                        borderBottom: `1px solid ${T.line}`,
+                      }}
+                    >
+                      <InfoRow
+                        icon={User}
+                        label="Nombre"
+                        value={user?.nombre || 'No especificado'}
+                      />
+                    </div>
+                    <div
+                      style={{
+                        padding: '0 16px',
+                        borderBottom: `1px solid ${T.line}`,
+                      }}
+                    >
+                      <InfoRow
+                        icon={Phone}
+                        label="Teléfono"
+                        value={user?.telefono || 'No especificado'}
+                        mono
+                      />
+                    </div>
+                    <div style={{ padding: '0 16px' }}>
+                      <InfoRow
+                        icon={Fingerprint}
+                        label="ID"
+                        value={user?.id}
+                        mono
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Nota */}
+                <p
+                  className="text-[11.5px] leading-[1.55] mt-8"
+                  style={{ color: T.inkFaint, fontWeight: 450 }}
+                >
+                  El cobrador puede escanear este código o usar el enlace
+                  para ver tus pagos pendientes.
+                </p>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <Footer variant="minimal" />
+      </div>
+
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
+        }
+        .animate-blink { animation: blink 1s step-end infinite; }
+        body {
+          font-family:
+            -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display',
+            'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
+        }
+        .font-serif {
+          font-family:
+            ui-serif, 'Iowan Old Style', 'Apple Garamond', 'Palatino',
+            Georgia, 'Times New Roman', serif;
+        }
+        ::selection {
+          background: rgba(79, 46, 232, 0.12);
+          color: #0F0F0F;
+        }
+        * {
+          -webkit-tap-highlight-color: transparent;
+          font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
+        }
+      `}</style>
     </>
   );
 }
