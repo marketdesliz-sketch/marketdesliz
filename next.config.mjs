@@ -4,7 +4,7 @@ const nextConfig = {
   images: {
     unoptimized: true,           // Desactiva optimización de imágenes de Next (necesario para estático)
   },
-  trailingSlash: true,           // Opcional, mejora compatibilidad con rutas en Capacitor
+  // trailingSlash: true,           // Opcional, mejora compatibilidad con rutas en Capacitor
   // Si usas variables de entorno, asegúrate de definirlas en .env o en el build
 };
 

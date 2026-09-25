@@ -7,6 +7,35 @@ const POCKETBASE_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || 'http://127.0.0
 const USER_STORAGE_KEY = 'pb_user_auth';
 const ADMIN_STORAGE_KEY = 'pb_admin_auth';
 
+
+// ═══════════════════════════════════════════════════════════════════════
+// Decodificar JWT — extrae el payload sin verificar firma
+// Solo se usa para leer `exp`. La verificación real la hace PocketBase.
+// ═══════════════════════════════════════════════════════════════════════
+function decodeJWT(token) {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    // Padding para que atob no falle
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+
+    const jsonPayload = decodeURIComponent(
+      atob(padded)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+}
+
 // ============================================================
 // 1. DEFINIR LA CLASE CustomAuthStore (CORREGIDA)
 // ============================================================
@@ -28,7 +57,27 @@ class CustomAuthStore {
   }
 
   get isValid() {
-    return !!this.token && !!this.model;
+    if (!this.token || !this.model) return false;
+
+    const payload = decodeJWT(this.token);
+    if (!payload) return false;
+
+    // `exp` viene en segundos, Date.now() en milisegundos
+    if (payload.exp && payload.exp * 1000 <= Date.now()) {
+      return false;
+    }
+
+    return true;
+  }
+
+  get shouldRefresh() {
+    if (!this.token) return false;
+    const payload = decodeJWT(this.token);
+    if (!payload || !payload.exp) return false;
+
+    // Refresh si expira en menos de 24h
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+    return payload.exp * 1000 - Date.now() < twentyFourHours;
   }
 
   get isAdminSession() {
@@ -60,7 +109,7 @@ class CustomAuthStore {
   // ✅ Carga la sesión de admin (SOLO para rutas de admin)
   loadAdminFromStorage() {
     if (typeof window === 'undefined') return false;
-    
+
     const adminStored = localStorage.getItem(ADMIN_STORAGE_KEY);
     if (adminStored) {
       try {
@@ -108,7 +157,7 @@ class CustomAuthStore {
         localStorage.removeItem(USER_STORAGE_KEY);
       }
     }
-    
+
     this.token = null;
     this.model = null;
     this.role = null;
@@ -168,11 +217,11 @@ if (typeof window !== 'undefined') {
 export const loginUsuario = async (email, password) => {
   try {
     const authData = await pb.collection('users').authWithPassword(email, password);
-    
+
     if (authData.record.role === 'admin') {
       throw new Error('No puedes iniciar sesión como administrador aquí');
     }
-    
+
     pb.authStore.save(authData.token, authData.record);
     return { success: true, data: authData };
   } catch (error) {
@@ -191,7 +240,7 @@ export const loginAdmin = async (email, password) => {
   try {
     // ✅ Usar pb.admins en lugar de pb.collection('_admins')
     const authData = await pb.admins.authWithPassword(email, password);
-    
+
     // ✅ Crear modelo de admin con los datos correctos
     const adminModel = {
       id: authData.record.id,
@@ -199,7 +248,7 @@ export const loginAdmin = async (email, password) => {
       role: 'admin',
       nombre: authData.record.name || authData.record.email?.split('@')[0] || 'Administrador'
     };
-    
+
     pb.authStore.save(authData.token, adminModel);
     return { success: true, data: authData };
   } catch (error) {

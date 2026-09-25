@@ -3,14 +3,16 @@ import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import {
-  ChevronRight, ArrowRight, Check, Phone, Mail, MapPin,
-} from 'lucide-react';
+import { ArrowRight, Check, Zap, Phone } from 'lucide-react';
 import { T } from '../lib/tokens';
 import TerminalBar from '../components/TerminalBar';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import BackButton from '../components/BackButton';
+
+// ─── Fuente monospace (estilo UltraMock) ────────────────────────────────
+const MONO =
+  "ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Monaco, 'Cascadia Code', 'Roboto Mono', monospace";
 
 // ─── DATA · SIN CAMBIOS ─────────────────────────────────────────────────
 const PASOS = [
@@ -150,14 +152,14 @@ const APARTADOS = [
 ];
 
 const NIVELES = [
-  { nivel: 0, nombre: 'Básico', productos: 0, tanda: '$0' },
-  { nivel: 1, nombre: 'Bronce', productos: 3, tanda: '$1,000' },
-  { nivel: 2, nombre: 'Plata', productos: 5, tanda: '$5,000' },
-  { nivel: 3, nombre: 'Oro', productos: 10, tanda: '$10,000' },
-  { nivel: 4, nombre: 'Platino', productos: 20, tanda: '$20,000' },
+  { nivel: 0, nombre: 'Básico',   productos: 0,  tanda: '$0' },
+  { nivel: 1, nombre: 'Bronce',   productos: 3,  tanda: '$1,000' },
+  { nivel: 2, nombre: 'Plata',    productos: 5,  tanda: '$5,000' },
+  { nivel: 3, nombre: 'Oro',      productos: 10, tanda: '$10,000' },
+  { nivel: 4, nombre: 'Platino',  productos: 20, tanda: '$20,000' },
   { nivel: 5, nombre: 'Diamante', productos: 30, tanda: '$30,000' },
-  { nivel: 6, nombre: 'Zafiro', productos: 40, tanda: '$40,000' },
-  { nivel: 7, nombre: 'Rubí', productos: 50, tanda: '$50,000' },
+  { nivel: 6, nombre: 'Zafiro',   productos: 40, tanda: '$40,000' },
+  { nivel: 7, nombre: 'Rubí',     productos: 50, tanda: '$50,000' },
 ];
 
 const BENEFICIOS = [
@@ -197,7 +199,8 @@ function SectionLabel({ children, accent = false }) {
       style={{
         color: accent ? T.accent : T.inkFaint,
         fontWeight: 500,
-        fontFeatureSettings: '"ss01"',
+        fontFamily: MONO,
+        letterSpacing: '0.28em',
       }}
     >
       {children}
@@ -233,58 +236,119 @@ export default function ComoFuncionaPage() {
 
         <main className="flex-1">
 
-          {/* ═══ HERO EDITORIAL ═══ */}
-          <section className="max-w-[1280px] mx-auto px-6 md:px-14 pt-8 md:pt-14 pb-12 md:pb-20">
+          {/* ═══ HERO EDITORIAL · MONO ═══ */}
+          <section className="max-w-[1280px] mx-auto px-6 md:px-14 pt-8 md:pt-14 pb-16 md:pb-24">
             <p
-              className="text-[10px] md:text-[11px] uppercase tracking-[0.28em] mb-6 md:mb-8"
+              className="text-[10px] md:text-[11px] uppercase mb-6 md:mb-8"
               style={{
                 color: T.inkFaint,
                 fontWeight: 500,
-                fontFeatureSettings: '"ss01"',
+                fontFamily: MONO,
+                letterSpacing: '0.28em',
               }}
             >
-              Cómo funciona · MarketDesliz
+              Cómo funciona — MarketDesliz
             </p>
 
             <h1
-              className="text-[40px] md:text-[72px] leading-[0.98] tracking-[-0.035em] max-w-3xl"
+              className="text-[36px] md:text-[64px] leading-[1] max-w-3xl"
               style={{
                 color: T.ink,
-                fontWeight: 400,
-                fontFeatureSettings: '"ss01"',
+                fontWeight: 500,
+                fontFamily: MONO,
+                letterSpacing: '-0.02em',
+                textTransform: 'uppercase',
               }}
             >
-              Todo en un mismo lugar,<br />
-              <span className="font-serif italic" style={{ color: T.inkMid }}>
-                a tu alcance.
-              </span>
+              TODO EN UN
+              <br />
+              MISMO LUGAR,
+              <br />
+              <span style={{ color: T.inkMid }}>A TU ALCANCE.</span>
             </h1>
 
             <p
-              className="text-[18px] md:text-[24px] leading-[1.4] tracking-[-0.015em] mt-5 md:mt-6 max-w-2xl"
+              className="text-[16px] md:text-[19px] leading-[1.5] mt-6 md:mt-8 max-w-2xl"
               style={{ color: T.inkSoft, fontWeight: 400 }}
             >
               Desde productos a crédito hasta tandas, negocios, servicios,
               fruta, ganado y bolsa de trabajo.
             </p>
+
+            <div className="flex flex-wrap items-center gap-3 mt-8">
+              <button
+                onClick={() => goTo('/productos')}
+                className="inline-flex items-center gap-2 h-11 px-5 text-white text-[12px] uppercase"
+                style={{
+                  background: T.accent,
+                  borderRadius: '6px',
+                  fontWeight: 500,
+                  letterSpacing: '0.14em',
+                  fontFamily: MONO,
+                  border: 'none',
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                  transitionTimingFunction: T.ease,
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = T.accentDeep)
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = T.accent)
+                }
+              >
+                Explorar productos <ArrowRight size={13} strokeWidth={1.75} />
+              </button>
+
+              <button
+                onClick={() => {
+                  const el = document.getElementById('apartados');
+                  if (el)
+                    el.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start',
+                    });
+                }}
+                className="inline-flex items-center gap-2 h-11 px-5 text-[12px] uppercase transition-colors"
+                style={{
+                  background: 'transparent',
+                  border: `1px solid ${T.line}`,
+                  borderRadius: '6px',
+                  color: T.inkMid,
+                  fontWeight: 500,
+                  letterSpacing: '0.14em',
+                  fontFamily: MONO,
+                  cursor: 'pointer',
+                  WebkitTapHighlightColor: 'transparent',
+                  transitionTimingFunction: T.ease,
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = 'rgba(15,15,15,0.03)')
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.background = 'transparent')
+                }
+              >
+                <Zap size={13} strokeWidth={1.75} /> Ver apartados
+              </button>
+            </div>
           </section>
 
-          {/* ═══ 3 PASOS · COMPRA A CRÉDITO ═══ */}
+          {/* ═══ 3 PASOS ═══ */}
           <section className="max-w-[1280px] mx-auto px-6 md:px-14 pb-16 md:pb-24">
             <SectionLabel>Compra a crédito</SectionLabel>
 
             <h2
-              className="text-[28px] md:text-[40px] leading-[1.05] tracking-[-0.03em] max-w-2xl mb-10 md:mb-14"
+              className="text-[24px] md:text-[34px] leading-[1.05] max-w-2xl mb-10 md:mb-14"
               style={{
                 color: T.ink,
-                fontWeight: 400,
-                fontFeatureSettings: '"ss01"',
+                fontWeight: 500,
+                fontFamily: MONO,
+                letterSpacing: '-0.015em',
+                textTransform: 'uppercase',
               }}
             >
-              Comprar es así{' '}
-              <span className="font-serif italic" style={{ color: T.inkMid }}>
-                de fácil.
-              </span>
+              COMPRAR ES ASÍ DE FÁCIL.
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
@@ -295,24 +359,32 @@ export default function ComoFuncionaPage() {
                   style={{ borderTop: `1px solid ${T.line}` }}
                 >
                   <span
-                    className="text-[13px] tabular-nums tracking-[0.14em] mb-4"
+                    className="text-[12px] mb-5"
                     style={{
                       color: T.accent,
                       fontWeight: 500,
+                      fontFamily: MONO,
+                      letterSpacing: '0.22em',
                       fontFeatureSettings: '"tnum"',
                     }}
                   >
                     {paso.numero}
                   </span>
                   <h3
-                    className="text-[18px] md:text-[20px] leading-snug tracking-[-0.01em] mb-3"
-                    style={{ color: T.ink, fontWeight: 500 }}
+                    className="text-[15px] md:text-[16px] leading-snug mb-3"
+                    style={{
+                      color: T.ink,
+                      fontWeight: 500,
+                      fontFamily: MONO,
+                      letterSpacing: '0.02em',
+                      textTransform: 'uppercase',
+                    }}
                   >
                     {paso.titulo}
                   </h3>
                   <p
                     className="text-[14px] leading-[1.65]"
-                    style={{ color: T.inkSoft, fontWeight: 450 }}
+                    style={{ color: T.inkSoft, fontWeight: 400 }}
                   >
                     {paso.descripcion}
                   </p>
@@ -329,17 +401,16 @@ export default function ComoFuncionaPage() {
             <SectionLabel>Apartados del sistema</SectionLabel>
 
             <h2
-              className="text-[28px] md:text-[40px] leading-[1.05] tracking-[-0.03em] max-w-2xl mb-10 md:mb-14"
+              className="text-[24px] md:text-[34px] leading-[1.05] max-w-2xl mb-10 md:mb-14"
               style={{
                 color: T.ink,
-                fontWeight: 400,
-                fontFeatureSettings: '"ss01"',
+                fontWeight: 500,
+                fontFamily: MONO,
+                letterSpacing: '-0.015em',
+                textTransform: 'uppercase',
               }}
             >
-              Todo lo que puedes{' '}
-              <span className="font-serif italic" style={{ color: T.inkMid }}>
-                hacer.
-              </span>
+              TODO LO QUE PUEDES HACER.
             </h2>
 
             <div className="flex flex-col">
@@ -355,41 +426,50 @@ export default function ComoFuncionaPage() {
                         : 'none',
                   }}
                 >
-                  {/* Izquierda: número + título + subtítulo */}
+                  {/* Izquierda */}
                   <div className="md:col-span-4">
                     <span
-                      className="text-[11px] tabular-nums tracking-[0.22em] block mb-4"
+                      className="text-[11px] block mb-4"
                       style={{
                         color: T.accent,
                         fontWeight: 500,
+                        fontFamily: MONO,
+                        letterSpacing: '0.22em',
                         fontFeatureSettings: '"tnum"',
                       }}
                     >
                       {apartado.numero}
                     </span>
                     <h3
-                      className="text-[22px] md:text-[26px] leading-tight tracking-[-0.02em] mb-2"
+                      className="text-[19px] md:text-[22px] leading-tight mb-2"
                       style={{
                         color: T.ink,
-                        fontWeight: 400,
-                        fontFeatureSettings: '"ss01"',
+                        fontWeight: 500,
+                        fontFamily: MONO,
+                        letterSpacing: '-0.005em',
+                        textTransform: 'uppercase',
                       }}
                     >
                       {apartado.titulo}
                     </h3>
                     <p
-                      className="text-[12px] uppercase tracking-[0.18em]"
-                      style={{ color: T.inkFaint, fontWeight: 500 }}
+                      className="text-[10.5px] uppercase"
+                      style={{
+                        color: T.inkFaint,
+                        fontWeight: 500,
+                        fontFamily: MONO,
+                        letterSpacing: '0.18em',
+                      }}
                     >
                       {apartado.subtitulo}
                     </p>
                   </div>
 
-                  {/* Derecha: descripción + pasos + CTA */}
+                  {/* Derecha */}
                   <div className="md:col-span-8">
                     <p
                       className="text-[14.5px] md:text-[15.5px] leading-[1.65] mb-6 max-w-2xl"
-                      style={{ color: T.inkSoft, fontWeight: 450 }}
+                      style={{ color: T.inkSoft, fontWeight: 400 }}
                     >
                       {apartado.descripcion}
                     </p>
@@ -399,15 +479,17 @@ export default function ComoFuncionaPage() {
                         <li
                           key={j}
                           className="flex items-start gap-3 text-[13.5px] leading-[1.6]"
-                          style={{ color: T.inkMid, fontWeight: 450 }}
+                          style={{ color: T.inkMid, fontWeight: 400 }}
                         >
                           <span
-                            className="tabular-nums shrink-0 pt-0.5"
+                            className="shrink-0 pt-0.5"
                             style={{
                               color: T.inkFaint,
                               fontWeight: 500,
-                              fontSize: '12px',
-                              minWidth: '18px',
+                              fontSize: '11.5px',
+                              minWidth: '20px',
+                              fontFamily: MONO,
+                              letterSpacing: '0.1em',
                               fontFeatureSettings: '"tnum"',
                             }}
                           >
@@ -420,20 +502,24 @@ export default function ComoFuncionaPage() {
 
                     <Link
                       href={apartado.ruta}
-                      className="inline-flex items-center gap-1.5 text-[12.5px] uppercase tracking-[0.18em] transition-colors"
+                      className="inline-flex items-center gap-2 text-[11px] uppercase transition-colors"
                       style={{
                         color: T.inkSoft,
                         fontWeight: 500,
+                        fontFamily: MONO,
+                        letterSpacing: '0.18em',
                         textDecoration: 'none',
                         WebkitTapHighlightColor: 'transparent',
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = T.accent)}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.color = T.accent)
+                      }
                       onMouseLeave={(e) =>
                         (e.currentTarget.style.color = T.inkSoft)
                       }
                     >
                       {apartado.cta}
-                      <ArrowRight size={13} strokeWidth={1.75} />
+                      <ArrowRight size={12} strokeWidth={1.75} />
                     </Link>
                   </div>
                 </div>
@@ -441,29 +527,28 @@ export default function ComoFuncionaPage() {
             </div>
           </section>
 
-          {/* ═══ EJEMPLO DE CRÉDITO ═══ */}
+          {/* ═══ EJEMPLO CRÉDITO ═══ */}
           <section className="max-w-[1280px] mx-auto px-6 md:px-14 pb-16 md:pb-24">
             <SectionLabel>Ejemplo real</SectionLabel>
 
             <h2
-              className="text-[28px] md:text-[40px] leading-[1.05] tracking-[-0.03em] max-w-2xl mb-10 md:mb-14"
+              className="text-[24px] md:text-[34px] leading-[1.05] max-w-2xl mb-10 md:mb-14"
               style={{
                 color: T.ink,
-                fontWeight: 400,
-                fontFeatureSettings: '"ss01"',
+                fontWeight: 500,
+                fontFamily: MONO,
+                letterSpacing: '-0.015em',
+                textTransform: 'uppercase',
               }}
             >
-              ¿Cómo se calculan{' '}
-              <span className="font-serif italic" style={{ color: T.inkMid }}>
-                tus pagos?
-              </span>
+              ¿CÓMO SE CALCULAN TUS PAGOS?
             </h2>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16">
               <div>
                 <p
                   className="text-[14.5px] md:text-[15.5px] leading-[1.7] mb-8 max-w-xl"
-                  style={{ color: T.inkSoft, fontWeight: 450 }}
+                  style={{ color: T.inkSoft, fontWeight: 400 }}
                 >
                   El enganche es un pago inicial (15%, 20% o 25% según el
                   producto). El saldo restante lo divides en pagos semanales
@@ -497,7 +582,7 @@ export default function ComoFuncionaPage() {
                       />
                       <p
                         className="text-[13.5px] leading-[1.65]"
-                        style={{ color: T.inkMid, fontWeight: 450 }}
+                        style={{ color: T.inkMid, fontWeight: 400 }}
                       >
                         <strong style={{ color: T.ink, fontWeight: 500 }}>
                           {item.strong}
@@ -509,11 +594,15 @@ export default function ComoFuncionaPage() {
                 </ul>
               </div>
 
-              {/* Tabla limpia de valores */}
               <div>
                 <p
-                  className="text-[10px] uppercase tracking-[0.22em] mb-5"
-                  style={{ color: T.inkFaint, fontWeight: 500 }}
+                  className="text-[10px] uppercase mb-5"
+                  style={{
+                    color: T.inkFaint,
+                    fontWeight: 500,
+                    fontFamily: MONO,
+                    letterSpacing: '0.22em',
+                  }}
                 >
                   Ejemplo de compra
                 </p>
@@ -531,16 +620,23 @@ export default function ComoFuncionaPage() {
                       style={{ borderTop: `1px solid ${T.line}` }}
                     >
                       <span
-                        className="text-[13px]"
-                        style={{ color: T.inkSoft, fontWeight: 450 }}
+                        className="text-[10.5px] uppercase"
+                        style={{
+                          color: T.inkFaint,
+                          fontWeight: 500,
+                          fontFamily: MONO,
+                          letterSpacing: '0.16em',
+                        }}
                       >
                         {row.label}
                       </span>
                       <span
-                        className="text-[15px] tabular-nums tracking-[-0.01em]"
+                        className="text-[15px]"
                         style={{
                           color: T.ink,
                           fontWeight: 500,
+                          fontFamily: MONO,
+                          letterSpacing: '-0.005em',
                           fontFeatureSettings: '"tnum"',
                         }}
                       >
@@ -557,16 +653,23 @@ export default function ComoFuncionaPage() {
                     }}
                   >
                     <span
-                      className="text-[13px]"
-                      style={{ color: T.ink, fontWeight: 500 }}
+                      className="text-[10.5px] uppercase"
+                      style={{
+                        color: T.ink,
+                        fontWeight: 500,
+                        fontFamily: MONO,
+                        letterSpacing: '0.18em',
+                      }}
                     >
                       Total de semanas
                     </span>
                     <span
-                      className="text-[40px] md:text-[52px] tabular-nums tracking-[-0.03em] leading-none"
+                      className="text-[40px] md:text-[52px] leading-none"
                       style={{
                         color: T.accent,
-                        fontWeight: 400,
+                        fontWeight: 500,
+                        fontFamily: MONO,
+                        letterSpacing: '-0.03em',
                         fontFeatureSettings: '"tnum"',
                       }}
                     >
@@ -577,7 +680,7 @@ export default function ComoFuncionaPage() {
 
                 <p
                   className="text-[12px] leading-[1.6] mt-5 max-w-md"
-                  style={{ color: T.inkFaint, fontWeight: 450 }}
+                  style={{ color: T.inkFaint, fontWeight: 400 }}
                 >
                   El último pago puede ser de menor cantidad ($25) para ajustar
                   el total. Sin cargos ocultos, sin intereses.
@@ -591,22 +694,21 @@ export default function ComoFuncionaPage() {
             <SectionLabel>Fidelización</SectionLabel>
 
             <h2
-              className="text-[28px] md:text-[40px] leading-[1.05] tracking-[-0.03em] max-w-2xl mb-4"
+              className="text-[24px] md:text-[34px] leading-[1.05] max-w-2xl mb-4"
               style={{
                 color: T.ink,
-                fontWeight: 400,
-                fontFeatureSettings: '"ss01"',
+                fontWeight: 500,
+                fontFamily: MONO,
+                letterSpacing: '-0.015em',
+                textTransform: 'uppercase',
               }}
             >
-              8 niveles{' '}
-              <span className="font-serif italic" style={{ color: T.inkMid }}>
-                de beneficios.
-              </span>
+              8 NIVELES DE BENEFICIOS.
             </h2>
 
             <p
               className="text-[14px] md:text-[15px] leading-[1.6] max-w-xl mb-10 md:mb-14"
-              style={{ color: T.inkSoft, fontWeight: 450 }}
+              style={{ color: T.inkSoft, fontWeight: 400 }}
             >
               Mientras más productos completas, más subes de nivel y mejores
               tandas desbloqueas.
@@ -616,14 +718,25 @@ export default function ComoFuncionaPage() {
             <div className="hidden md:block">
               <table className="w-full">
                 <thead>
-                  <tr style={{ borderTop: `1px solid ${T.line}`, borderBottom: `1px solid ${T.line}` }}>
+                  <tr
+                    style={{
+                      borderTop: `1px solid ${T.line}`,
+                      borderBottom: `1px solid ${T.line}`,
+                    }}
+                  >
                     {['Nivel', 'Nombre', 'Productos pagados', 'Tanda disponible'].map(
                       (h, i) => (
                         <th
                           key={h}
-                          className={`py-4 text-[10px] uppercase tracking-[0.22em] ${i === 3 ? 'text-right' : 'text-left'
-                            }`}
-                          style={{ color: T.inkFaint, fontWeight: 500 }}
+                          className={`py-4 text-[10px] uppercase ${
+                            i === 3 ? 'text-right' : 'text-left'
+                          }`}
+                          style={{
+                            color: T.inkFaint,
+                            fontWeight: 500,
+                            fontFamily: MONO,
+                            letterSpacing: '0.22em',
+                          }}
                         >
                           {h}
                         </th>
@@ -633,43 +746,48 @@ export default function ComoFuncionaPage() {
                 </thead>
                 <tbody>
                   {NIVELES.map((n, i) => (
-                    <tr
-                      key={i}
-                      style={{
-                        borderBottom: `1px solid ${T.line}`,
-                      }}
-                    >
+                    <tr key={i} style={{ borderBottom: `1px solid ${T.line}` }}>
                       <td
-                        className="py-4 text-[13px] tabular-nums"
+                        className="py-4 text-[13px]"
                         style={{
                           color: T.inkSoft,
-                          fontWeight: 450,
+                          fontWeight: 500,
+                          fontFamily: MONO,
+                          letterSpacing: '0.1em',
                           fontFeatureSettings: '"tnum"',
                         }}
                       >
                         {String(n.nivel).padStart(2, '0')}
                       </td>
                       <td
-                        className="py-4 text-[14px]"
-                        style={{ color: T.ink, fontWeight: 500 }}
+                        className="py-4 text-[13.5px] uppercase"
+                        style={{
+                          color: T.ink,
+                          fontWeight: 500,
+                          fontFamily: MONO,
+                          letterSpacing: '0.08em',
+                        }}
                       >
                         {n.nombre}
                       </td>
                       <td
-                        className="py-4 text-[13.5px] tabular-nums"
+                        className="py-4 text-[13px]"
                         style={{
                           color: T.inkSoft,
-                          fontWeight: 450,
+                          fontWeight: 400,
+                          fontFamily: MONO,
                           fontFeatureSettings: '"tnum"',
                         }}
                       >
                         {n.productos}
                       </td>
                       <td
-                        className="py-4 text-right text-[14px] tabular-nums tracking-[-0.01em]"
+                        className="py-4 text-right text-[14px]"
                         style={{
                           color: T.accent,
                           fontWeight: 500,
+                          fontFamily: MONO,
+                          letterSpacing: '-0.005em',
                           fontFeatureSettings: '"tnum"',
                         }}
                       >
@@ -681,7 +799,7 @@ export default function ComoFuncionaPage() {
               </table>
             </div>
 
-            {/* Mobile: lista vertical */}
+            {/* Mobile */}
             <div className="md:hidden flex flex-col">
               {NIVELES.map((n, i) => (
                 <div
@@ -691,10 +809,12 @@ export default function ComoFuncionaPage() {
                 >
                   <div className="flex items-baseline gap-4">
                     <span
-                      className="text-[11px] tabular-nums"
+                      className="text-[11px]"
                       style={{
                         color: T.inkFaint,
                         fontWeight: 500,
+                        fontFamily: MONO,
+                        letterSpacing: '0.1em',
                         fontFeatureSettings: '"tnum"',
                       }}
                     >
@@ -702,16 +822,23 @@ export default function ComoFuncionaPage() {
                     </span>
                     <div>
                       <p
-                        className="text-[14px]"
-                        style={{ color: T.ink, fontWeight: 500 }}
+                        className="text-[13.5px] uppercase"
+                        style={{
+                          color: T.ink,
+                          fontWeight: 500,
+                          fontFamily: MONO,
+                          letterSpacing: '0.08em',
+                        }}
                       >
                         {n.nombre}
                       </p>
                       <p
-                        className="text-[11px] mt-0.5 tabular-nums"
+                        className="text-[10.5px] uppercase mt-1"
                         style={{
                           color: T.inkFaint,
-                          fontWeight: 450,
+                          fontWeight: 500,
+                          fontFamily: MONO,
+                          letterSpacing: '0.14em',
                           fontFeatureSettings: '"tnum"',
                         }}
                       >
@@ -720,10 +847,11 @@ export default function ComoFuncionaPage() {
                     </div>
                   </div>
                   <span
-                    className="text-[13px] tabular-nums"
+                    className="text-[13px]"
                     style={{
                       color: T.accent,
                       fontWeight: 500,
+                      fontFamily: MONO,
                       fontFeatureSettings: '"tnum"',
                     }}
                   >
@@ -740,17 +868,16 @@ export default function ComoFuncionaPage() {
             <SectionLabel>Beneficios</SectionLabel>
 
             <h2
-              className="text-[28px] md:text-[40px] leading-[1.05] tracking-[-0.03em] max-w-2xl mb-10 md:mb-14"
+              className="text-[24px] md:text-[34px] leading-[1.05] max-w-2xl mb-10 md:mb-14"
               style={{
                 color: T.ink,
-                fontWeight: 400,
-                fontFeatureSettings: '"ss01"',
+                fontWeight: 500,
+                fontFamily: MONO,
+                letterSpacing: '-0.015em',
+                textTransform: 'uppercase',
               }}
             >
-              Por qué elegir{' '}
-              <span className="font-serif italic" style={{ color: T.inkMid }}>
-                MarketDesliz.
-              </span>
+              POR QUÉ ELEGIR MARKETDESLIZ.
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-10">
@@ -761,14 +888,19 @@ export default function ComoFuncionaPage() {
                   style={{ borderTop: `1px solid ${T.line}` }}
                 >
                   <h3
-                    className="text-[16px] md:text-[17px] mb-2.5 tracking-[-0.01em]"
-                    style={{ color: T.ink, fontWeight: 500 }}
+                    className="text-[14px] md:text-[15px] mb-3 uppercase"
+                    style={{
+                      color: T.ink,
+                      fontWeight: 500,
+                      fontFamily: MONO,
+                      letterSpacing: '0.08em',
+                    }}
                   >
                     {ben.titulo}
                   </h3>
                   <p
                     className="text-[13.5px] leading-[1.6]"
-                    style={{ color: T.inkSoft, fontWeight: 450 }}
+                    style={{ color: T.inkSoft, fontWeight: 400 }}
                   >
                     {ben.descripcion}
                   </p>
@@ -777,29 +909,28 @@ export default function ComoFuncionaPage() {
             </div>
           </section>
 
-          {/* ═══ CONTACTO + CTA FINAL ═══ */}
+          {/* ═══ CTA FINAL ═══ */}
           <section className="max-w-[1280px] mx-auto px-6 md:px-14 pb-16 md:pb-24">
             <SectionLabel>Empieza hoy</SectionLabel>
 
             <h2
-              className="text-[28px] md:text-[40px] leading-[1.05] tracking-[-0.03em] max-w-2xl mb-10 md:mb-14"
+              className="text-[24px] md:text-[34px] leading-[1.05] max-w-2xl mb-10 md:mb-14"
               style={{
                 color: T.ink,
-                fontWeight: 400,
-                fontFeatureSettings: '"ss01"',
+                fontWeight: 500,
+                fontFamily: MONO,
+                letterSpacing: '-0.015em',
+                textTransform: 'uppercase',
               }}
             >
-              ¿Listo para{' '}
-              <span className="font-serif italic" style={{ color: T.inkMid }}>
-                empezar?
-              </span>
+              ¿LISTO PARA EMPEZAR?
             </h2>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-start">
               <div>
                 <p
                   className="text-[15px] md:text-[16px] leading-[1.65] mb-8 max-w-md"
-                  style={{ color: T.inkSoft, fontWeight: 450 }}
+                  style={{ color: T.inkSoft, fontWeight: 400 }}
                 >
                   Explora nuestros productos, únete a una tanda o encuentra
                   oportunidades cerca de ti. Todo desde una sola plataforma.
@@ -808,12 +939,13 @@ export default function ComoFuncionaPage() {
                 <div className="flex flex-wrap items-center gap-3">
                   <Link
                     href="/productos"
-                    className="inline-flex items-center gap-2 h-11 px-5 text-white text-[13px]"
+                    className="inline-flex items-center gap-2 h-11 px-5 text-white text-[12px] uppercase"
                     style={{
                       background: T.accent,
                       borderRadius: '6px',
                       fontWeight: 500,
-                      letterSpacing: '0.01em',
+                      letterSpacing: '0.14em',
+                      fontFamily: MONO,
                       textDecoration: 'none',
                       WebkitTapHighlightColor: 'transparent',
                       transitionTimingFunction: T.ease,
@@ -825,20 +957,23 @@ export default function ComoFuncionaPage() {
                       (e.currentTarget.style.background = T.accent)
                     }
                   >
-                    Explorar productos <ArrowRight size={14} strokeWidth={1.75} />
+                    Explorar productos
+                    <ArrowRight size={13} strokeWidth={1.75} />
                   </Link>
 
                   <a
                     href="https://wa.me/522821414939"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 h-11 px-5 text-[13px] transition-colors"
+                    className="inline-flex items-center gap-2 h-11 px-5 text-[12px] uppercase transition-colors"
                     style={{
                       background: 'transparent',
                       border: `1px solid ${T.line}`,
                       borderRadius: '6px',
                       color: T.inkMid,
                       fontWeight: 500,
+                      letterSpacing: '0.14em',
+                      fontFamily: MONO,
                       textDecoration: 'none',
                       WebkitTapHighlightColor: 'transparent',
                       transitionTimingFunction: T.ease,
@@ -850,12 +985,11 @@ export default function ComoFuncionaPage() {
                       (e.currentTarget.style.background = 'transparent')
                     }
                   >
-                    <Phone size={14} strokeWidth={1.75} /> WhatsApp
+                    <Phone size={13} strokeWidth={1.75} /> WhatsApp
                   </a>
                 </div>
               </div>
 
-              {/* Contacto como filas hairline */}
               <div className="flex flex-col">
                 {[
                   { label: 'Teléfono', valor: '28 2141 4939' },
@@ -868,16 +1002,23 @@ export default function ComoFuncionaPage() {
                     style={{ borderTop: `1px solid ${T.line}` }}
                   >
                     <span
-                      className="text-[10px] uppercase tracking-[0.22em]"
-                      style={{ color: T.inkFaint, fontWeight: 500 }}
+                      className="text-[10px] uppercase"
+                      style={{
+                        color: T.inkFaint,
+                        fontWeight: 500,
+                        fontFamily: MONO,
+                        letterSpacing: '0.22em',
+                      }}
                     >
                       {info.label}
                     </span>
                     <span
-                      className="text-[13.5px] tabular-nums"
+                      className="text-[13px]"
                       style={{
                         color: T.ink,
-                        fontWeight: 450,
+                        fontWeight: 500,
+                        fontFamily: MONO,
+                        letterSpacing: '0.02em',
                         fontFeatureSettings: '"tnum"',
                       }}
                     >
@@ -908,11 +1049,6 @@ export default function ComoFuncionaPage() {
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
           font-feature-settings: 'kern' 1, 'liga' 1, 'ss01' 1, 'calt' 1;
-        }
-        .font-serif {
-          font-family:
-            ui-serif, 'Iowan Old Style', 'Apple Garamond', 'Palatino',
-            Georgia, 'Times New Roman', serif;
         }
         ::selection {
           background: rgba(79, 46, 232, 0.12);

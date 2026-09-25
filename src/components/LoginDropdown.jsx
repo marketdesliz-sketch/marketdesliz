@@ -357,7 +357,7 @@ export default function LoginDropdown({ onClose, onSuccess }) {
         <div className="mb-2">
           <GoogleLogin
             onSuccess={handleGoogleSuccess}
-            onError={() => console.log('Google Login Failed')}
+            onError={(error) => console.error('Google Login error completo:', error)}
             theme="outline"
             size="large"
             text="continue_with"
