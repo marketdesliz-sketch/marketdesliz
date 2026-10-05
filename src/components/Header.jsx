@@ -67,7 +67,7 @@ export default function Header({
   const links = navLinks || [
     { href: '/como-funciona', label: 'Cómo funciona' },
     { href: '/acerca-de-nosotros', label: 'Nosotros' },
-    { href: '/trabaja-con-nosotros', label: 'Trabaja con nosotros' },
+    { href: '/vender-con-marketdesliz/pasos/01', label: 'Trabaja con nosotros' },
     { href: '/eshe-parallel', label: 'Éshé Parallel' },
   ];
 

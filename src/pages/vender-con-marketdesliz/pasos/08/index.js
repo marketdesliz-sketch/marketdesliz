@@ -58,16 +58,19 @@ export default function Paso08Activacion() {
     try {
       const numero = await generarGafete();
 
+      // Generar código y qrToken únicos
+      const codigoVendedor = 'MDZ-V-' + Date.now().toString(36).toUpperCase();
+      const qrToken = 'QR-' + codigoVendedor + '-' + Math.random().toString(36).substring(2, 8);
+
       // 1) Crear registro en vendedores
       const nuevoVendedor = await pb.collection('vendedores').create({
         userId: user.id,
-        nombre: sol.nombre || user.nombre || '',
-        telefono: sol.telefono || '',
-        email: user.email || '',
+        codigo: codigoVendedor,
+        qrToken: qrToken,
         ciudad: sol.ciudad || '',
         gafeteNumero: numero,
         zona: 'Por asignar',
-        comision: 10,
+        comisionPorcentaje: 10,
         diasDisponibles: sol.diasDisponibles || [],
         horaInicio: sol.horaInicio || '',
         horaFin: sol.horaFin || '',
@@ -439,9 +442,8 @@ export default function Paso08Activacion() {
                     {dias.slice(0, 5).map((key, i) => (
                       <div key={i} className="flex flex-col items-center gap-2">
                         <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
-                            i === 0 ? 'bg-primary text-white' : 'bg-secondary text-primary'
-                          }`}
+                          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${i === 0 ? 'bg-primary text-white' : 'bg-secondary text-primary'
+                            }`}
                         >
                           {key.charAt(0)}
                         </div>
@@ -555,18 +557,16 @@ export default function Paso08Activacion() {
                     <div key={i} className="flex items-start">
                       <div className="flex flex-col items-center gap-3 text-center w-[12%] min-w-[100px]">
                         <div
-                          className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
-                            i === 6
+                          className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${i === 6
                               ? 'bg-primary text-white shadow-lg'
                               : 'bg-white shadow-sm border border-gray-100 text-gray-400'
-                          }`}
+                            }`}
                         >
                           <Icon size={24} className={step.rotate ? 'rotate-180' : ''} />
                         </div>
                         <p
-                          className={`text-[10px] font-bold leading-tight px-1 ${
-                            i === 6 ? 'text-primary' : 'text-gray-500'
-                          }`}
+                          className={`text-[10px] font-bold leading-tight px-1 ${i === 6 ? 'text-primary' : 'text-gray-500'
+                            }`}
                         >
                           {step.label}
                         </p>
@@ -669,11 +669,10 @@ export default function Paso08Activacion() {
                   <button
                     onClick={irAlDashboard}
                     disabled={activando || !vendedor}
-                    className={`w-full font-black py-6 text-base rounded-2xl flex items-center justify-center gap-3 transition-all ${
-                      activando || !vendedor
+                    className={`w-full font-black py-6 text-base rounded-2xl flex items-center justify-center gap-3 transition-all ${activando || !vendedor
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                         : 'bg-primary hover:bg-primary/90 text-white shadow-xl shadow-primary/20 active:scale-[0.98]'
-                    }`}
+                      }`}
                   >
                     {activando ? (
                       <>
@@ -767,20 +766,18 @@ function ProgressSteps({ stepActual = 8 }) {
             <div key={step.id} className="flex items-center gap-2 flex-1">
               <div className="flex flex-col items-center gap-2 flex-1">
                 <div
-                  className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${
-                    isActive
+                  className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${isActive
                       ? 'bg-primary text-white shadow-md shadow-primary/20 scale-110'
                       : isCompleted
-                      ? 'bg-green-100 text-green-600'
-                      : 'bg-gray-100 text-gray-400'
-                  }`}
+                        ? 'bg-green-100 text-green-600'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}
                 >
                   {isCompleted ? <Check size={18} className="stroke-[3px]" /> : <Icon size={18} />}
                 </div>
                 <div className="text-center">
-                  <p className={`text-[10px] font-bold uppercase tracking-wider ${
-                    isActive ? 'text-primary' : isCompleted ? 'text-green-600' : 'text-gray-400'
-                  }`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? 'text-primary' : isCompleted ? 'text-green-600' : 'text-gray-400'
+                    }`}>
                     Paso {step.id}
                   </p>
                   <p className={`text-[10px] font-semibold ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>

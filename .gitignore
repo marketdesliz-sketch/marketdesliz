@@ -6,3 +6,7 @@ pb_data/
 .vercel/ 
 dist/ 
 .DS_Store 
+# Llaves y secretos
+keys/
+*.key
+*.pem

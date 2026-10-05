@@ -1,30 +1,25 @@
-
-
 ---
 
 # 📋 MARKETDESLIZ - ESTRUCTURA FINAL DE COLECCIONES 
 
 ## 🔴 ACLARACIONES IMPORTANTES ANTES DE EMPEZAR
 
-### 1. El Admin es el Cobrador
+### 1. El Admin es el Cobrador y autorizados
 - El **vendedor** solo recibe el enganche inicial (usando su QR)
 - El **admin** entrega la tarjeta física en la primera visita (segundo pago)
 - El **admin** cobra todos los pagos semanales/quincenales posteriores
 - Por eso la colección `cobradores` se mantiene para el admin y su equipo
 
-
 ### 2. Frecuencia de Pago: Semanal y Quincenal
-
 
 ### 3. Respeto de Nombres Existentes
 
 
 ---
-
 ## 📁 COLECCIONES COMPLETAS 
 
 
-1. 📁 COLLECTION: - Users
+1. 📁 Users
 // ============================================
 
   email: { type: "email", unique: true, required: false },  // opcional
@@ -69,7 +64,7 @@ DeleteRule: @request.auth.role = "admin"
 | autor       | text     | -                          |
 | vistas      | number   | default: 0                 |
 | activo      | boolean  | default: true              |
-| excerpt     | text     | -                          |
+| resumen     | text     | -                          |
 | created     | date     | auto                       |
 | updated     | date     | auto                       |
 
@@ -79,51 +74,21 @@ ViewRule:   1=1
 CreateRule: @request.auth.role = "admin"
 UpdateRule: @request.auth.role = "admin"
 DeleteRule: @request.auth.role = "admin"
+
 ```
 
 ---
 
-3. bolsa_trabajo - Bolsa de Trabajo
-Campo	Tipo	Descripción
+### 3. `carrusel`
 
-userId	relation(users)	requerido
-tipo	select	ofrezco_trabajo, busco_trabajo
-titulo	text	requerido
-descripcion	text	requerido
-categoria	select: ventas, atencion_cliente, administracion, tecnologia, oficios, construccion, limpieza, cocina, chofer, repartidor, informal, otro  
-salario	text	-
-horario	text	-
-ubicacion	text	-
-telefono	text	requerido
-email	email	-
-imagen	file	-
-estado	select	pendiente, aprobado, rechazado
-motivoRechazo	text	-
-revisadoPor	relation(users)	-
-fechaRevision	date	-
-activo	bool	default: true
-
-
-// API Rules
-ListRule:   @request.auth.id != ""  // Solo usuarios autenticados
-ViewRule:   @request.auth.id != ""  // Solo usuarios autenticados
-CreateRule: @request.auth.id != ""  // Usuarios autenticados pueden crear
-UpdateRule: @request.auth.role = "admin"  // Solo admin puede editar/aprobar
-DeleteRule: @request.auth.role = "admin"  // Solo admin puede eliminar
-
-
----
-
-### 4. `carrusel`
-
-// 📁 COLLECTION: carrusel
 | Campo        | Tipo     | Configuración              |
 |--------------|----------|----------------------------|
 | imagen       | file     | requerido                  |
 | orden        | number   | default: 0                 |
 | activo       | boolean  | default: true              |
 | botonEnlace  | text     | -                          |
-| botonPosicion| json     | -                          |
+| botonPosicion| json     | -                          
+
 
 // API Rules
 ListRule:   1=1
@@ -135,10 +100,8 @@ DeleteRule: @request.auth.role = "admin"
 
 ---
 
-### 5. `categorias`
+### 4. `categorias`
 
-
-// 📁 COLLECTION: categorias
 | Campo   | Tipo    | Configuración              |
 |---------|---------|----------------------------|
 | nombre  | text    | requerido                  |
@@ -146,11 +109,11 @@ DeleteRule: @request.auth.role = "admin"
 | icono   | text    | -                          |
 | imagen  | file    | -                          |
 | orden   | number  | default: 0                 |
-| descripción |text  |			|
-|activo    |  bool   |			|
+| descripcion |text  |			|
+|activo   |  bool   |			|
 |productCount | number |		|
 |categoriaPadreId |    relation	| con categorías
-
+| vertical | select  | products , eshe_parallel, frutas, ganado, servicios |
 
 // API Rules
 ListRule:   1=1
@@ -162,7 +125,7 @@ DeleteRule: @request.auth.role = "admin"
 
 ---
 
-### 6.categorias_negocios
+### 5.categorias_negocios
 
 {
   "nombre": "text, required",
@@ -187,10 +150,8 @@ DeleteRule: @request.auth.role = "admin"
 
 
 ---
-### 7. `clients`
+### 6. `clients`
 
-
-// 📁 COLLECTION: clients
 | Campo                  | Tipo     | Configuración              |
 |------------------------|----------|----------------------------|
 | userId                 | relation | users, único               |
@@ -227,7 +188,6 @@ DeleteRule: @request.auth.role = "admin"
 | fechaUltimoPago        | date     | nullable                   |
 | fechaUltimaCompra      | date     | nullable                   |
 | totalGastado           | number   | default: 0                 |
-|   nombre		 |  text    | requerido: false (opcional)|
 |tarjetaEstado	         |select    |valores: activa, perdida, bloqueada, suspendida default: activa requerido: false (opcional)|
 | direccionLocalidad       | text     | -                          |
 | direccionSector            | text     | - 
@@ -242,17 +202,17 @@ DeleteRule: @request.auth.role = "admin"
 
 ---
 
-### 8. `cobradores`
+### 7. `cobradores`
 
-
-// 📁 COLLECTION: cobradores
 | Campo        | Tipo     | Configuración              |
 |--------------|----------|----------------------------|
 | userId       | relation | users, único               |
 | zonaAsignada | text     | -                          |
-| ruta         | json     | {lunes: [ids], martes: [ids]} |
+| ruta         | json     |{lunes: [ids], martes: [ids]} |
 | activo       | boolean  | default: true              |
-| created      | date     | auto                       |
+| created     | date     | auto                       |
+| updated     | date     | auto                       |
+
 
 // API Rules
 ListRule:   @request.auth.role = "admin"
@@ -264,7 +224,7 @@ DeleteRule: @request.auth.role = "admin"
 
 ---
 
-### 9. `cobros`
+### 8. `cobros`
 
 
 | Campo            | Tipo     | Configuración              |
@@ -281,17 +241,17 @@ DeleteRule: @request.auth.role = "admin"
 | fecha            | date     | -                          |
 | fechaProgramada  | date     | -                          |
 | fechaAsignacion  | date     | -                          |
-| fechaCompletado  | date     | -                          |
+| fechaCompletada  | date     | -                          |
 | hora             | text     | -                          |
 | horaEstimada     | text     | -                          |
 | direccion        | text     | -                          |
 | detalles         | text     | -                          |
-| notas            | text     | -                          
+| notas            | text     | -   
+|                      
 | asignadoA        | relation | users                      |
 | montoCobrado     | number   | -                          |
-| ubicacionCliente | json     | -                          |
-| created          | date     | auto                       |
-| updated          | date     | auto                       |
+| ubicacionCliente | json     | -                          
+
 
 // API Rules
 ListRule:   @request.auth.role = "admin" || asignadoA = @request.auth.id
@@ -301,40 +261,16 @@ UpdateRule: @request.auth.role = "admin" || asignadoA = @request.auth.id
 DeleteRule: @request.auth.role = "admin"
 ```
 
----
-
-### 10. `comentarios_negocios`
-
-
-// 📁 COLLECTION: comentarios_negocios
-| Campo         | Tipo     | Configuración              |
-|---------------|----------|----------------------------|
-| negocioId     | relation | negocios, requerido        |
-| usuarioId     | relation | users, requerido           |
-| usuarioNombre | text     | -                          |
-| calificacion  | number   | 1-5                        |
-| comentario    | text     | -                          |
-| created       | date     | auto                       |
-
-// API Rules
-ListRule:   1 = 1
-ViewRule:   1 = 1
-CreateRule: @request.auth.id != ""
-UpdateRule: usuarioId = @request.auth.id
-DeleteRule: @request.auth.role = "admin" || usuarioId = @request.auth.id
-```
 
 ---
 
-### 11. `comprobantes`
+### 9. `comprobantes`
 
-// 📁 COLLECTION: comprobantes
 | Campo       | Tipo     | Configuración              |
 |-------------|----------|----------------------------|
 | comprobante | file     | -                          |
 | mensaje     | text     | -                          |
 | estado      |select: pendiente_validacion, validado, rechazado    | -                           
-| fecha       | date     | auto                       
 
 // API Rules
 ListRule:   @request.auth.role = "admin"
@@ -346,10 +282,8 @@ DeleteRule: @request.auth.role = "admin"
 
 ---
 
-### 12. `config_niveles`
+### 10. `config_niveles`
 
-
-// 📁 COLLECTION: config_niveles
 | Campo               | Tipo    | Configuración              |
 |---------------------|---------|----------------------------|
 | nivel               | number  | único, requerido           |
@@ -360,6 +294,9 @@ DeleteRule: @request.auth.role = "admin"
 | maxProductosCurso   | number  | default: 3                 |
 | colorTarjeta        | text    | -                          |
 | icono               | text    | -                          |
+| created             | date    | auto                       |
+| updated             | date    | auto                       |
+
 
 // API Rules
 ListRule:   @request.auth.id != ""
@@ -371,16 +308,25 @@ DeleteRule: @request.auth.role = "admin"
 
 ---
 
-### 13. `config_sistema`
+### 11. `config_sistema`
 
-
-// 📁 COLLECTION: config_sistema
 | Campo       | Tipo    | Configuración              |
-|-------------|---------|----------------------------|
-| clave       | text    | único, requerido           |
-| valor       | json    | requerido                  |
-| descripcion | text    | -                          |
-| editable    | boolean | default: true              |
+|-------------|---------|----------------------------|             
+|comisionMarketDesliz	number	10	Comisión general de los 5 servicios
+
+ cuotaAltaVendedor	number	100	Cuota de alta del wizard
+
+ deslizmotoActivo	bool	true	
+ deslizfoodActivo	bool	true	
+ encargosVipActivo	bool	true	
+ publicidadActivo	bool	true	
+ invitacionesActivo	bool	true	
+ precioPublicidadBasico	number	300	
+ precioPublicidadEstandar	number	700	
+ precioPublicidadPremium	number	1500	
+ precioInvitacionMin	number	200	
+ precioInvitacionMax	number	500
+
 
 // API Rules
 ListRule:   @request.auth.role = "admin"
@@ -389,17 +335,19 @@ CreateRule: @request.auth.role = "admin"
 UpdateRule: @request.auth.role = "admin"
 DeleteRule: @request.auth.role = "admin"
 ```
+
 ---
-14. COLECCIÓN: contacto
+12. contacto
 
 Campo	Tipo	Configuración
+
 nombre	text	requerido
 email	email	requerido
 telefono	text	-
 asunto	text	requerido
 mensaje	text	requerido
 leido	boolean	default: false
-created	date	auto
+
 
 API Rules
 // ListRule - Solo admin
@@ -417,9 +365,112 @@ API Rules
 // DeleteRule - Solo admin
 @request.auth.role = "admin"
 
+```
+
 ---
+13. empleos
+
+Campo	Tipo	Descripción
+userId	relation(users)	requerido
+tipo	select	ofrezco_trabajo, busco_trabajo
+titulo	text	requerido
+descripcion	text	requerido
+categoria	select: ventas, atencion_cliente, administracion, tecnologia, oficios, construccion, limpieza, cocina, chofer, repartidor, informal, otro  
+salario	text	-
+horario	text	-
+ubicacion	text	-
+telefono	text	requerido
+email	email	-
+imagen	file	-
+estado	select	pendiente, aprobado, rechazado
+motivoRechazo	text	-
+revisadoPor	relation(users)	-
+fechaRevision	date	-
+activo	bool	default: true
+
+// API Rules
+ListRule:   @request.auth.id != ""  // Solo usuarios autenticados
+ViewRule:   @request.auth.id != ""  // Solo usuarios autenticados
+CreateRule: @request.auth.id != ""  // Usuarios autenticados pueden crear
+UpdateRule: @request.auth.role = "admin"  // Solo admin puede editar/aprobar
+DeleteRule: @request.auth.role = "admin"  // Solo admin puede eliminar
+
+```
+
+---
+### 14 eshe_parallel (NUEVA)
+
+Nombre	Tipo	Requerid	Opciones / Notas
+
+nombre	Text	✅ Sí	Ej: "Blazer Oversize Camel"
+descripcion	Text (multiline)	❌ No	—
+categoriaId relation categorias
+subcategoria	Select (single)	❌ No	Ver valores abajo
+coleccion	Text	❌ No	Ej: "Otoño 2026", "Éshé Parallel"
+talla	Select (multiple)	❌ No	XS, S, M, L, XL, XXL, Única
+color	Text	❌ No	Ej: "Camel", "Negro", "Beige"
+material	Text	❌ No	Ej: "Algodón", "Lino", "Mezclilla"
+genero	Select (single)	❌ No	Mujer, Hombre, Unisex, Niños
+precio	Number	✅ Sí	—
+precioAnterior	Number	❌ No	Para mostrar descuento
+precioCredito	Number ❌ No Precio si aplica crédito
+enganche	Number	❌ No	Si aplica crédito
+pagoSemanal	Number	❌ No	Si aplica crédito
+stock	Number	❌ No	Default: 0
+sku	Text	❌ No	Código único
+imagen	File (single)	❌ No	Max 10MB, imágenes
+imagenes	File (multiple)	❌ No	Max 10MB, imágenes
+tallas	JSON	❌ No	{ "S": 5, "M": 3 } — stock por talla
+colores	JSON	❌ No	Array de colores disponibles
+etiquetas	JSON	❌ No	["nuevo", "destacado", "edicion limitada"]
+temporada	Select (single)	❌ No	Primavera-Verano, Otoño-Invierno, Todo el año
+activo	Bool	❌ No	Default: true
+nuevo	Bool	❌ No	Default: false
+destacado	Bool	❌ No	Default: false
+edicionLimitada	Bool	❌ No	Default: false
+orden	Number	❌ No	Default: 0
+visitas	Number	❌ No	Default: 0
+calificacion	Number	❌ No	Default: 0
+totalComentarios	Number	❌ No	Default: 0
+userId	Relation → users	❌ No	Max 1
 
 
+Valores del Select subcategoria
+text
+Casual
+Formal
+Deportivo
+Fiesta
+Oficina
+Playa
+Invierno
+Verano
+Otro
+
+Valores del Select genero
+text
+Mujer
+Hombre
+Unisex
+Niños
+Bebés
+
+Valores del Select temporada
+text
+Primavera-Verano
+Otoño-Invierno
+Todo el año
+
+Reglas de API
+Regla	Valor
+List	activo = true
+View	``
+Create	@request.auth.id != ""
+Update	@request.auth.id = userId || @request.auth.role = "admin"
+Delete	@request.auth.id = userId || @request.auth.role = "admin"
+```
+
+---
 ### 15.estados
 
 {
@@ -442,8 +493,6 @@ DeleteRule: @request.auth.role = "admin"
 
 ### 16. `favoritos`
 
-
-// 📁 COLLECTION: favoritos
 | Campo     | Tipo     | Configuración              |
 |-----------|----------|----------------------------|
 | userId    | relation | users, requerido           |
@@ -460,20 +509,169 @@ DeleteRule: userId = @request.auth.id
 ```
 
 ---
+### 17: favoritos_frutas (NUEVA)
 
-### 17. `invitaciones_negocios`
+
+Campo	Tipo	Relation
+userId	Relation	→ users
+frutaId	Relation	→ frutas
 
 
-// 📁 COLLECTION: invitaciones_negocios
+API Rules:
+ListRule:   userId = @request.auth.id
+ViewRule:   userId = @request.auth.id
+CreateRule: @request.auth.id != ""
+UpdateRule: userId = @request.auth.id
+DeleteRule: userId = @request.auth.id
+```
+
+---
+##📦18. favoritos_ganado (NUEVA)
+
+Campo	Tipo	Relation
+userId	Relation	→ users
+ganadoId	Relation	→ ganado
+
+API Rules:
+ListRule:   userId = @request.auth.id
+ViewRule:   userId = @request.auth.id
+CreateRule: @request.auth.id != ""
+UpdateRule: userId = @request.auth.id
+DeleteRule: userId = @request.auth.id
+
+```
+
+```
+📦 ### 19.  favoritos_negocios (NUEVA)
+Campo	Tipo	Config
+
+userId	relation → users	requerido, max: 1
+negocioId	relation → negocios	requerido, max: 1
+
+
+API Rules:
+ListRule:   userId = @request.auth.id
+ViewRule:   userId = @request.auth.id
+CreateRule: @request.auth.id != ""
+UpdateRule: userId = @request.auth.id
+DeleteRule: userId = @request.auth.id
+---
+
+```
+📦 ### 20. frutas (NUEVA)
+Nombre	Tipo	Requerido	Opciones
+
+nombre	Text	✅ Sí	—
+descripcion	Text (multiline)	❌ No	—
+categoriaId relation categorias
+precio	Number	✅ Sí	—
+precioAnterior	Number	❌ No	Para mostrar descuento
+unidad	Select (single)	✅ Sí	kg, pieza, manojo, caja, docena, litro, gramo
+stock	Number	❌ No	Default: 0
+imagen	File (single)	❌ No	Max 5MB, imágenes
+imagenes	File (multiple)	❌ No	Max 5MB, imágenes
+activo	Bool	❌ No	Default: true
+nuevo	Bool	❌ No	Default: false
+destacado	Bool	❌ No	Default: false
+temporada	Bool	❌ No	Default: false
+orden	Number	❌ No	Default: 0
+visitas	Number	❌ No	Default: 0
+calificacion	Number	❌ No	Default: 0
+totalComentarios	Number	❌ No	Default: 0
+userId	Relation → users	❌ No	Max 1
+negocioId	Relation → negocios	❌ No	Max 1 (opcional)
+municipioId	Relation → municipios	❌ No	Max 1
+localidadId	Relation → localidades	❌ No	Max 1
+
+
+Valores del Select unidad
+text
+kg
+pieza
+manojo
+caja
+docena
+litro
+gramo
+
+Reglas de API
+Regla	Valor
+List	activo = true
+View	``
+Create	@request.auth.id != ""
+Update	@request.auth.id = userId || @request.auth.role = "admin"
+Delete	@request.auth.id = userId || @request.auth.role = "admin"
+
+```
+
+---
+### 21 ganado (NUEVA)
+Nombre	Tipo	Requerido	Opciones / Notas
+
+nombre	Text	✅ Sí	Ej: "Novillo Brahman"
+descripcion	Text (multiline)	❌ No	—
+categoriaId relation categorias	
+raza	Text	❌ No	Ej: "Brahman", "Angus"
+sexo	Select (single)	❌ No	Macho, Hembra, Mixto
+edadMeses	Number	❌ No	Edad en meses
+pesoKg	Number	❌ No	Peso en kg
+precio	Number	✅ Sí	—
+precioAnterior	Number	❌ No	Para mostrar descuento
+unidad	Select (single)	✅ Sí	cabeza, lote, kg, docena
+cantidad	Number	❌ No	Cuántas cabezas disponibles
+vacunado	Bool	❌ No	Default: false
+certificado	Bool	❌ No	Default: false
+imagen	File (single)	❌ No	Max 10MB, imágenes
+imagenes	File (multiple)	❌ No	Max 10MB, imágenes
+municipioId	Relation → municipios	❌ No	Max 1
+localidadId	Relation → localidades	❌ No	Max 1
+telefono	Text	❌ No	—
+whatsapp	Text	❌ No	—
+email	Email	❌ No	—
+activo	Bool	❌ No	Default: true
+nuevo	Bool	❌ No	Default: false
+destacado	Bool	❌ No	Default: false
+orden	Number	❌ No	Default: 0
+visitas	Number	❌ No	Default: 0
+calificacion	Number	❌ No	Default: 0
+totalComentarios	Number	❌ No	Default: 0
+userId	Relation → users	❌ No	Max 1
+
+
+Valores del Select sexo
+text
+Macho
+Hembra
+Mixto
+
+Valores del Select unidad
+text
+cabeza
+lote
+kg
+docena
+
+Reglas de API
+Regla	Valor
+List	activo = true
+View	``
+Create	@request.auth.id != ""
+Update	@request.auth.id = userId || @request.auth.role = "admin"
+Delete	@request.auth.id = userId || @request.auth.role = "admin"
+
+
+### 22. `invitaciones_negocios`
+
 | Campo          | Tipo     | Configuración              |
 |----------------|----------|----------------------------|
 | negocioId      | relation | negocios                   |
-| usuarioId      | relation | users                      |
+| userId      | relation | users                      |
 | codigo         | text     | único                      |
 | usado          | boolean  | default: false             |
 | fechaRegistro  | date     | auto                       |
 | negocioNombre  | text     | -                          |
-
+| created        | date     | auto                       |
+| updated        | date     | auto                       |
 
 // API Rules
 ListRule:   @request.auth.role = "admin"
@@ -485,7 +683,7 @@ DeleteRule: @request.auth.role = "admin"
 
 ---
 
-18. // 📁 COLLECTION: invitaciones_tanda 
+23. // 📁 invitaciones_tanda 
 
 | Campo               | Tipo     | Configuración              |
 |---------------------|----------|----------------------------|
@@ -496,6 +694,7 @@ DeleteRule: @request.auth.role = "admin"
 | usadoPor            | relation | users                      |
 | fechaUso            | date     | nullable                   |
 | created             | date     | auto                       |
+| updated             | date     | auto                       |
 
 // API Rules
 ListRule:   @request.auth.role = "admin"
@@ -504,12 +703,11 @@ CreateRule: @request.auth.role = "admin"
 UpdateRule: @request.auth.role = "admin"
 DeleteRule: @request.auth.role = "admin"
 
+```
+
 ---
+### 24. `kyc_verifications`
 
-### 19. `kyc_verifications`
-
-
-// 📁 COLLECTION: kyc_verifications
 | Campo                  | Tipo     | Configuración              |
 |------------------------|----------|----------------------------|
 | userId                 | relation | users                      |
@@ -531,6 +729,8 @@ DeleteRule: @request.auth.role = "admin"
 | fechaActualizacion     | date     | -                          |
 | fechaRevision          | date     | -                          |
 | fechaExpiracion        | date     | +1 año                     |
+| created                | date     | auto                       |
+| updated                | date     | auto                       |
 
 // API Rules
 ListRule:   @request.auth.role = "admin"
@@ -542,7 +742,7 @@ DeleteRule: @request.auth.role = "admin"
 
 ---
 
-### 20.  localidades
+### 25.  localidades
 
 {
   "municipioId": "relation(municipios)",
@@ -560,22 +760,24 @@ CreateRule: @request.auth.role = "admin"
 UpdateRule: @request.auth.role = "admin"
 DeleteRule: @request.auth.role = "admin"
 ```
+
 ---
 
 
-### 21. `log_actividad`
+### 26. `log_actividad`
 
 // 📁 COLLECTION: log_actividad
 | Campo        | Tipo     | Configuración              |
 |--------------|----------|----------------------------|
-| usuarioId    | relation | users                      |
-| entidad      | text     | requerido                  |
+| userId    | relation | users                      |
+| entidad      | select     | order, payment, user, product, client, tanda, tanda_pago, negocio, 
+cobro, tarjeta, solicitud, kyc, nivel, vacante, vendedor, prestador, config_sistema 
+                  |
 | entidadId    | text     | requerido                  |
-| accion       | text     | create, update, delete     |
+| accion       | select    | create, update, delete     |
 | datosPrevios | json     | -                          |
 | datosNuevos  | json     | -                          |
-| ip           | text     | -                          |
-| created      | date     | auto                       |
+| ip           | text     | -                          
 
 // API Rules
 ListRule:   @request.auth.role = "admin"
@@ -587,7 +789,7 @@ DeleteRule: @request.auth.role = "admin"
 
 ---
 
-### 22.municipios
+### 27.municipios
 
 {
   "estadoId": "relation(estados)",
@@ -605,21 +807,17 @@ CreateRule: @request.auth.role = "admin"
 UpdateRule: @request.auth.role = "admin"
 DeleteRule: @request.auth.role = "admin"
 ```
+
 ---
-
-### 23. `negocios`
-
-// 📁 COLLECTION: negocios
+### 28. `negocios`
 | Campo           | Tipo     | Configuración              |
 |-----------------|----------|----------------------------|
-| usuarioId       | relation | users                      |
-| nombre          | text     | requerido                  |
-| categoria       | select   | [abarrotes, etc]              |
+| userId       | relation | users                      |
+| nombre          | text     | requerido                  |             |
 | descripcion     | text     | -                          |
 | direccion       | text     | -                          |
 | telefono        | text     | -                          |
 | whatsapp        | text     | -                          |
-| horario         | text     | -                          |
 | logo            | file     | -                          |
 | imagenes        | file     | múltiple                   |
 | fechaAfiliacion | date     | -                          |
@@ -627,9 +825,9 @@ DeleteRule: @request.auth.role = "admin"
 | orden           | number   | default: 0                 |
 | visitas         | number   | default: 0                 |
 | ubicacion       | text     | -                          |
-estadoActivacion    select     pendiente_activacion, activo, rechazado	pendiente_activacion
+estadoActivacion    select: pendiente_activacion, activo, rechazada
 slug	text, unique	Para URLs amigables
-categoriaNegocioId	relation(categorias_negocios)	Nueva categoría (relacional)
+categoriaNegocioId relation(categorias_negocios)
 email	email	Correo del negocio
 sitioWeb	text	URL del sitio web
 facebook	text	URL de Facebook
@@ -640,12 +838,12 @@ portada	file	Imagen de portada
 estadoId	relation(estados)	Estado
 municipioId	relation(municipios)	Municipio
 localidadId	relation(localidades)	Localidad
-sectorId	relation(sectores)	Sector/colonia
+sectorId	relation(sectores) Sector/colonia
 codigoPostal	text	Código postal
 latitud	number	Coordenada
 longitud	number	Coordenada
 servicios	json	Array de servicios (ej: ["domicilio", "citas"])
-atencionWhatsapp	bool, default:true	Acepta pedidos por WhatsApp
+atencionWhatsapp  bool, default:true Acepta pedidos por WhatsApp
 citasPrevias	bool, default:false	Requiere cita previa
 domicilio	bool, default:false	Realiza envíos a domicilio
 verificado	bool, default:false	¿Verificado por MarketDesliz?
@@ -653,51 +851,46 @@ verificadoPor	relation(users)	Admin que verificó
 fechaVerificacion	date	Fecha de verificación
 destacado	bool, default:false	¿Destacado en inicio?
 totalComentarios	number, default:0	Contador (actualizado por trigger)
-calificacion	number, default:0	Promedio de calificaciones
-
+calificacion	number, default:0	Promedio de             calificaciones
 
 
 // API Rules
 ListRule:   1=1
 ViewRule:   1=1
 CreateRule: @request.auth.role = "admin"
-UpdateRule: @request.auth.role = "admin" || usuarioId = @request.auth.id
+UpdateRule: @request.auth.role = "admin" || userId = @request.auth.id
 DeleteRule: @request.auth.role = "admin"
 ```
 
 ---
-### 24. `notificaciones`
+### 29. `notificaciones`  (UNIFICADA)
 
-
-// 📁 COLLECTION: notificaciones (UNIFICADA)
 | Campo       | Tipo     | Configuración              |
 |-------------|----------|----------------------------|
-| usuarioId   | relation | users, requerido           |
+| userId   | relation | users, requerido           |
 | tipoUsuario | select   | cliente, vendedor, negocio, admin |
 | tipo        | select   | nivel_up, tanda_disponible, limite_alcanzado, nueva_solicitud, recordatorio, sistema, comentario, calificacion, contacto, visita |
 | titulo      | text     | requerido                  |
 | mensaje     | text     | requerido                  |
 | leida       | boolean  | default: false             |
 | entidadId   | text     | nullable                   |
-| entidadTipo | text     | solicitud, orden, tanda... |
+| entidadTipo | select     |solicitud, orden, tanda, negocio, kyc, cobro, pago, tanda_pago, nivel, sistema|
 | leidaEn     | date     | nullable                   |
-| datos       | json     | nullable                   |
-| created     | date     | auto                       |
+| datos       | json     | nullable                   
+
 
 // API Rules
-ListRule:   usuarioId = @request.auth.id || @request.auth.role = "admin"
-ViewRule:   usuarioId = @request.auth.id || @request.auth.role = "admin"
+ListRule:   userId = @request.auth.id || @request.auth.role = "admin"
+ViewRule:   userId = @request.auth.id || @request.auth.role = "admin"
 CreateRule: @request.auth.role = "admin" || @request.auth.id != ""
-UpdateRule: usuarioId = @request.auth.id
+UpdateRule: userId = @request.auth.id
 DeleteRule: @request.auth.role = "admin"
 ```
 
 ---
 
-### 25. `orders`
+### 30. `orders`
 
-
-// 📁 COLLECTION: orders
 | Campo            | Tipo     | Configuración              |
 |------------------|----------|----------------------------|
 | userId           | relation | users                      |
@@ -722,8 +915,7 @@ DeleteRule: @request.auth.role = "admin"
 | fechaValidacion  | date     | -                          |
 | fechaPrimerPago  | date     | nullable                   |
 | fechaProximoPago | date     | nullable                   |
-| fechaCompletada  | date     | nullable                   |
-| created          | date     | auto                       |
+| fechaCompletada  | date     | nullable                   
 
 // API Rules
 ListRule:   @request.auth.role = "admin" || userId = @request.auth.id
@@ -734,11 +926,8 @@ DeleteRule: @request.auth.role = "admin"
 ```
 
 ---
+### 31. `payments`
 
-### 26. `payments`
-
-
-// 📁 COLLECTION: payments
 | Campo           | Tipo     | Configuración              |
 |-----------------|----------|----------------------------|
 | orderId         | relation | orders                     |
@@ -752,7 +941,7 @@ DeleteRule: @request.auth.role = "admin"
 | fechaPago       | date     | nullable                   |
 | estado          | select   | pendiente, pagado, atrasado, parcial |
 | metodoPago      | select   | qr, transferencia          |
-| notasAdmin      | text     | -                          |
+| notasAdmin      | text     | -                                              |
 
 // API Rules
 ListRule:   @request.auth.role = "admin" || userId = @request.auth.id
@@ -762,11 +951,42 @@ UpdateRule: @request.auth.role = "admin" || (userId = @request.auth.id && estado
 DeleteRule: @request.auth.role = "admin"
 ```
 
+```
+### 32 prestadores (NUEVA)
+Sirve para los 3 servicios propios con prestadores (moto, food, encargos).
+
+Campo	Tipo	Notas
+userId	relation → users	required
+tipo	select: moto, food, encargos	required
+nombre	text	required
+vehiculo	text	"Honda Wave 125"
+placa	text	
+rating	number	0-5, default 5
+serviciosRealizados	number	contador (antes "viajes")
+experiencia	text	"2 meses"
+satisfaccion	number	0-100
+estado	select: disponible, ocupado, desconectado
+zona	text	
+fotoPerfil	file	jpg/png/webp, 5MB, thumbs 100x100 y 300x300
+activo	bool	default true
+comisionPorcentaje	number	0-100, default 5
+servicioId  relation → servicios  max:1
+
+API Rules:
+List: activo = true
+
+View: activo = true
+
+Create: @request.auth.id = userId
+
+Update: @request.auth.id = userId
+
+Delete: @request.auth.role = "admin"
 ---
 
-### 27. `products`
+---
+### 33. `products`
 
-// 📁 COLLECTION: products
 | Campo         | Tipo     | Configuración              |
 |---------------|----------|----------------------------|
 | nombre        | text     | requerido                  |
@@ -777,9 +997,7 @@ DeleteRule: @request.auth.role = "admin"
 | pagoSemanal   | number   | default: 0                 |
 | semanas       | number   | default: 12                |
 | frecuenciaPago| select   | semanal, quincenal         |
-| categoría     | select   | electronica, hogar, ropa, instrumentos, ganado, "cortinas", "sabanas", "almohadas","cubre-salas",bote, sillas,bancos-plastico,etc. |
-| categoriaId   | relation | categorias                 |
-| subcategoriaId  | relacion | subcategorias            |
+| categoriaId   | relation | categorias                 |          |
 | imagen        | file     | -                          |
 | imagenes	|file	   |max:5 archivos, max:5MB     |
 | stock         | number   | default: 0                 |
@@ -790,11 +1008,7 @@ DeleteRule: @request.auth.role = "admin"
 | sku           | text     | único                      |
 |ventas		| number   | default:0 Contador de venta|
 |visitas	|number	   |default:0 Contador de visitas|
-| negocioId     | relation | negocios                   |
-| created       | date     | auto                       |
-| updated       | date     | auto                       |
-```
-
+| negocioId     | relation | negocios                   
 
 // API Rules
 ListRule:   1=1
@@ -803,24 +1017,92 @@ CreateRule: @request.auth.role = "admin"
 UpdateRule: @request.auth.role = "admin"
 DeleteRule: @request.auth.role = "admin"
 
-
 ```
-### 28. recordatorios_pagos
 
-// 📁 COLLECTION: recordatorios_pagos
+---
+### 34. recordatorios_pagos
+
 | Campo            | Tipo     | Configuración              |
 |------------------|----------|----------------------------|
 | tandaMemberId    | relation | tanda_members, requerido   |
-| usuarioId        | relation | users, requerido           |
+| userId        | relation | users, requerido           |
 | tipo             | select   | primera_parte, segunda_parte |
 | fechaRecordatorio| date     | requerido                  |
 | enviado          | boolean  | default: false             |
-| fechaEnvio       | date     | nullable                   |
-| creadoEn         | date     | auto 
+| fechaEnvio       | date     | nullable                   
+ 
+API Rules:
+ListRule:   @request.auth.role = "admin" || userId = @request.auth.id
+ViewRule:   @request.auth.role = "admin" || userId = @request.auth.id
+CreateRule: @request.auth.role = "admin"
+UpdateRule: @request.auth.role = "admin"
+DeleteRule: @request.auth.role = "admin"
 
+```
 
 ---
-### 29.sectores
+
+### 35_. reviews
+
+productId   relación: products
+userId      relación: users
+calificación   number
+comentario     text
+activo         bool
+
+// API Rules
+ListRule:   activo = true
+ViewRule:   activo = true
+CreateRule: @request.auth.id != ""
+UpdateRule: @request.auth.id = userId && activo = true
+DeleteRule: @request.auth.id = userId
+```
+
+---
+
+### 36. reviews_frutas (NUEVA)
+Campo	Tipo	Notas
+frutaId	Relation	→ frutas
+userId	Relation	→ users
+calificacion	Number	1-5
+comentario	Text	multiline
+activo	Bool	Default: true
+
+```
+
+---
+### 37 reviews_ganado (NUEVA)
+Campo	Tipo
+ganadoId	Relation → ganado
+userId	Relation → users
+calificacion	Number (1-5)
+comentario	Text multiline
+activo	Bool default true
+
+```
+
+```
+### 38. `reviews_negocios`
+
+| Campo         | Tipo     | Configuración              |
+|---------------|----------|----------------------------|
+| negocioId     | relation | negocios, requerido        |
+| userId     | relation | users, requerido           |
+| calificacion  | number   | 1-5                        |
+| comentario    | text     | - 
+| activo: bool, default: true
+                         
+
+// API Rules
+ListRule:   1 = 1
+ViewRule:   1 = 1
+CreateRule: @request.auth.id != ""
+UpdateRule: userId = @request.auth.id
+DeleteRule: @request.auth.role = "admin" || userId = @request.auth.id
+```
+
+---
+### 39.sectores
 {
   "localidadId": "relation(localidades)",
   "nombre": "text, required",
@@ -836,12 +1118,91 @@ CreateRule: @request.auth.role = "admin"
 UpdateRule: @request.auth.role = "admin"
 DeleteRule: @request.auth.role = "admin"
 ```
+
 ---
+### 40. servicios  (NUEVA)
+Nombre	Tipo	Requerido	Opciones / Config
+
+nombre	Text	✅ Sí	—
+descripcion	Text (multiline)	❌ No	—
+categoriaId     relation categorias
+direccion	Text	❌ No	—
+ubicacion	Text	❌ No	Coordenadas o texto de ubicación
+telefono	Text	❌ No	—
+whatsapp	Text	❌ No	—
+email	Email	❌ No	—
+horario	Text	❌ No	Ej: "Lun-Vie 9am-6pm"
+sitioWeb	URL	❌ No	—
+facebook	URL	❌ No	—
+instagram	URL	❌ No	—
+tiktok	URL	❌ No	—
+logo	File (single)	❌ No	Max 5MB, imágenes
+imagenes	File (multiple)	❌ No	Max 5MB, imágenes
+userId	Relation → users	❌ No	Max 1
+estadoId	Relation → estados	❌ No	Max 1
+municipioId	Relation → municipios	❌ No	Max 1
+localidadId	Relation → localidades	❌ No	Max 1
+sectorId	Relation → sectores	❌ No	Max 1
+codigoPostal	Text	❌ No	—
+latitud	Number	❌ No	—
+longitud	Number	❌ No	—
+servicios	Text	❌ No	Otros servicios separados por coma
+precioBase	Number	❌ No	Para servicios MD
+atencionWhatsapp	Bool	❌ No	Default: true
+citasPrevias	Bool	❌ No	Default: false
+domicilio	Bool	❌ No	Default: false
+esMarketDesliz	Bool	❌ No	Default: false. True = servicio propio
+estadoActivacion	Select (single)	❌ No	activo, pendiente_activacion, inactivo
+activo	Bool	❌ No	Default: true
+destacado	Bool	❌ No	Default: false
+verificado	Bool	❌ No	Default: false
+orden	Number	❌ No	Default: 0
+visitas	Number	❌ No	Default: 0
+calificacion	Number	❌ No	Default: 0
+totalComentarios	Number	❌ No	Default: 0
+
+Valores del Select estadoActivacion
+text
+activo
+pendiente_activacion
+inactivo
+
+Reglas de API 
+Regla	Valor
+List	activo = true
+View	`` (vacío = público)
+Create	@request.auth.id != ""
+Update	@request.auth.id = userId || @request.auth.role = "admin"
+Delete	@request.auth.id = userId || @request.auth.role = "admin"
 
 
-### 30. `solicitudes`
 
-// 📁 COLLECTION: solicitudes
+```
+
+### 41 sms_codes (NUEVA)
+Campo	Tipo	Config
+
+telefono	text	required
+code	text	required
+expiresAt	date	required
+attempts	number	default: 0
+used	bool	default: false
+created	date	auto
+updated	date	auto
+
+API Rules (todas admin-only, solo el servidor accede):
+ListRule:   @request.auth.role = "admin"
+ViewRule:   @request.auth.role = "admin"
+CreateRule: @request.auth.role = "admin"
+UpdateRule: @request.auth.role = "admin"
+DeleteRule: @request.auth.role = "admin"
+
+
+```
+
+---
+### 42. `solicitudes`
+
 | Campo                   | Tipo     | Configuración              |
 |-------------------------|----------|----------------------------|
 | clienteId               | relation | users                      |
@@ -869,7 +1230,8 @@ DeleteRule: @request.auth.role = "admin"
 | fechaValidacionVendedor | date     | -                          |
 | fechaValidacionAdmin    | date     | -                          |
 | notasVendedor           | text     | -                          |
-| notasAdmin              | text     | -                          |
+| notasAdmin              | text     | -                          
+
 
 // API Rules
 ListRule:   @request.auth.role = "admin" || vendedorId = @request.auth.id || clienteId = @request.auth.id
@@ -883,30 +1245,183 @@ UpdateRule: @request.auth.role = "admin" || (vendedorId = @request.auth.id && es
 DeleteRule: @request.auth.role = "admin"
 
 ```
-📁 ### 31. colección subcategorias 
 
-Campo	Tipo	Configuración
-nombre	text	requerido, min:2, max:50
-slug	text	requerido, único, pattern: ^[a-z0-9-]+$
-categoriaId	relation	categorias, requerido
-descripcion	text	opcional, max:200
-imagen	file	opcional, max:5MB
-orden	number	default:0
-activo	bool	default:true
+---
+### 43 solicitudes_invitaciones (NUEVA)
 
-ListRule:   1=1
-ViewRule:   1=1
+Campos
+Nombre	Tipo	Requerido	Notas
+
+userId	Relation → users	✅	Max: 1
+nombre	Text	✅	—
+email	Email	❌	—
+telefono	Text	❌	—
+tipo	Select (single)	✅	boda, xv, cumple, bautizo, otro
+tipoLabel	Text	❌	"Bodas", "XV Años"...
+estilo	Select (single)	✅	clasico, moderno, minimalista, floral, elegante, divertido
+estiloLabel	Text	❌	—
+nombreEvento	Text	✅	—
+fechaEvento	Date	✅	—
+detalles	Text (multiline)	❌	Max 2000
+estado	Select (single)	✅	Default: pendiente
+precioFinal	Number	❌	Precio final acordado
+notasAdmin	Text (multiline)	❌	—
+fechaContacto	Date	❌	—
+fechaEntrega	Date	❌	—
+archivoDiseno	File (single)	❌	Max 10MB
+activo	Bool	❌	Default: true
+created	Autodate	Auto	—
+updated	Autodate	Auto	—
+
+Valores de Select
+tipo:
+boda
+xv
+cumple
+bautizo
+otro
+
+estilo:
+clasico
+moderno
+minimalista
+floral
+elegante
+divertido
+
+estado:
+pendiente
+contactada
+en_diseno
+aprobada
+entregada
+cancelada
+
+Reglas de API
+Regla	Valor
+List	@request.auth.role = "admin" || userId = @request.auth.id
+View	@request.auth.role = "admin" || userId = @request.auth.id
+Create	@request.auth.id != ""
+Update	@request.auth.role = "admin"
+Delete	@request.auth.role = "admin"
+
+```
+
+---
+
+### 44 solicitudes_publicidad (NUEVA)
+Campos
+Nombre	Tipo	Requerido	Opciones / Notas
+
+userId	Relation → users	✅	Max select: 1
+nombre	Text	✅	—
+email	Email	❌	—
+telefono	Text	❌	—
+negocio	Text	✅	—
+plan	Select (single)	✅	basico, estandar, premium
+planNombre	Text	❌	"Básico", "Estándar", "Premium"
+precio	Number	✅	—
+duracion	Text	❌	"7 días", "15 días", "30 días"
+objetivo	Select (single)	✅	ventas, clientes, marca, evento, otro
+detalles	Text (multiline)	❌	Max: 2000
+estado	Select (single)	✅	Default: pendiente
+notasAdmin	Text (multiline)	❌	—
+fechaContacto	Date	❌	—
+fechaInicio	Date	❌	—
+fechaFin	Date	❌	—
+comprobante	File (single)	❌Max 10MB, imágenes
+activo	Bool	❌	Default: true
+created	Autodate	Auto	—
+updated	Autodate	Auto	—
+
+
+Valores del Select plan
+basico
+estandar
+premium
+
+Valores del Select objetivo
+ventas
+clientes
+marca
+evento
+otro
+
+Valores del Select estado
+pendiente
+contactada
+aprobada
+activo
+completada
+cancelada
+
+Reglas de API
+Regla	Valor
+List	@request.auth.role = "admin" || userId = @request.auth.id
+View	@request.auth.role = "admin" || userId = @request.auth.id
+Create	@request.auth.id != ""
+Update	@request.auth.role = "admin"
+Delete	@request.auth.role = "admin"
+```
+
+---
+### 45. `tanda_members`
+
+| Campo          | Tipo     | Configuración              |
+|----------------|----------|----------------------------|
+| tandaId        | relation | tandas                     |
+| userId         | relation | users                      |
+| posicion       | number   | -                          |
+| estadoPago     | select   | al_corriente, atrasado, pagado |
+| gasFeePaid     | boolean  | default: false             |
+| fechaPagoTurno | date     | nullable                   |
+| joinedAt       | date     | auto     
+| codigoUsado    | text     | -                          | 
+| pagoPrimeraParte   | boolean  | default: false             |
+| pagoSegundaParte   | boolean  | default: false             |
+| fechaPagoPrimera   | date     | nullable                   |
+| fechaPagoSegunda   | date     | nullable                   |
+| recordatorioEnviado| boolean  | default: false             
+
+
+// API Rules
+ListRule:   @request.auth.role = "admin" || userId = @request.auth.id
+ViewRule:   @request.auth.role = "admin" || userId = @request.auth.id
+CreateRule: @request.auth.id != ""
+UpdateRule: @request.auth.role = "admin" || userId = @request.auth.id
+DeleteRule: @request.auth.role = "admin"
+```
+
+---
+
+### 46. `tanda_pagos`
+
+| Campo         | Tipo     | Configuración              |
+|---------------|----------|----------------------------|
+| tandaMemberId | relation | tanda_members              |
+| cobradorId    | relation | cobradores                 |
+| semana        | number   | -                          |
+| monto         | number   | -                          |
+| fechaPago     | date     | -                          |
+| estado        | select   | pendiente, pagado, atrasado|
+|tipoPago         (select:   primera_parte, segunda_parte)
+
+
+
+// API Rules
+ListRule:   @request.auth.role = "admin"
+ViewRule:   @request.auth.role = "admin"
 CreateRule: @request.auth.role = "admin"
 UpdateRule: @request.auth.role = "admin"
 DeleteRule: @request.auth.role = "admin"
+```
+
 ---
 
-### 32. `tandas`
+### 47. `tandas`
 
-// 📁 COLLECTION: tandas
 | Campo               | Tipo     | Configuración              |
-|---------------------|----------|----------------------------|
-| userId              | relation | users                      |
+|---------------------|----------|----------------------------|                    |
 | createdBy           | relation | users                      |
 | nombre              | text     | -                          |
 | descripcion         | text     | -                          |
@@ -919,15 +1434,13 @@ DeleteRule: @request.auth.role = "admin"
 | productosRequeridos | number   | default: 3                 |
 | cupoMaximo          | number   | default: 20                |
 | cupoDisponible      | number   | -                          |
-| miembrosActuales    | number   | default: 0                 |                    
-| totalRounds         | number   | -                          |
+| miembrosActuales    | number   | default: 0                 |                                            |
 | gasFee              | number   | default: 25                |
-| activa              | boolean  | default: true              |
 | esPlantilla         | boolean  | default: false             |                     
 | fechaInicio         | date     | -                          |
 | fechaFinEstimada    | date     | -   
 | codigoInvitacion    | text     | único, requerido              
-| pagoEnDosPartes     | boolean  | default: true              |                                       
+| pagoEnDosPartes     | boolean  | default: true                                           
 
 // API Rules
 ListRule:   @request.auth.id != ""
@@ -936,9 +1449,10 @@ CreateRule: @request.auth.role = "admin"
 UpdateRule: @request.auth.role = "admin"
 DeleteRule: @request.auth.role = "admin"
 
-
 ```
-33. 📁 COLLECTION: user_providers
+
+---
+48. 📁 COLLECTION: user_providers
 
 {
   userId: { type: "relation", collection: "users" },
@@ -973,64 +1487,11 @@ ViewRule:   @request.auth.role = "admin" || userId = @request.auth.id
 CreateRule: @request.auth.role = "admin" || @request.auth.id != ""
 UpdateRule: @request.auth.role = "admin"
 DeleteRule: @request.auth.role = "admin"
----
-
-### 34. `tanda_members`
-
-
-// 📁 COLLECTION: tanda_members
-| Campo          | Tipo     | Configuración              |
-|----------------|----------|----------------------------|
-| tandaId        | relation | tandas                     |
-| userId         | relation | users                      |
-| posicion       | number   | -                          |
-| estadoPago     | select   | al_corriente, atrasado, pagado |
-| gasFeePaid     | boolean  | default: false             |
-| fechaPagoTurno | date     | nullable                   |
-| joinedAt       | date     | auto     
-| codigoUsado    | text     | -                          | 
-| pagoPrimeraParte   | boolean  | default: false             |
-| pagoSegundaParte   | boolean  | default: false             |
-| fechaPagoPrimera   | date     | nullable                   |
-| fechaPagoSegunda   | date     | nullable                   |
-| recordatorioEnviado| boolean  | default: false             |  
-
-// API Rules
-ListRule:   @request.auth.role = "admin" || userId = @request.auth.id
-ViewRule:   @request.auth.role = "admin" || userId = @request.auth.id
-CreateRule: @request.auth.id != ""
-UpdateRule: @request.auth.role = "admin" || userId = @request.auth.id
-DeleteRule: @request.auth.role = "admin"
 ```
 
 ---
 
-### 35. `tanda_pagos`
-
-// 📁 COLLECTION: tanda_pagos 
-| Campo         | Tipo     | Configuración              |
-|---------------|----------|----------------------------|
-| tandaMemberId | relation | tanda_members              |
-| cobradorId    | relation | cobradores                 |
-| semana        | number   | -                          |
-| monto         | number   | -                          |
-| fechaPago     | date     | -                          |
-| estado        | select   | pendiente, pagado, atrasado |
-tipoPago         (select:   primera_parte, segunda_parte)
-
-
-// API Rules
-ListRule:   @request.auth.role = "admin"
-ViewRule:   @request.auth.role = "admin"
-CreateRule: @request.auth.role = "admin"
-UpdateRule: @request.auth.role = "admin"
-DeleteRule: @request.auth.role = "admin"
-```
-
----
-
-### 36. `vacantes`
-
+### 49. `vacantes`
 
 // 📁 COLLECTION: vacantes
 | Campo       | Tipo     | Configuración              |
@@ -1041,20 +1502,55 @@ DeleteRule: @request.auth.role = "admin"
 | puesto      | text     | requerido                  |
 | experiencia | text     | -                          |
 | mensaje     | text     | -                          |
-| leido       | boolean  | default: false             |
-| created     | date     | auto                       |
+| leido       | boolean  | default: false             
+|vendedorId	relation → vendedores
+activado	bool
+fechaActivacion	date
+gafeteNumero	text
+estado	select (en_progreso, aprobado, rechazado, abandonado, activado)
+pasoActual   number
+activo        bool 
+notasAdmin     text
+aceptaRequisitos     bool
+fechaAceptaRequisitos      date
+diasDisponibles      json
+horaInicio           text
+horaFin              text
+edad                 number
+ciudad               text
+motivacion           text
+tipoTransporte       text
+entrevistaCompletada  bool 
+aceptado             bool
+fechaAceptacion      date
+ineFrontal           file
+ineTrasero           file
+comprobanteDomicilio file
+selfieConIne         file
+cuotaPagada          bool
+fechaPagoCuota       date
+capacitacionCompletada bool
+uniformeEntregado     bool
+fechaCapacitacion     date
+evaluacionCompletada  bool
+puntajeEvaluacion     number
+evaluadorId           relation: users
+notasEvaluacion       text
+userId                relation: users
+altaCompletada	bool	default: false
+citaConfirmada	bool	default: false
+fechaConfirmacionCita	date	nullable
 
 // API Rules
-ListRule:   @request.auth.role = "admin"
-ViewRule:   @request.auth.role = "admin"
-CreateRule: @request.auth.id = "" || @request.auth.id != ""
-UpdateRule: @request.auth.role = "admin"
+ListRule:   @request.auth.role = "admin" || userId = @request.auth.id
+ViewRule:   @request.auth.role = "admin" || userId = @request.auth.id
+CreateRule: @request.auth.id != ""
+UpdateRule: @request.auth.role = "admin" || userId = @request.auth.id
 DeleteRule: @request.auth.role = "admin"
 ```
 
 ---
-
-### 37. `vendedores`
+### 50. `vendedores`
 
 // 📁 COLLECTION: vendedores
 | Campo                | Tipo     | Configuración              |
@@ -1068,7 +1564,16 @@ DeleteRule: @request.auth.role = "admin"
 | totalVentas          | number   | default: 0                 |
 | totalComisiones      | number   | default: 0                 |
 | comisionesPendientes | number   | default: 0                 |
-| activo               | boolean  | default: true              |
+| activo               | boolean  | default: true                
+|
+ ciudad	          text
+ gafeteNumero	  text
+ diasDisponibles	  json
+ horaInicio	  text
+ horaFin	          text
+ fechaActivacion	  date
+ vacanteId	relation → vacantes
+
 
 // API Rules
 ListRule:   @request.auth.role = "admin" || userId = @request.auth.id
@@ -1086,41 +1591,53 @@ DeleteRule: @request.auth.role = "admin"
 |---|-----------|--------|
 | 1 | users | ✅ |
 | 2 | blog | ✅ |
-  3   bolsa_trabajo
-| 4 | carrusel | ✅ |
-  5  categorías ✅
-| 6 | categorias_negocios | ✅ |
-| 7 | clients | ✅ |
-| 8 | cobradores | ✅ |
-| 9 | cobros | ✅|
-| 10 | comentarios_negocios | ✅ |
-| 11 | comprobantes | ✅ |
-| 12 | config_niveles | ✅ |
-| 13 | config_sistema | ✅ |
-  14   contacto          ✅
-  15   estados✅
+| 3 | carrusel | ✅ |
+| 4 |  categorías |✅|
+| 5 | categorias_negocios | ✅ |
+| 6 | clients | ✅ |
+| 7 | cobradores | ✅ |
+| 8 | cobros | ✅|
+| 9 | comprobantes | ✅ |
+| 10 | config_niveles | ✅ |
+| 11 | config_sistema | ✅ |
+| 12 |  contacto      | ✅ |
+| 13 |   empleos|
+| 14 |  eshe_parallel | ✅ |
+| 15 |  estados       | ✅ |
 | 16 | favoritos | ✅ |
-| 17 | invitaciones_negocios | ✅ |
-  18   invitaciones_tandas
-| 19 | kyc_verifications | ✅ |
-  20   localidades  ✅
-| 21 | log_actividad | ✅ |
-  22   municipios  ✅
-| 23 | negocios | ✅ |
-| 24 | notificaciones | ✅|
-| 25 | orders | ✅ | 
-| 26 | payments | ✅ |
-| 27 | products | ✅ | 
-  28   recordatorios_pagos ✅
-  29  sectores  ✅
-| 30 | solicitudes | ✅  |
-  31    subcategorías   ✅
-| 32 | tandas | ✅ |
-  33    user_providers ✅
-| 34 | tanda_members | ✅ |
-| 35 | tanda_pagos | ✅ |
-| 36 | vacantes | ✅ |
-| 37 | vendedores | ✅  |
-
+| 17 | favoritos_frutas | ✅ |
+| 18 | favoritos_ganado | ✅ |
+| 19 | favoritos_negocios | ✅ | 
+| 20 | frutas | ✅ |
+| 21 | ganado | ✅ |
+| 22 | invitaciones_negocios | ✅ |
+| 23 | invitaciones_tanda | ✅ |
+| 24 | kyc_verifications | ✅ |
+| 25 | localidades | ✅ | 
+| 26 | log_actividad | ✅ |
+| 27 | municipios | ✅ |
+| 28 | negocios | ✅ |
+| 29 | notificaciones | ✅|
+| 30 | orders | ✅ | 
+| 31 | payments | ✅ |
+| 32 | prestadores ✅ |
+| 33 | products | ✅ |
+| 34 | recordatorios_pagos | ✅ | 
+| 35 | reviews | ✅ |
+| 36 | reviews_frutas | ✅ |
+| 37 | reviews_ganado | ✅ |
+| 38 | reviews_negocios | ✅ |
+| 39 | sectores | ✅ |
+| 40 | servicios | ✅ |
+| 41 | sms_codes | ✅ |
+| 42 | solicitudes | ✅  |
+| 43 | solicitudes_invitaciones | ✅  |
+| 44 | solicitudes_publicidad | ✅  |
+| 45 | tanda_members | ✅ |
+| 46 | tanda_pagos | ✅ |
+| 47 | tandas | ✅ |
+| 48 | user_providers | ✅ |
+| 49 | vacantes | ✅  |
+| 50 | vendedores | ✅  |
 
 ---
