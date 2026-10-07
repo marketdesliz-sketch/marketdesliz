@@ -5,6 +5,7 @@ const PB_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL;
 const PB_ADMIN_EMAIL = process.env.POCKETBASE_ADMIN_EMAIL;
 const PB_ADMIN_PASSWORD = process.env.POCKETBASE_ADMIN_PASSWORD;
 
+// ─── Helper: slug ────────────────────────────────────────
 function slugify(str) {
   return String(str || '')
     .toLowerCase()
@@ -14,35 +15,98 @@ function slugify(str) {
     .replace(/^-+|-+$/g, '');
 }
 
+// ─── Helper: decodificar JWT (sin verificar firma) ───────
+function decodeJWT(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    return JSON.parse(Buffer.from(padded, 'base64').toString('utf-8'));
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método no permitido' });
   }
 
-  // ─── 1. Verificar que el usuario logueado es admin del sitio ───
+  // ─── 1. Obtener token ───
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
   if (!token) {
     return res.status(401).json({ error: 'No autenticado' });
   }
 
-  const pbUser = new PocketBase(PB_URL);
-  pbUser.authStore.save(token, null);
+  // ─── 2. Decodificar payload del JWT (para saber la colección y exp) ───
+  const payload = decodeJWT(token);
+  console.log('[crear-categoria] Token payload:', {
+    type: payload?.type,
+    collectionId: payload?.collectionId,
+    exp: payload?.exp,
+    expirado: payload?.exp ? payload.exp * 1000 <= Date.now() : 'sin exp',
+  });
 
-  let currentUser;
-  try {
-    // Refrescar el token para validar y obtener el usuario
-    const authData = await pbUser.collection('users').authRefresh();
-    currentUser = authData.record;
-  } catch {
-    return res.status(401).json({ error: 'Sesión inválida o expirada' });
+  if (payload?.exp && payload.exp * 1000 <= Date.now()) {
+    return res.status(401).json({ error: 'Token expirado. Vuelve a iniciar sesión.' });
   }
 
-  if (currentUser?.role !== 'admin') {
+  // ─── 3. Intentar autenticar en el orden correcto ───
+  const pbUser = new PocketBase(PB_URL);
+  pbUser.autoCancellation(false);
+  pbUser.authStore.save(token, null);
+
+  // Si el payload dice que es superuser, intentar _superusers primero
+  const esSuperuserToken =
+    payload?.type === 'superuser' ||
+    payload?.collectionName === '_superusers' ||
+    payload?.collectionId === '_superusers';
+
+  const coleccionesAProbar = esSuperuserToken
+    ? ['_superusers', 'users']
+    : ['users', '_superusers'];
+
+  let currentUser = null;
+  let isSuperuser = false;
+  const errores = [];
+
+  for (const coleccion of coleccionesAProbar) {
+    try {
+      const authData = await pbUser.collection(coleccion).authRefresh();
+      if (coleccion === '_superusers') {
+        isSuperuser = true;
+        currentUser = {
+          id: authData.record.id,
+          role: 'admin',
+          email: authData.record.email,
+        };
+      } else {
+        currentUser = authData.record;
+      }
+      console.log(`[crear-categoria] Auth OK contra "${coleccion}"`);
+      break;
+    } catch (err) {
+      const msg = err?.message || String(err);
+      errores.push(`${coleccion}: ${msg}`);
+      console.log(`[crear-categoria] Auth FAIL contra "${coleccion}":`, msg);
+    }
+  }
+
+  if (!currentUser) {
+    return res.status(401).json({
+      error: 'Sesión inválida o expirada',
+      detalle: errores.join(' | '),
+    });
+  }
+
+  if (!isSuperuser && currentUser.role !== 'admin') {
     return res.status(403).json({ error: 'Se requieren permisos de administrador' });
   }
 
-  // ─── 2. Validar parámetros ───
+  // ─── 4. Validar parámetros ───
   const { nombre, vertical = 'products' } = req.body || {};
   const limpio = String(nombre || '').trim();
 
@@ -58,7 +122,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: `Vertical inválido: ${vertical}` });
   }
 
-  // ─── 3. Autenticar como superadmin ───
+  // ─── 5. Autenticar como superadmin (para bypasear API Rules) ───
   const pbAdmin = new PocketBase(PB_URL);
   pbAdmin.autoCancellation(false);
 
@@ -73,7 +137,7 @@ export default async function handler(req, res) {
     });
   }
 
-  // ─── 4. Verificar duplicado ───
+  // ─── 6. Verificar duplicado ───
   try {
     const duplicado = await pbAdmin.collection('categorias').getFirstListItem(
       `nombre = "${limpio.replace(/"/g, '\\"')}" && vertical = "${vertical}"`
@@ -87,7 +151,7 @@ export default async function handler(req, res) {
     // 404 esperado → no existe, seguir
   }
 
-  // ─── 5. Generar slug único ───
+  // ─── 7. Generar slug único ───
   let slug = slugify(limpio) || `cat-${Date.now()}`;
   try {
     const slugExistente = await pbAdmin.collection('categorias').getFirstListItem(
@@ -100,7 +164,7 @@ export default async function handler(req, res) {
     // 404 → disponible
   }
 
-  // ─── 6. Crear categoría ───
+  // ─── 8. Crear categoría ───
   try {
     const record = await pbAdmin.collection('categorias').create({
       nombre: limpio,
