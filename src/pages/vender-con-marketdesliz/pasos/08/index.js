@@ -165,7 +165,8 @@ export default function Paso08Activacion() {
   };
 
   // ─── Datos dinámicos ───────────────────────────────────
-  const nombreCompleto = solicitud?.nombre || user?.nombre || 'Vendedor';
+  // Nota: `nombre` vive en `users`, no en `vacantes`. Se obtiene desde el usuario autenticado.
+  const nombreCompleto = user?.nombre || 'Vendedor';
   const primerNombre = nombreCompleto.split(' ')[0];
   const telefono = solicitud?.telefono || '55 0000 0000';
   const dias = solicitud?.diasDisponibles || ['L', 'M1', 'M2', 'J', 'V'];
@@ -191,8 +192,8 @@ export default function Paso08Activacion() {
           }}
         />
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-muted-foreground text-sm">
+          <div className="w-8 h-8 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+          <p className="mt-4 text-gray-700 text-sm font-medium">
             Activando tu cuenta...
           </p>
         </div>
@@ -243,7 +244,7 @@ export default function Paso08Activacion() {
                     de <span className="text-primary italic">MarketDesliz.</span>
                   </h1>
                 </div>
-                <p className="text-muted-foreground text-lg max-w-[450px] leading-relaxed">
+                <p className="text-gray-700 text-lg font-medium max-w-[450px] leading-relaxed">
                   Terminaste tu preparación. Ahora vamos a activar tu identidad y
                   dejar todo listo para tu primera jornada.
                 </p>
@@ -252,7 +253,7 @@ export default function Paso08Activacion() {
               {/* Gafete flotante */}
               <div className="relative group w-full md:w-[320px] shrink-0">
                 <div className="absolute -inset-4 bg-primary/10 rounded-2xl blur-2xl group-hover:bg-primary/20 transition-all duration-500"></div>
-                <div className="relative bg-white border border-gray-100 rounded-2xl shadow-2xl overflow-hidden transform rotate-3 hover:rotate-0 transition-all duration-500">
+                <div className="relative bg-white border border-gray-200 rounded-2xl shadow-2xl overflow-hidden transform rotate-3 hover:rotate-0 transition-all duration-500">
                   <div className="h-10 bg-primary/5 flex items-center justify-center border-b border-dashed border-gray-200">
                     <div className="w-16 h-2 bg-gray-200 rounded-full"></div>
                   </div>
@@ -273,13 +274,13 @@ export default function Paso08Activacion() {
                       </div>
                     </div>
 
-                    <div className="relative mx-auto w-24 h-24 rounded-2xl overflow-hidden border-2 border-primary/10 p-1 bg-gray-100 flex items-center justify-center">
+                    <div className="relative mx-auto w-24 h-24 rounded-2xl overflow-hidden border-2 border-gray-200 p-1 bg-gray-100 flex items-center justify-center">
                       <User size={48} className="text-gray-300" />
                     </div>
 
                     <div className="space-y-1">
                       <h3 className="font-bold text-lg text-gray-900">{nombreCompleto}</h3>
-                      <p className="text-xs text-muted-foreground font-medium">
+                      <p className="text-xs text-gray-600 font-medium">
                         Vendedor MarketDesliz
                       </p>
                     </div>
@@ -292,10 +293,10 @@ export default function Paso08Activacion() {
                     </div>
 
                     <div className="pt-2 border-t border-gray-100 flex items-center justify-center gap-2">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-primary">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-gray-900">
                         ACTIVO
                       </span>
-                      <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                      <div className="w-4 h-4 bg-gray-900 rounded-full flex items-center justify-center">
                         <CheckCircle2 className="w-2.5 h-2.5 text-white" strokeWidth={4} />
                       </div>
                     </div>
@@ -308,7 +309,7 @@ export default function Paso08Activacion() {
             {error && (
               <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700">
                 <AlertCircle size={18} className="shrink-0" />
-                <span className="text-sm font-medium">{error}</span>
+                <span className="text-sm font-bold">{error}</span>
               </div>
             )}
 
@@ -316,7 +317,7 @@ export default function Paso08Activacion() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
               {/* Checklist */}
-              <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                 <div className="p-8">
                   <h3 className="text-xl font-bold text-gray-900 mb-6">Todo está listo</h3>
                   <div className="space-y-4">
@@ -332,14 +333,14 @@ export default function Paso08Activacion() {
                       return (
                         <div key={i} className="flex items-center justify-between py-2 group cursor-default">
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 bg-secondary rounded-xl flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                            <div className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-center text-gray-700 group-hover:bg-gray-900 group-hover:text-white group-hover:border-gray-900 transition-colors">
                               <Icon size={20} />
                             </div>
-                            <span className="font-semibold text-gray-700">{item.label}</span>
+                            <span className="font-semibold text-gray-800">{item.label}</span>
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className="text-sm font-medium text-muted-foreground">{item.status}</span>
-                            <CheckCircle2 size={18} className="text-green-500" />
+                            <span className="text-sm font-medium text-gray-600">{item.status}</span>
+                            <CheckCircle2 size={18} className="text-gray-900" />
                           </div>
                         </div>
                       );
@@ -349,11 +350,11 @@ export default function Paso08Activacion() {
               </div>
 
               {/* Preview del gafete */}
-              <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden flex flex-col">
+              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden flex flex-col">
                 <div className="p-8 flex-1 space-y-6">
                   <div className="space-y-2">
                     <h3 className="text-xl font-bold text-gray-900">Recibe tu gafete</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
+                    <p className="text-sm text-gray-700 font-medium leading-relaxed">
                       Tu gafete te identifica frente a los clientes como vendedor
                       autorizado de MarketDesliz.
                     </p>
@@ -362,10 +363,10 @@ export default function Paso08Activacion() {
                   <div className="grid grid-cols-2 gap-4">
                     {/* Frente */}
                     <div className="space-y-2">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center block">
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest text-center block">
                         Frente
                       </span>
-                      <div className="aspect-[3/4] bg-white border border-gray-100 rounded-xl shadow-sm p-3 space-y-2 flex flex-col items-center">
+                      <div className="aspect-[3/4] bg-white border border-gray-200 rounded-xl shadow-sm p-3 space-y-2 flex flex-col items-center">
                         <div className="w-full flex items-center gap-1 mb-1">
                           <div className="w-3 h-3 bg-primary rounded-[2px] shrink-0"></div>
                           <span className="text-[8px] font-bold text-gray-900">MarketDesliz</span>
@@ -375,7 +376,7 @@ export default function Paso08Activacion() {
                         </div>
                         <div className="space-y-0.5 text-center">
                           <div className="text-[8px] font-bold text-gray-900">{nombreCompleto}</div>
-                          <div className="text-[6px] text-gray-400">Vendedor MarketDesliz</div>
+                          <div className="text-[6px] text-gray-500">Vendedor MarketDesliz</div>
                         </div>
                         <div className="w-full flex items-center justify-between mt-auto">
                           <div className="bg-primary/5 text-primary text-[6px] px-1 rounded border border-primary/10 font-bold">
@@ -388,24 +389,24 @@ export default function Paso08Activacion() {
 
                     {/* Reverso */}
                     <div className="space-y-2">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center block">
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest text-center block">
                         Reverso
                       </span>
-                      <div className="aspect-[3/4] bg-white border border-gray-100 rounded-xl shadow-sm p-4 flex flex-col items-center justify-center text-center space-y-3">
+                      <div className="aspect-[3/4] bg-white border border-gray-200 rounded-xl shadow-sm p-4 flex flex-col items-center justify-center text-center space-y-3">
                         <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
                           <span className="text-primary font-bold text-xs italic leading-none">M</span>
                         </div>
-                        <p className="text-[7px] font-medium text-gray-600 leading-tight px-1">
+                        <p className="text-[7px] font-medium text-gray-700 leading-tight px-1">
                           Vendedor autorizado para ofrecer productos y servicios de
                           MarketDesliz.
                         </p>
                         <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 bg-secondary rounded-full flex items-center justify-center text-primary">
+                          <div className="w-3 h-3 bg-gray-100 border border-gray-200 rounded-full flex items-center justify-center text-gray-700">
                             <Clock size={6} />
                           </div>
                           <span className="text-[8px] font-bold text-gray-900">{telefono}</span>
                         </div>
-                        <div className="w-full bg-primary py-1.5 rounded-md mt-auto">
+                        <div className="w-full bg-gray-900 py-1.5 rounded-md mt-auto">
                           <span className="text-[7px] text-white font-medium">
                             marketdesliz.com
                           </span>
@@ -414,9 +415,9 @@ export default function Paso08Activacion() {
                     </div>
                   </div>
 
-                  <div className="bg-secondary p-4 rounded-2xl flex gap-3 items-start">
-                    <Info size={16} className="text-primary shrink-0 mt-0.5" />
-                    <p className="text-[11px] text-gray-600 leading-normal">
+                  <div className="bg-gray-50 border border-gray-200 p-4 rounded-2xl flex gap-3 items-start">
+                    <Info size={16} className="text-gray-900 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-gray-700 leading-normal font-medium">
                       Deberás portar tu gafete junto con tu camisa blanca de manga
                       larga con la identidad de MarketDesliz todos los días.
                     </p>
@@ -429,10 +430,10 @@ export default function Paso08Activacion() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
               {/* Horario */}
-              <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                 <div className="p-8 space-y-6">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-secondary rounded-xl flex items-center justify-center text-primary">
+                    <div className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-center text-gray-900">
                       <Calendar size={20} />
                     </div>
                     <h3 className="text-xl font-bold text-gray-900">Tu horario registrado</h3>
@@ -442,27 +443,30 @@ export default function Paso08Activacion() {
                     {dias.slice(0, 5).map((key, i) => (
                       <div key={i} className="flex flex-col items-center gap-2">
                         <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${i === 0 ? 'bg-primary text-white' : 'bg-secondary text-primary'
-                            }`}
+                          className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm border-2 ${
+                            i === 0
+                              ? 'bg-gray-900 text-white border-gray-900'
+                              : 'bg-white text-gray-700 border-gray-200'
+                          }`}
                         >
                           {key.charAt(0)}
                         </div>
-                        <span className="text-[10px] font-medium text-gray-400">
+                        <span className="text-[10px] font-medium text-gray-600">
                           {diasNombres[i]}
                         </span>
                       </div>
                     ))}
                   </div>
 
-                  <div className="bg-secondary/50 p-6 rounded-2xl space-y-4">
+                  <div className="bg-gray-50 border border-gray-200 p-6 rounded-2xl space-y-4">
                     <div className="flex items-center justify-center gap-4">
-                      <Clock className="text-primary" size={20} />
+                      <Clock className="text-gray-900" size={20} />
                       <span className="text-2xl font-black text-gray-900">
                         {horaInicio} - {horaFin}
                       </span>
                     </div>
                     <div className="flex justify-center">
-                      <span className="bg-white text-green-600 border border-green-200 px-3 py-1 font-bold flex items-center gap-2 rounded-full text-xs">
+                      <span className="bg-white text-gray-900 border-2 border-gray-900 px-3 py-1 font-bold flex items-center gap-2 rounded-full text-xs">
                         {dias.length} días semanales <CheckCircle2 size={14} />
                       </span>
                     </div>
@@ -471,10 +475,10 @@ export default function Paso08Activacion() {
               </div>
 
               {/* Primera jornada */}
-              <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+              <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                 <div className="p-8 space-y-8">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-secondary rounded-xl flex items-center justify-center text-primary">
+                    <div className="w-10 h-10 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-center text-gray-900">
                       <Rocket size={20} />
                     </div>
                     <h3 className="text-xl font-bold text-gray-900">Tu primera jornada</h3>
@@ -496,14 +500,14 @@ export default function Paso08Activacion() {
                         const Icon = item.icon;
                         return (
                           <div key={i} className="flex gap-4">
-                            <Icon size={18} className="text-primary shrink-0 mt-0.5" />
+                            <Icon size={18} className="text-gray-900 shrink-0 mt-0.5" />
                             <div className="space-y-1">
-                              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                              <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">
                                 {item.label}
                               </p>
-                              <p className="font-bold text-gray-800 leading-tight">{item.value}</p>
+                              <p className="font-bold text-gray-900 leading-tight">{item.value}</p>
                               {item.sub && (
-                                <p className="text-[10px] text-muted-foreground max-w-[200px] leading-normal">
+                                <p className="text-[10px] text-gray-600 max-w-[200px] leading-normal font-medium">
                                   {item.sub}
                                 </p>
                               )}
@@ -513,8 +517,8 @@ export default function Paso08Activacion() {
                       })}
                     </div>
 
-                    <div className="flex-1 bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-6 flex flex-col justify-between space-y-4">
-                      <p className="text-sm text-gray-600 leading-relaxed italic">
+                    <div className="flex-1 bg-gray-50 border border-dashed border-gray-300 rounded-2xl p-6 flex flex-col justify-between space-y-4">
+                      <p className="text-sm text-gray-700 leading-relaxed italic font-medium">
                         &quot;Preséntate con tu uniforme y gafete. Ahí se registrarán los
                         productos que llevarás durante tu primera jornada.&quot;
                       </p>
@@ -526,9 +530,9 @@ export default function Paso08Activacion() {
                             '_blank'
                           )
                         }
-                        className="w-full bg-white text-gray-900 border border-gray-200 shadow-sm hover:bg-gray-50 font-bold h-12 rounded-xl group flex items-center justify-center transition"
+                        className="w-full bg-white text-gray-900 border-2 border-gray-200 shadow-sm hover:border-gray-900 font-bold h-12 rounded-xl group flex items-center justify-center transition"
                       >
-                        <MapPin size={18} className="mr-2 text-primary" />
+                        <MapPin size={18} className="mr-2 text-gray-900" />
                         Cómo llegar
                       </button>
                     </div>
@@ -557,23 +561,25 @@ export default function Paso08Activacion() {
                     <div key={i} className="flex items-start">
                       <div className="flex flex-col items-center gap-3 text-center w-[12%] min-w-[100px]">
                         <div
-                          className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${i === 6
-                              ? 'bg-primary text-white shadow-lg'
-                              : 'bg-white shadow-sm border border-gray-100 text-gray-400'
-                            }`}
+                          className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all border-2 ${
+                            i === 6
+                              ? 'bg-gray-900 text-white border-gray-900 shadow-lg'
+                              : 'bg-white border-gray-200 text-gray-500'
+                          }`}
                         >
                           <Icon size={24} className={step.rotate ? 'rotate-180' : ''} />
                         </div>
                         <p
-                          className={`text-[10px] font-bold leading-tight px-1 ${i === 6 ? 'text-primary' : 'text-gray-500'
-                            }`}
+                          className={`text-[10px] font-bold leading-tight px-1 ${
+                            i === 6 ? 'text-gray-900' : 'text-gray-600'
+                          }`}
                         >
                           {step.label}
                         </p>
                       </div>
                       {i < 6 && (
                         <div className="hidden md:flex items-center pt-7">
-                          <ChevronRight size={16} className="text-gray-200" />
+                          <ChevronRight size={16} className="text-gray-300" />
                         </div>
                       )}
                     </div>
@@ -583,7 +589,7 @@ export default function Paso08Activacion() {
             </section>
 
             {/* ─── ESPACIO DE VENDEDOR PREVIEW ─────────────── */}
-            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+            <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
               <div className="p-0 flex flex-col md:flex-row items-center">
 
                 {/* Mockup teléfono */}
@@ -655,10 +661,10 @@ export default function Paso08Activacion() {
                           key={i}
                           className="flex flex-col items-center gap-3 text-center group cursor-default"
                         >
-                          <div className="w-12 h-12 bg-gray-50 border border-gray-100 rounded-2xl flex items-center justify-center text-gray-400 group-hover:text-primary group-hover:bg-primary/5 group-hover:border-primary/20 transition-all">
+                          <div className="w-12 h-12 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-center text-gray-500 group-hover:text-gray-900 group-hover:bg-white group-hover:border-gray-900 transition-all">
                             <Icon size={22} />
                           </div>
-                          <p className="text-[9px] font-bold text-gray-500 group-hover:text-primary leading-tight">
+                          <p className="text-[9px] font-bold text-gray-600 group-hover:text-gray-900 leading-tight">
                             {item.label}
                           </p>
                         </div>
@@ -669,10 +675,11 @@ export default function Paso08Activacion() {
                   <button
                     onClick={irAlDashboard}
                     disabled={activando || !vendedor}
-                    className={`w-full font-black py-6 text-base rounded-2xl flex items-center justify-center gap-3 transition-all ${activando || !vendedor
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-primary hover:bg-primary/90 text-white shadow-xl shadow-primary/20 active:scale-[0.98]'
-                      }`}
+                    className={`w-full font-bold py-6 text-base rounded-2xl flex items-center justify-center gap-3 transition-all border-2 ${
+                      activando || !vendedor
+                        ? 'bg-gray-200 text-gray-500 border-gray-200 cursor-not-allowed'
+                        : 'bg-gray-900 hover:bg-gray-800 text-white border-gray-900 shadow-xl shadow-gray-900/20 active:scale-[0.98]'
+                    }`}
                   >
                     {activando ? (
                       <>
@@ -691,9 +698,9 @@ export default function Paso08Activacion() {
             </div>
 
             {/* ─── BIENVENIDA ──────────────────────────────── */}
-            <div className="bg-secondary rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-primary relative shrink-0">
+                <div className="w-12 h-12 bg-white border border-gray-200 rounded-2xl shadow-sm flex items-center justify-center text-gray-900 relative shrink-0">
                   <Star size={24} fill="currentColor" className="opacity-20" />
                   <Star size={24} className="absolute" />
                 </div>
@@ -701,7 +708,7 @@ export default function Paso08Activacion() {
                   <h4 className="font-bold text-gray-900">
                     Bienvenido a MarketDesliz, {primerNombre}.
                   </h4>
-                  <p className="text-sm text-muted-foreground font-medium">
+                  <p className="text-sm text-gray-700 font-medium">
                     Todo está listo. Tu siguiente paso es tu primera jornada.
                   </p>
                 </div>
@@ -715,7 +722,7 @@ export default function Paso08Activacion() {
                     <User size={14} />
                   </div>
                 ))}
-                <div className="w-8 h-8 rounded-full border-2 border-white bg-primary flex items-center justify-center text-white text-[10px] font-bold">
+                <div className="w-8 h-8 rounded-full border-2 border-white bg-gray-900 flex items-center justify-center text-white text-[10px] font-bold">
                   +
                 </div>
               </div>
@@ -723,14 +730,14 @@ export default function Paso08Activacion() {
 
             {/* FOOTER */}
             <footer className="py-8 border-t border-gray-100 flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-3 text-gray-400">
+              <div className="flex items-center gap-3 text-gray-600">
                 <Lock size={16} />
                 <div className="text-[11px] font-medium">
-                  <p className="font-bold text-gray-600">Tu información está protegida.</p>
-                  <p>Usamos tus datos solo para el proceso de selección.</p>
+                  <p className="font-bold text-gray-800">Tu información está protegida.</p>
+                  <p className="text-gray-700">Usamos tus datos solo para el proceso de selección.</p>
                 </div>
               </div>
-              <div className="text-xl font-bold tracking-tight">
+              <div className="text-xl font-bold tracking-tight text-gray-900">
                 Market<span className="text-primary">Desliz</span>
               </div>
             </footer>
@@ -756,7 +763,7 @@ const STEPS = [
 
 function ProgressSteps({ stepActual = 8 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm overflow-x-auto">
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
       <div className="flex items-center justify-between gap-2 min-w-[720px]">
         {STEPS.map((step, idx) => {
           const Icon = step.icon;
@@ -766,27 +773,41 @@ function ProgressSteps({ stepActual = 8 }) {
             <div key={step.id} className="flex items-center gap-2 flex-1">
               <div className="flex flex-col items-center gap-2 flex-1">
                 <div
-                  className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${isActive
-                      ? 'bg-primary text-white shadow-md shadow-primary/20 scale-110'
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all border-2 ${
+                    isActive
+                      ? 'bg-gray-900 text-white border-gray-900 ring-4 ring-gray-900/15 shadow-lg shadow-gray-900/20 scale-110'
                       : isCompleted
-                        ? 'bg-green-100 text-green-600'
-                        : 'bg-gray-100 text-gray-400'
-                    }`}
+                      ? 'bg-white text-gray-900 border-gray-900'
+                      : 'bg-gray-50 text-gray-400 border-gray-200'
+                  }`}
                 >
-                  {isCompleted ? <Check size={18} className="stroke-[3px]" /> : <Icon size={18} />}
+                  {isCompleted ? <Check size={20} className="stroke-[3px]" /> : <Icon size={20} />}
                 </div>
                 <div className="text-center">
-                  <p className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? 'text-primary' : isCompleted ? 'text-green-600' : 'text-gray-400'
-                    }`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-wider ${
+                    isActive
+                      ? 'text-gray-900'
+                      : isCompleted
+                      ? 'text-gray-800'
+                      : 'text-gray-500'
+                  }`}>
                     Paso {step.id}
                   </p>
-                  <p className={`text-[10px] font-semibold ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>
+                  <p className={`text-[10px] font-semibold pb-1 ${
+                    isActive
+                      ? 'text-gray-900 underline underline-offset-4 decoration-2 decoration-gray-900'
+                      : isCompleted
+                      ? 'text-gray-700'
+                      : 'text-gray-500'
+                  }`}>
                     {step.title}
                   </p>
                 </div>
               </div>
               {idx < STEPS.length - 1 && (
-                <div className={`h-0.5 flex-shrink-0 w-6 rounded-full ${step.id < stepActual ? 'bg-green-300' : 'bg-gray-100'}`} />
+                <div className={`h-0.5 flex-shrink-0 w-6 rounded-full ${
+                  step.id < stepActual ? 'bg-gray-900' : 'bg-gray-200'
+                }`} />
               )}
             </div>
           );

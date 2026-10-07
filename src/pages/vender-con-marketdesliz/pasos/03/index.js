@@ -69,10 +69,12 @@ export default function Paso03Entrevista() {
         return;
       }
 
-      // Restaurar datos previos
+      // Restaurar datos previos.
+      // Nota: `nombre` vive en `users` (fuente de verdad). `telefono` de `vacantes` es el
+      // teléfono de contacto de la solicitud.
       setFormData({
-        nombre: sol.nombre || currentUser.nombre || '',
-        telefono: sol.telefono || currentUser.telefono || '',
+        nombre: currentUser?.nombre || '',
+        telefono: sol.telefono || currentUser?.telefono || '',
         edad: sol.edad || '',
         ciudad: sol.ciudad || '',
         experiencia: sol.experiencia || '',
@@ -137,8 +139,14 @@ export default function Paso03Entrevista() {
     setError('');
 
     try {
+      // 1) Si el usuario cambió su nombre, actualizar `users` (fuente de verdad).
+      const nombreLimpio = formData.nombre.trim();
+      if (nombreLimpio && nombreLimpio !== (user.nombre || '')) {
+        await pb.collection('users').update(user.id, { nombre: nombreLimpio });
+      }
+
+      // 2) Guardar el resto en `vacantes` (sin `nombre`, que ya vive en users).
       await guardarProgreso({
-        nombre: formData.nombre.trim(),
         telefono: formData.telefono.trim(),
         edad: parseInt(formData.edad) || 0,
         ciudad: formData.ciudad.trim(),
@@ -176,8 +184,8 @@ export default function Paso03Entrevista() {
           }}
         />
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-muted-foreground text-sm">Cargando...</p>
+          <div className="w-8 h-8 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+          <p className="mt-4 text-gray-700 text-sm font-medium">Cargando...</p>
         </div>
       </div>
     );
@@ -219,15 +227,15 @@ export default function Paso03Entrevista() {
                 <h1 className="text-4xl md:text-5xl font-black leading-tight text-gray-900 mb-4 tracking-tight">
                   Queremos <span className="text-primary">conocerte.</span>
                 </h1>
-                <p className="text-gray-500 text-lg font-medium max-w-xl">
+                <p className="text-gray-700 text-lg font-medium max-w-xl">
                   Cuéntanos un poco sobre ti, qué buscas y por qué te interesa formar
                   parte de MarketDesliz.
                 </p>
               </div>
 
               <div className="relative shrink-0 hidden md:block">
-                <div className="w-24 h-24 bg-white rounded-3xl shadow-sm flex items-center justify-center border border-gray-100 relative z-10">
-                  <div className="w-12 h-12 text-primary">
+                <div className="w-24 h-24 bg-white rounded-3xl shadow-sm flex items-center justify-center border border-gray-200 relative z-10">
+                  <div className="w-12 h-12 text-gray-900">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M4 18c0-2.209 1.791-4 4-4s4 1.791 4 4" />
                       <path d="M12 18c0-2.209 1.791-4 4-4s4 1.791 4 4" />
@@ -244,9 +252,9 @@ export default function Paso03Entrevista() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
               {/* FORMULARIO */}
-              <div className="lg:col-span-2 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-                <h3 className="font-bold text-gray-800 mb-5 flex items-center gap-2">
-                  <ClipboardCheck size={18} className="text-primary" />
+              <div className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                <h3 className="font-bold text-gray-900 mb-5 flex items-center gap-2">
+                  <ClipboardCheck size={18} className="text-gray-900" />
                   Información personal
                 </h3>
 
@@ -254,23 +262,23 @@ export default function Paso03Entrevista() {
                   {/* Nombre + Teléfono */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
                         Nombre completo *
                       </label>
                       <div className="relative">
-                        <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                         <input
                           type="text"
                           name="nombre"
                           value={formData.nombre}
                           onChange={handleChange}
                           placeholder="Ej: Juan Pérez"
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-sm transition"
+                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-gray-900 text-sm text-gray-900 transition"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
                         Teléfono *
                       </label>
                       <input
@@ -279,7 +287,7 @@ export default function Paso03Entrevista() {
                         value={formData.telefono}
                         onChange={handleChange}
                         placeholder="Ej: 55 1234 5678"
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-sm transition"
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-gray-900 text-sm text-gray-900 transition"
                       />
                     </div>
                   </div>
@@ -287,34 +295,34 @@ export default function Paso03Entrevista() {
                   {/* Edad + Ciudad */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
                         Edad *
                       </label>
                       <div className="relative">
-                        <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                         <input
                           type="number"
                           name="edad"
                           value={formData.edad}
                           onChange={handleChange}
                           placeholder="Ej: 25"
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-sm transition"
+                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-gray-900 text-sm text-gray-900 transition"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                      <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
                         Ciudad donde vives *
                       </label>
                       <div className="relative">
-                        <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                         <input
                           type="text"
                           name="ciudad"
                           value={formData.ciudad}
                           onChange={handleChange}
                           placeholder="Ej: Veracruz, Ver."
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-sm transition"
+                          className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-gray-900 text-sm text-gray-900 transition"
                         />
                       </div>
                     </div>
@@ -322,43 +330,43 @@ export default function Paso03Entrevista() {
 
                   {/* Experiencia */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
                       ¿Tienes experiencia en ventas? *
                     </label>
                     <div className="relative">
-                      <Briefcase size={16} className="absolute left-3 top-3 text-gray-400" />
+                      <Briefcase size={16} className="absolute left-3 top-3 text-gray-500" />
                       <textarea
                         name="experiencia"
                         value={formData.experiencia}
                         onChange={handleChange}
                         rows={3}
                         placeholder="Cuéntanos sobre trabajos anteriores o si es tu primera vez vendiendo..."
-                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-sm transition resize-none"
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-gray-900 text-sm text-gray-900 transition resize-none"
                       />
                     </div>
                   </div>
 
                   {/* Motivación */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
                       ¿Por qué te interesa trabajar con nosotros? *
                     </label>
                     <div className="relative">
-                      <MessageSquare size={16} className="absolute left-3 top-3 text-gray-400" />
+                      <MessageSquare size={16} className="absolute left-3 top-3 text-gray-500" />
                       <textarea
                         name="motivacion"
                         value={formData.motivacion}
                         onChange={handleChange}
                         rows={3}
                         placeholder="Cuéntanos tu motivación..."
-                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-sm transition resize-none"
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-900 focus:border-gray-900 text-sm text-gray-900 transition resize-none"
                       />
                     </div>
                   </div>
 
                   {/* Transporte */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                    <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
                       ¿Cuentas con vehículo o transporte propio? *
                     </label>
                     <div className="grid grid-cols-3 gap-3">
@@ -367,10 +375,10 @@ export default function Paso03Entrevista() {
                           key={op}
                           type="button"
                           onClick={() => handleTransporte(op)}
-                          className={`py-2.5 rounded-xl text-sm font-semibold border transition ${
+                          className={`py-2.5 rounded-xl text-sm font-bold border-2 transition ${
                             formData.tipoTransporte === op
-                              ? 'bg-primary text-white border-primary shadow-sm'
-                              : 'bg-white border-gray-200 text-gray-600 hover:border-primary hover:text-primary'
+                              ? 'bg-gray-900 text-white border-gray-900 shadow-sm'
+                              : 'bg-white border-gray-200 text-gray-700 hover:border-gray-900 hover:text-gray-900'
                           }`}
                         >
                           {op}
@@ -385,42 +393,42 @@ export default function Paso03Entrevista() {
               <div className="space-y-4">
 
                 {/* ¿Qué buscamos? */}
-                <div className="bg-primary/5 border border-primary/10 rounded-2xl p-5">
-                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-primary mb-3">
+                <div className="bg-primary/5 border border-primary/15 rounded-2xl p-5">
+                  <div className="w-10 h-10 bg-white border border-gray-200 rounded-xl flex items-center justify-center text-gray-900 mb-3">
                     <Target size={18} />
                   </div>
-                  <h3 className="font-bold text-gray-800 mb-3 text-sm">¿Qué buscamos?</h3>
-                  <ul className="text-xs text-gray-600 space-y-2">
+                  <h3 className="font-bold text-gray-900 mb-3 text-sm">¿Qué buscamos?</h3>
+                  <ul className="text-xs text-gray-700 space-y-2 font-medium">
                     <li className="flex items-start gap-2">
-                      <Check size={12} className="text-primary mt-0.5 shrink-0" />
+                      <Check size={12} className="text-gray-900 mt-0.5 shrink-0" />
                       Personas comprometidas con su trabajo
                     </li>
                     <li className="flex items-start gap-2">
-                      <Check size={12} className="text-primary mt-0.5 shrink-0" />
+                      <Check size={12} className="text-gray-900 mt-0.5 shrink-0" />
                       Buena comunicación y trato con clientes
                     </li>
                     <li className="flex items-start gap-2">
-                      <Check size={12} className="text-primary mt-0.5 shrink-0" />
+                      <Check size={12} className="text-gray-900 mt-0.5 shrink-0" />
                       Disponibilidad para trabajar 5 días mínimo
                     </li>
                     <li className="flex items-start gap-2">
-                      <Check size={12} className="text-primary mt-0.5 shrink-0" />
+                      <Check size={12} className="text-gray-900 mt-0.5 shrink-0" />
                       Ganas de aprender y crecer
                     </li>
                   </ul>
                 </div>
 
                 {/* Progreso del formulario */}
-                <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-                  <h3 className="font-bold text-gray-800 mb-3 text-sm">Progreso</h3>
+                <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                  <h3 className="font-bold text-gray-900 mb-3 text-sm">Progreso</h3>
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">Campos completados</span>
-                      <span className="font-bold text-primary">{totalCompletados}/7</span>
+                      <span className="text-gray-600 font-medium">Campos completados</span>
+                      <span className="font-bold text-gray-900">{totalCompletados}/7</span>
                     </div>
                     <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-primary rounded-full transition-all"
+                        className="h-full bg-gray-900 rounded-full transition-all"
                         style={{ width: `${(totalCompletados / 7) * 100}%` }}
                       />
                     </div>
@@ -428,7 +436,7 @@ export default function Paso03Entrevista() {
                 </div>
 
                 {/* Info protegida */}
-                <div className="flex items-center gap-3 text-gray-400 p-3">
+                <div className="flex items-center gap-3 text-gray-600 p-3">
                   <Lock size={14} />
                   <p className="text-[10px] font-medium">
                     Tu información está protegida. La usamos solo para el proceso de selección.
@@ -441,29 +449,31 @@ export default function Paso03Entrevista() {
             {error && (
               <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700">
                 <AlertCircle size={18} className="shrink-0" />
-                <span className="text-sm font-medium">{error}</span>
+                <span className="text-sm font-bold">{error}</span>
               </div>
             )}
 
             {/* FOOTER DE ACCIÓN */}
-            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-5">
-                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <ClipboardCheck className="w-7 h-7 text-primary" />
+                <div className="w-14 h-14 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center shrink-0">
+                  <ClipboardCheck className="w-7 h-7 text-gray-900" />
                 </div>
                 <div>
                   <div className="flex items-baseline gap-2 mb-1">
                     <h3 className="text-lg font-black text-gray-900">Entrevista</h3>
-                    <span className={`text-lg font-black ${camposCompletos ? 'text-primary' : 'text-gray-400'}`}>
+                    <span className={`text-lg font-black ${camposCompletos ? 'text-gray-900' : 'text-gray-400'}`}>
                       {totalCompletados}/7
                     </span>
                   </div>
                   <div className="space-y-1">
-                    <div className={`flex items-center gap-2 text-xs font-bold ${totalCompletados >= 7 ? 'text-primary' : 'text-gray-400'}`}>
+                    <div className={`flex items-center gap-2 text-xs font-bold ${
+                      totalCompletados >= 7 ? 'text-gray-900' : 'text-gray-400'
+                    }`}>
                       {totalCompletados >= 7 ? <Check className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
                       <span>Información completa</span>
                     </div>
-                    <div className="flex items-center gap-2 text-xs font-bold text-primary">
+                    <div className="flex items-center gap-2 text-xs font-bold text-gray-900">
                       <Check className="w-3 h-3" />
                       <span>Disponibilidad registrada</span>
                     </div>
@@ -475,10 +485,10 @@ export default function Paso03Entrevista() {
                 <button
                   onClick={continuar}
                   disabled={guardando || !camposCompletos}
-                  className={`h-14 px-8 md:px-10 font-bold text-base rounded-2xl flex items-center gap-3 transition-all shrink-0 ${
+                  className={`h-14 px-8 md:px-10 font-bold text-base rounded-2xl flex items-center gap-3 transition-all shrink-0 border-2 ${
                     guardando || !camposCompletos
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20'
+                      ? 'bg-gray-200 text-gray-500 border-gray-200 cursor-not-allowed'
+                      : 'bg-gray-900 hover:bg-gray-800 text-white border-gray-900 shadow-lg shadow-gray-900/20'
                   }`}
                 >
                   {guardando ? (
@@ -494,7 +504,7 @@ export default function Paso03Entrevista() {
                   )}
                 </button>
                 {!camposCompletos && (
-                  <p className="text-xs text-red-500 font-medium">
+                  <p className="text-xs text-red-600 font-bold">
                     Completa los {7 - totalCompletados} campos restantes
                   </p>
                 )}
@@ -503,14 +513,14 @@ export default function Paso03Entrevista() {
 
             {/* FOOTER FINAL */}
             <footer className="py-8 border-t border-gray-100 flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-3 text-gray-400">
+              <div className="flex items-center gap-3 text-gray-600">
                 <Lock size={16} />
                 <div className="text-[11px] font-medium">
-                  <p className="font-bold text-gray-600">Tu información está protegida.</p>
-                  <p>Usamos tus datos solo para el proceso de selección.</p>
+                  <p className="font-bold text-gray-800">Tu información está protegida.</p>
+                  <p className="text-gray-700">Usamos tus datos solo para el proceso de selección.</p>
                 </div>
               </div>
-              <div className="text-xl font-bold tracking-tight">
+              <div className="text-xl font-bold tracking-tight text-gray-900">
                 Market<span className="text-primary">Desliz</span>
               </div>
             </footer>
@@ -536,7 +546,7 @@ const STEPS = [
 
 function ProgressSteps({ stepActual = 3 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm overflow-x-auto">
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
       <div className="flex items-center justify-between gap-2 min-w-[720px]">
         {STEPS.map((step, idx) => {
           const Icon = step.icon;
@@ -546,29 +556,41 @@ function ProgressSteps({ stepActual = 3 }) {
             <div key={step.id} className="flex items-center gap-2 flex-1">
               <div className="flex flex-col items-center gap-2 flex-1">
                 <div
-                  className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all border-2 ${
                     isActive
-                      ? 'bg-primary text-white shadow-md shadow-primary/20 scale-110'
+                      ? 'bg-gray-900 text-white border-gray-900 ring-4 ring-gray-900/15 shadow-lg shadow-gray-900/20 scale-110'
                       : isCompleted
-                      ? 'bg-green-100 text-green-600'
-                      : 'bg-gray-100 text-gray-400'
+                      ? 'bg-white text-gray-900 border-gray-900'
+                      : 'bg-gray-50 text-gray-400 border-gray-200'
                   }`}
                 >
-                  {isCompleted ? <Check size={18} className="stroke-[3px]" /> : <Icon size={18} />}
+                  {isCompleted ? <Check size={20} className="stroke-[3px]" /> : <Icon size={20} />}
                 </div>
                 <div className="text-center">
                   <p className={`text-[10px] font-bold uppercase tracking-wider ${
-                    isActive ? 'text-primary' : isCompleted ? 'text-green-600' : 'text-gray-400'
+                    isActive
+                      ? 'text-gray-900'
+                      : isCompleted
+                      ? 'text-gray-800'
+                      : 'text-gray-500'
                   }`}>
                     Paso {step.id}
                   </p>
-                  <p className={`text-[10px] font-semibold ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>
+                  <p className={`text-[10px] font-semibold pb-1 ${
+                    isActive
+                      ? 'text-gray-900 underline underline-offset-4 decoration-2 decoration-gray-900'
+                      : isCompleted
+                      ? 'text-gray-700'
+                      : 'text-gray-500'
+                  }`}>
                     {step.title}
                   </p>
                 </div>
               </div>
               {idx < STEPS.length - 1 && (
-                <div className={`h-0.5 flex-shrink-0 w-6 rounded-full ${step.id < stepActual ? 'bg-green-300' : 'bg-gray-100'}`} />
+                <div className={`h-0.5 flex-shrink-0 w-6 rounded-full ${
+                  step.id < stepActual ? 'bg-gray-900' : 'bg-gray-200'
+                }`} />
               )}
             </div>
           );

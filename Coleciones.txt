@@ -1495,9 +1495,7 @@ DeleteRule: @request.auth.role = "admin"
 
 // 📁 COLLECTION: vacantes
 | Campo       | Tipo     | Configuración              |
-|-------------|----------|----------------------------|
-| nombre      | text     | requerido                  |
-| email       | email    | requerido                  |
+|-------------|----------|----------------------------|              |
 | telefono    | text     | -                          |
 | puesto      | text     | requerido                  |
 | experiencia | text     | -                          |
@@ -1540,6 +1538,12 @@ userId                relation: users
 altaCompletada	bool	default: false
 citaConfirmada	bool	default: false
 fechaConfirmacionCita	date	nullable
+datosPuesto  json  
+fechaEvaluacion       date
+horaEvaluacion        text
+lugarEvaluacion       text
+direccionEvaluacion   text
+
 
 // API Rules
 ListRule:   @request.auth.role = "admin" || userId = @request.auth.id

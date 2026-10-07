@@ -13,6 +13,22 @@ import HeaderSimple from '../../../../components/Header';
 import pb from '../../../../lib/pocketbase';
 import { getMiSolicitud, guardarProgreso } from '../../../../lib/vendedoresService';
 
+// Formatea fechas ISO a formato legible en español
+function formatearFecha(fechaISO) {
+  if (!fechaISO) return 'Por confirmar';
+  try {
+    const fecha = new Date(fechaISO);
+    return fecha.toLocaleDateString('es-MX', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  } catch {
+    return fechaISO;
+  }
+}
+
 export default function Paso07Evaluacion() {
   const router = useRouter();
 
@@ -110,14 +126,16 @@ export default function Paso07Evaluacion() {
     }
   };
 
-  // ─── Datos dinámicos (con fallback a valores del template) ───
-  const nombreCompleto = solicitud?.nombre || user?.nombre || 'Sin nombre';
+  // ─── Datos dinámicos ───────────────────────────────────
+  // Nota: `nombre` vive en `users`. Los campos de cita vienen de `vacantes`.
+  // El capacitador se obtiene vía expand de `evaluadorId`.
+  const nombreCompleto = user?.nombre || 'Sin nombre';
   const gafeteNumero = solicitud?.gafeteNumero || 'MDZ-V-XXX';
-  const fechaCita = solicitud?.fechaEvaluacion || 'Por confirmar';
+  const fechaCita = formatearFecha(solicitud?.fechaEvaluacion);
   const horaCita = solicitud?.horaEvaluacion || 'Por confirmar';
   const lugarCita = solicitud?.lugarEvaluacion || 'Centro de capacitación MarketDesliz';
   const direccionCita = solicitud?.direccionEvaluacion || 'Av. Siempre Viva 123, Col. Centro, Cuauhtémoc, Ciudad de México';
-  const capacitador = solicitud?.evaluadorNombre || 'Por asignar';
+  const capacitador = solicitud?.expand?.evaluadorId?.nombre || 'Por asignar';
 
   // ─── Loading ───────────────────────────────────────────
   if (loading) {
@@ -137,8 +155,8 @@ export default function Paso07Evaluacion() {
           }}
         />
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-muted-foreground text-sm">Cargando...</p>
+          <div className="w-8 h-8 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+          <p className="mt-4 text-gray-700 text-sm font-medium">Cargando...</p>
         </div>
       </div>
     );
@@ -174,14 +192,14 @@ export default function Paso07Evaluacion() {
             {/* ─── HEADER & ID CARD ────────────────────────────── */}
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
               <div className="space-y-6">
-                <div className="text-primary font-black text-xs tracking-[0.2em] uppercase">
+                <div className="inline-block bg-primary/10 text-primary px-3 py-1 rounded-full font-bold text-[10px] tracking-widest uppercase">
                   07 • Evaluación
                 </div>
                 <h1 className="text-4xl lg:text-6xl font-black text-gray-900 leading-tight tracking-tight">
                   Es momento de <br /> demostrar lo que <br />{' '}
                   <span className="text-primary">aprendiste.</span>
                 </h1>
-                <p className="text-muted-foreground text-lg max-w-md leading-relaxed font-medium">
+                <p className="text-gray-700 text-lg max-w-md leading-relaxed font-medium">
                   Tu evaluación es presencial. Te asignamos un lugar, fecha y hora
                   para realizar una venta completa con tu capacitador de
                   MarketDesliz.
@@ -190,15 +208,15 @@ export default function Paso07Evaluacion() {
 
               <div className="relative flex justify-center">
                 {/* Anotación manuscrita */}
-                <div className="absolute -left-16 top-1/4 transform -rotate-6 hidden lg:block text-primary">
+                <div className="absolute -left-16 top-1/4 transform -rotate-6 hidden lg:block text-gray-900">
                   <p className="font-semibold text-lg italic leading-tight">
                     Cada venta <br /> es una oportunidad <br /> para crecer.
                   </p>
-                  <div className="ml-8 mt-2 w-10 h-10 border-b-2 border-r-2 border-primary rounded-br-2xl"></div>
+                  <div className="ml-8 mt-2 w-10 h-10 border-b-2 border-r-2 border-gray-900 rounded-br-2xl"></div>
                 </div>
 
                 {/* ID Card */}
-                <div className="bg-white rounded-2xl p-7 shadow-lg w-80 border border-gray-100 relative overflow-hidden ring-1 ring-gray-100 group transition-transform hover:-rotate-1">
+                <div className="bg-white rounded-2xl p-7 shadow-lg w-80 border border-gray-200 relative overflow-hidden ring-1 ring-gray-100 group transition-transform hover:-rotate-1">
                   <div className="flex justify-between items-start mb-8">
                     <div className="flex items-center gap-1.5">
                       <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center text-white">
@@ -212,13 +230,13 @@ export default function Paso07Evaluacion() {
                   </div>
 
                   <div className="flex flex-col items-center text-center mb-8">
-                    <div className="w-28 h-28 rounded-2xl overflow-hidden mb-5 border-4 border-primary/10 shadow-inner bg-gray-100 flex items-center justify-center">
-                      <User size={48} className="text-gray-300" />
+                    <div className="w-28 h-28 rounded-2xl overflow-hidden mb-5 border-4 border-gray-200 shadow-inner bg-gray-100 flex items-center justify-center">
+                      <User size={48} className="text-gray-400" />
                     </div>
                     <h3 className="font-black text-gray-900 text-lg tracking-tight">
                       {nombreCompleto}
                     </h3>
-                    <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mt-1">
+                    <p className="text-gray-600 text-[10px] font-bold uppercase tracking-widest mt-1">
                       Vendedor MarketDesliz
                     </p>
                     <div className="bg-primary/10 text-primary text-[10px] font-black px-4 py-1.5 rounded-full mt-3 tracking-wider">
@@ -226,14 +244,14 @@ export default function Paso07Evaluacion() {
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-end border-t border-gray-50 pt-6">
+                  <div className="flex justify-between items-end border-t border-gray-100 pt-6">
                     <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-md"></div>
-                      <span className="text-[10px] font-black text-green-600 uppercase tracking-widest">
+                      <div className="w-2.5 h-2.5 rounded-full bg-gray-900 shadow-md"></div>
+                      <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest">
                         En proceso
                       </span>
                     </div>
-                    <div className="bg-gray-50 p-2 rounded-xl">
+                    <div className="bg-gray-50 border border-gray-200 p-2 rounded-xl">
                       <QrCode size={32} className="text-gray-800" />
                     </div>
                   </div>
@@ -245,9 +263,9 @@ export default function Paso07Evaluacion() {
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
               {/* Cita */}
-              <div className="bg-white rounded-2xl p-10 shadow-sm border border-gray-100 space-y-8">
+              <div className="bg-white rounded-2xl p-10 shadow-sm border border-gray-200 space-y-8">
                 <div className="flex items-center gap-5">
-                  <div className="w-14 h-14 rounded-2xl bg-primary/5 flex items-center justify-center text-primary shadow-sm shrink-0">
+                  <div className="w-14 h-14 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-900 shadow-sm shrink-0">
                     <Calendar size={24} />
                   </div>
                   <div>
@@ -282,18 +300,17 @@ export default function Paso07Evaluacion() {
                     href={`https://maps.google.com/?q=${encodeURIComponent(lugarCita)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-3 border-2 border-gray-100 rounded-2xl py-4 text-sm font-black text-gray-600 hover:bg-gray-50 transition-all hover:border-gray-200 group"
+                    className="flex items-center justify-center gap-3 border-2 border-gray-200 rounded-2xl py-4 text-sm font-bold text-gray-700 hover:bg-gray-50 hover:border-gray-900 transition-all group"
                   >
                     <Navigation
                       size={16}
-                      className="text-primary group-hover:translate-x-1 transition-transform"
+                      className="text-gray-900 group-hover:translate-x-1 transition-transform"
                     />
                     Cómo llegar
                   </a>
                   <button
                     type="button"
                     onClick={() => {
-                      // Descarga .ics básico — opcional
                       const ics = [
                         'BEGIN:VCALENDAR',
                         'VERSION:2.0',
@@ -311,18 +328,18 @@ export default function Paso07Evaluacion() {
                       a.click();
                       URL.revokeObjectURL(url);
                     }}
-                    className="flex items-center justify-center gap-3 border-2 border-gray-100 rounded-2xl py-4 text-sm font-black text-gray-600 hover:bg-gray-50 transition-all hover:border-gray-200"
+                    className="flex items-center justify-center gap-3 border-2 border-gray-200 rounded-2xl py-4 text-sm font-bold text-gray-700 hover:bg-gray-50 hover:border-gray-900 transition-all"
                   >
-                    <PlusCircle size={16} className="text-primary" />
+                    <PlusCircle size={16} className="text-gray-900" />
                     Agregar a calendario
                   </button>
                 </div>
               </div>
 
               {/* Requisitos */}
-              <div className="bg-white rounded-2xl p-10 shadow-sm border border-gray-100 space-y-8">
+              <div className="bg-white rounded-2xl p-10 shadow-sm border border-gray-200 space-y-8">
                 <div className="flex items-center gap-5">
-                  <div className="w-14 h-14 rounded-2xl bg-primary/5 flex items-center justify-center text-primary shadow-sm shrink-0">
+                  <div className="w-14 h-14 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-900 shadow-sm shrink-0">
                     <Briefcase size={24} />
                   </div>
                   <h2 className="text-2xl font-black text-gray-900 tracking-tight">
@@ -335,25 +352,22 @@ export default function Paso07Evaluacion() {
                     icon={<DollarSign size={20} />}
                     title="$100 en efectivo"
                     desc="El pago se realiza presencialmente el día de tu evaluación."
-                    color="green"
                   />
                   <RequirementItem
                     icon={<Shirt size={20} />}
                     title="Tu uniforme"
                     desc="Camisa blanca de manga larga con la identidad de MarketDesliz."
-                    color="blue"
                   />
                   <RequirementItem
                     icon={<BookOpen size={20} />}
                     title="Tu guion y objeciones"
                     desc="Evaluaremos que puedas desenvolverte sin depender de leerlos."
-                    color="purple"
                   />
                 </div>
 
-                <div className="mt-6 bg-gray-50 rounded-2xl p-5 flex items-center gap-4 border border-gray-100">
-                  <Info size={24} className="text-blue-500 shrink-0" />
-                  <p className="text-sm text-muted-foreground font-bold leading-snug">
+                <div className="mt-6 bg-gray-50 rounded-2xl p-5 flex items-center gap-4 border border-gray-200">
+                  <Info size={24} className="text-gray-900 shrink-0" />
+                  <p className="text-sm text-gray-700 font-bold leading-snug">
                     Llega puntual. Tu capacitador te estará esperando.
                   </p>
                 </div>
@@ -361,7 +375,7 @@ export default function Paso07Evaluacion() {
             </section>
 
             {/* ─── PROCESO ─────────────────────────────────────── */}
-            <section className="bg-white rounded-2xl p-12 shadow-sm border border-gray-100">
+            <section className="bg-white rounded-2xl p-12 shadow-sm border border-gray-200">
               <h2 className="text-3xl font-black text-gray-900 mb-16 text-center tracking-tight">
                 ¿Qué sucederá en tu evaluación?
               </h2>
@@ -377,7 +391,7 @@ export default function Paso07Evaluacion() {
 
             {/* ─── CRITERIOS & RESULTADOS ──────────────────────── */}
             <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 bg-white rounded-2xl p-10 shadow-sm border border-gray-100">
+              <div className="lg:col-span-2 bg-white rounded-2xl p-10 shadow-sm border border-gray-200">
                 <h2 className="text-2xl font-black text-gray-900 mb-10 tracking-tight">
                   Lo que evaluará tu capacitador
                 </h2>
@@ -391,13 +405,13 @@ export default function Paso07Evaluacion() {
                   <CriteriaItem icon={<Shield size={18} />} title="Objeciones" sub="Sabe reaccionar al 'No'." />
                   <CriteriaItem icon={<Shirt size={18} />} title="Presentación" sub="Uso correcto del uniforme." />
                 </div>
-                <div className="mt-12 bg-primary/5 rounded-2xl p-5 flex items-center justify-center gap-4 text-primary font-black text-sm text-center border border-primary/10">
+                <div className="mt-12 bg-gray-50 rounded-2xl p-5 flex items-center justify-center gap-4 text-gray-900 font-bold text-sm text-center border border-gray-200">
                   <CheckCircle size={20} />
                   Tu evaluación será registrada por tu capacitador.
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl p-10 shadow-sm border border-gray-100">
+              <div className="bg-white rounded-2xl p-10 shadow-sm border border-gray-200">
                 <h2 className="text-2xl font-black text-gray-900 mb-10 tracking-tight">
                   Posibles resultados
                 </h2>
@@ -428,21 +442,21 @@ export default function Paso07Evaluacion() {
             {error && (
               <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700">
                 <AlertCircle size={18} className="shrink-0" />
-                <span className="text-sm font-medium">{error}</span>
+                <span className="text-sm font-bold">{error}</span>
               </div>
             )}
 
             {/* ─── CTA FINAL ───────────────────────────────────── */}
-            <section className="bg-white rounded-2xl p-10 lg:p-14 shadow-sm border border-gray-100 flex flex-col lg:flex-row items-center justify-between gap-10">
+            <section className="bg-white rounded-2xl p-10 lg:p-14 shadow-sm border border-gray-200 flex flex-col lg:flex-row items-center justify-between gap-10">
               <div className="flex items-center gap-10">
-                <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center text-primary shadow-inner shrink-0">
+                <div className="w-24 h-24 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-900 shadow-inner shrink-0">
                   <Trophy size={48} strokeWidth={1.5} />
                 </div>
                 <div className="text-center lg:text-left">
                   <h2 className="text-3xl font-black text-gray-900 mb-3 tracking-tight">
                     Prepárate para tu evaluación
                   </h2>
-                  <p className="text-muted-foreground font-bold text-lg leading-snug">
+                  <p className="text-gray-700 font-bold text-lg leading-snug">
                     Último paso antes de convertirte en{' '}
                     <br className="hidden lg:block" /> vendedor activo de
                     MarketDesliz.
@@ -454,10 +468,10 @@ export default function Paso07Evaluacion() {
                 <button
                   onClick={continuar}
                   disabled={guardando}
-                  className={`px-12 py-6 rounded-2xl font-black text-lg flex items-center gap-5 transition-all shrink-0 ${
+                  className={`px-12 py-6 rounded-2xl font-bold text-lg flex items-center gap-5 transition-all shrink-0 border-2 ${
                     guardando
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95'
+                      ? 'bg-gray-200 text-gray-500 border-gray-200 cursor-not-allowed'
+                      : 'bg-gray-900 hover:bg-gray-800 text-white border-gray-900 shadow-lg shadow-gray-900/20 active:scale-95'
                   }`}
                 >
                   {guardando ? (
@@ -467,12 +481,12 @@ export default function Paso07Evaluacion() {
                     </>
                   ) : (
                     <>
-                      Ver detalles de mi cita
+                      Confirmar mi cita
                       <ArrowRight size={24} strokeWidth={2.5} />
                     </>
                   )}
                 </button>
-                <div className="flex items-center gap-2.5 text-gray-400 text-xs font-bold text-center lg:text-right leading-relaxed">
+                <div className="flex items-center gap-2.5 text-gray-600 text-xs font-bold text-center lg:text-right leading-relaxed">
                   <Lock size={14} />
                   <span>
                     No se requiere pago en línea. <br /> El pago es presencial el
@@ -484,14 +498,14 @@ export default function Paso07Evaluacion() {
 
             {/* FOOTER */}
             <footer className="py-8 border-t border-gray-100 flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-3 text-gray-400">
+              <div className="flex items-center gap-3 text-gray-600">
                 <Lock size={16} />
                 <div className="text-[11px] font-medium">
-                  <p className="font-bold text-gray-600">Tu información está protegida.</p>
-                  <p>Usamos tus datos solo para el proceso de selección.</p>
+                  <p className="font-bold text-gray-800">Tu información está protegida.</p>
+                  <p className="text-gray-700">Usamos tus datos solo para el proceso de selección.</p>
                 </div>
               </div>
-              <div className="text-xl font-bold tracking-tight">
+              <div className="text-xl font-bold tracking-tight text-gray-900">
                 Market<span className="text-primary">Desliz</span>
               </div>
             </footer>
@@ -507,16 +521,16 @@ export default function Paso07Evaluacion() {
 function InfoItem({ icon, label, value, sub, last }) {
   return (
     <div className="flex items-start gap-5 group">
-      <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-gray-400 mt-1 transition-all group-hover:text-primary group-hover:bg-primary/5 shrink-0">
+      <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-700 mt-1 transition-all group-hover:text-gray-900 shrink-0">
         {icon}
       </div>
-      <div className={`flex-1 ${!last ? 'border-b border-gray-50 pb-5' : ''}`}>
-        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">
+      <div className={`flex-1 ${!last ? 'border-b border-gray-100 pb-5' : ''}`}>
+        <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest mb-1">
           {label}
         </p>
-        <p className="font-black text-gray-800 leading-tight">{value}</p>
+        <p className="font-black text-gray-900 leading-tight">{value}</p>
         {sub && (
-          <p className="text-sm text-muted-foreground mt-2 leading-relaxed font-medium">
+          <p className="text-sm text-gray-700 mt-2 leading-relaxed font-medium">
             {sub}
           </p>
         )}
@@ -525,29 +539,17 @@ function InfoItem({ icon, label, value, sub, last }) {
   );
 }
 
-function RequirementItem({ icon, title, desc, color }) {
-  const styles = {
-    green: 'bg-green-50 text-green-500 hover:bg-green-100',
-    blue: 'bg-blue-50 text-blue-500 hover:bg-blue-100',
-    purple: 'bg-primary/5 text-primary hover:bg-primary/10',
-  };
-  const titleColors = {
-    green: 'text-green-600',
-    blue: 'text-blue-600',
-    purple: 'text-primary',
-  };
+function RequirementItem({ icon, title, desc }) {
   return (
     <div className="flex items-start gap-6 group">
-      <div
-        className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${styles[color]}`}
-      >
+      <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 bg-gray-50 border border-gray-200 text-gray-900">
         {icon}
       </div>
       <div>
-        <p className={`font-black text-lg leading-none ${titleColors[color]}`}>
+        <p className="font-black text-lg leading-none text-gray-900">
           {title}
         </p>
-        <p className="text-sm text-muted-foreground mt-2 font-medium leading-relaxed">
+        <p className="text-sm text-gray-700 mt-2 font-medium leading-relaxed">
           {desc}
         </p>
       </div>
@@ -558,12 +560,12 @@ function RequirementItem({ icon, title, desc, color }) {
 function ProcessStep({ num, title, desc }) {
   return (
     <div className="flex flex-col items-center text-center space-y-5 group">
-      <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-black text-lg shadow-lg shadow-primary/10 group-hover:scale-110 transition-transform cursor-default">
+      <div className="w-12 h-12 rounded-full bg-gray-900 text-white flex items-center justify-center font-black text-lg shadow-lg shadow-gray-900/10 group-hover:scale-110 transition-transform cursor-default">
         {num}
       </div>
       <div className="px-2">
-        <p className="font-black text-gray-800 text-sm mb-2 tracking-tight">{title}</p>
-        <p className="text-[11px] text-gray-400 font-bold leading-relaxed">{desc}</p>
+        <p className="font-black text-gray-900 text-sm mb-2 tracking-tight">{title}</p>
+        <p className="text-[11px] text-gray-600 font-bold leading-relaxed">{desc}</p>
       </div>
     </div>
   );
@@ -573,15 +575,15 @@ function CriteriaItem({ icon, title, sub }) {
   return (
     <div className="flex items-center justify-between group cursor-default">
       <div className="flex items-center gap-4">
-        <div className="w-11 h-11 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-primary/5 group-hover:text-primary transition-all shrink-0">
+        <div className="w-11 h-11 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-700 group-hover:text-gray-900 transition-all shrink-0">
           {icon}
         </div>
         <div>
-          <p className="text-sm font-black text-gray-800 tracking-tight">{title}</p>
-          <p className="text-[11px] text-gray-400 font-bold">{sub}</p>
+          <p className="text-sm font-black text-gray-900 tracking-tight">{title}</p>
+          <p className="text-[11px] text-gray-600 font-bold">{sub}</p>
         </div>
       </div>
-      <div className="w-6 h-6 rounded-full bg-green-50 text-green-600 flex items-center justify-center group-hover:bg-green-500 group-hover:text-white transition-all shadow-sm shrink-0">
+      <div className="w-6 h-6 rounded-full bg-gray-50 border border-gray-200 text-gray-900 flex items-center justify-center group-hover:bg-gray-900 group-hover:text-white transition-all shadow-sm shrink-0">
         <CheckCircle size={14} />
       </div>
     </div>
@@ -589,19 +591,14 @@ function CriteriaItem({ icon, title, sub }) {
 }
 
 function ResultCard({ icon, title, desc, type }) {
-  const styles = {
-    success: 'bg-green-50 border-green-100 text-green-700',
-    warning: 'bg-orange-50 border-orange-100 text-orange-700',
-    neutral: 'bg-gray-50 border-gray-100 text-gray-700',
-  };
   const iconColors = {
-    success: 'bg-green-500',
-    warning: 'bg-orange-500',
+    success: 'bg-gray-900',
+    warning: 'bg-gray-700',
     neutral: 'bg-gray-400',
   };
   return (
     <div
-      className={`${styles[type]} rounded-2xl p-6 border flex items-start gap-5 transition-all hover:scale-[1.02] cursor-default`}
+      className="bg-white border border-gray-200 rounded-2xl p-6 flex items-start gap-5 transition-all hover:scale-[1.02] cursor-default"
     >
       <div
         className={`w-11 h-11 rounded-full text-white flex items-center justify-center shrink-0 shadow-lg ${iconColors[type]}`}
@@ -609,8 +606,8 @@ function ResultCard({ icon, title, desc, type }) {
         {icon}
       </div>
       <div>
-        <p className="font-black text-sm tracking-tight">{title}</p>
-        <p className="text-[11px] opacity-80 mt-1.5 font-bold leading-relaxed">{desc}</p>
+        <p className="font-black text-sm tracking-tight text-gray-900">{title}</p>
+        <p className="text-[11px] text-gray-700 mt-1.5 font-bold leading-relaxed">{desc}</p>
       </div>
     </div>
   );
@@ -630,7 +627,7 @@ const STEPS = [
 
 function ProgressSteps({ stepActual = 7 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm overflow-x-auto">
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
       <div className="flex items-center justify-between gap-2 min-w-[720px]">
         {STEPS.map((step, idx) => {
           const Icon = step.icon;
@@ -640,29 +637,41 @@ function ProgressSteps({ stepActual = 7 }) {
             <div key={step.id} className="flex items-center gap-2 flex-1">
               <div className="flex flex-col items-center gap-2 flex-1">
                 <div
-                  className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all border-2 ${
                     isActive
-                      ? 'bg-primary text-white shadow-md shadow-primary/20 scale-110'
+                      ? 'bg-gray-900 text-white border-gray-900 ring-4 ring-gray-900/15 shadow-lg shadow-gray-900/20 scale-110'
                       : isCompleted
-                      ? 'bg-green-100 text-green-600'
-                      : 'bg-gray-100 text-gray-400'
+                      ? 'bg-white text-gray-900 border-gray-900'
+                      : 'bg-gray-50 text-gray-400 border-gray-200'
                   }`}
                 >
-                  {isCompleted ? <Check size={18} className="stroke-[3px]" /> : <Icon size={18} />}
+                  {isCompleted ? <Check size={20} className="stroke-[3px]" /> : <Icon size={20} />}
                 </div>
                 <div className="text-center">
                   <p className={`text-[10px] font-bold uppercase tracking-wider ${
-                    isActive ? 'text-primary' : isCompleted ? 'text-green-600' : 'text-gray-400'
+                    isActive
+                      ? 'text-gray-900'
+                      : isCompleted
+                      ? 'text-gray-800'
+                      : 'text-gray-500'
                   }`}>
                     Paso {step.id}
                   </p>
-                  <p className={`text-[10px] font-semibold ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>
+                  <p className={`text-[10px] font-semibold pb-1 ${
+                    isActive
+                      ? 'text-gray-900 underline underline-offset-4 decoration-2 decoration-gray-900'
+                      : isCompleted
+                      ? 'text-gray-700'
+                      : 'text-gray-500'
+                  }`}>
                     {step.title}
                   </p>
                 </div>
               </div>
               {idx < STEPS.length - 1 && (
-                <div className={`h-0.5 flex-shrink-0 w-6 rounded-full ${step.id < stepActual ? 'bg-green-300' : 'bg-gray-100'}`} />
+                <div className={`h-0.5 flex-shrink-0 w-6 rounded-full ${
+                  step.id < stepActual ? 'bg-gray-900' : 'bg-gray-200'
+                }`} />
               )}
             </div>
           );

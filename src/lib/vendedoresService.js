@@ -6,13 +6,17 @@ import pb from './pocketbase';
 /**
  * Obtiene la solicitud del usuario actual (si existe).
  * Filtra por `activo = true` y `pasoActual > 0` para excluir registros vacíos.
+ *
+ * Expande `evaluadorId` para tener acceso al nombre del capacitador
+ * asignado vía `solicitud.expand.evaluadorId.nombre`.
  */
 export async function getMiSolicitud() {
   const user = pb.authStore.model;
   if (!user) return null;
   try {
     const solicitud = await pb.collection('vacantes').getFirstListItem(
-      `userId = "${user.id}" && activo = true && pasoActual > 0`
+      `userId = "${user.id}" && activo = true && pasoActual > 0`,
+      { expand: 'evaluadorId' }
     );
     return solicitud;
   } catch (error) {
@@ -25,6 +29,9 @@ export async function getMiSolicitud() {
  * - Si ya existe → update
  * - Si no → create
  * - Si por race condition otra llamada ya creó → reintenta update
+ *
+ * Nota: `nombre` y `email` NO se guardan aquí porque viven en `users`.
+ * Se obtienen vía `expand.userId` al consultar.
  */
 export async function guardarProgreso(data) {
   const user = pb.authStore.model;
@@ -93,7 +100,13 @@ export async function rechazarSolicitud(id, notas = '') {
 /**
  * Lista todas las solicitudes del wizard (admin).
  * Filtra por `activo = true` y `pasoActual > 0`.
- * Search por ciudad o teléfono (nombre ya no existe en la colección).
+ *
+ * Búsqueda:
+ *  - `ciudad` y `telefono` son campos propios de `vacantes`.
+ *  - `nombre` y `email` NO existen en `vacantes` (se eliminaron por normalización);
+ *    se buscan a través de la relación `userId` usando notación de punto
+ *    (`userId.nombre`, `userId.email`), que PocketBase resuelve con un JOIN
+ *    implícito en la consulta.
  */
 export async function getAllSolicitudes({
   page = 1,
@@ -108,7 +121,9 @@ export async function getAllSolicitudes({
 
   if (search) {
     const s = search.replace(/"/g, '\\"');
-    filters.push(`(ciudad ~ "${s}" || telefono ~ "${s}")`);
+    filters.push(
+      `(ciudad ~ "${s}" || telefono ~ "${s}" || userId.nombre ~ "${s}" || userId.email ~ "${s}")`
+    );
   }
 
   const filter = filters.join(' && ');

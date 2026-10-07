@@ -123,8 +123,8 @@ export default function Paso06Capacitacion() {
           }}
         />
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-muted-foreground text-sm">Cargando...</p>
+          <div className="w-8 h-8 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+          <p className="mt-4 text-gray-700 text-sm font-medium">Cargando...</p>
         </div>
       </div>
     );
@@ -160,21 +160,21 @@ export default function Paso06Capacitacion() {
             {/* SECTION 1: HEADER & UNIFORME */}
             <section className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
               <div className="space-y-6">
-                <span className="inline-block bg-primary/5 text-primary border-none px-4 py-1.5 rounded-full font-bold text-xs uppercase tracking-wider">
+                <span className="inline-block bg-primary/10 text-primary border-none px-4 py-1.5 rounded-full font-bold text-xs uppercase tracking-wider">
                   06 • Capacitación
                 </span>
-                <h1 className="text-4xl md:text-5xl font-extrabold leading-tight text-gray-900">
+                <h1 className="text-4xl md:text-5xl font-black leading-tight text-gray-900">
                   Ahora vamos a <span className="text-primary">prepararte.</span>
                 </h1>
-                <p className="text-lg text-muted-foreground font-medium leading-relaxed max-w-sm">
+                <p className="text-lg text-gray-700 font-medium leading-relaxed max-w-sm">
                   Antes de salir a vender debes conocer a fondo el proceso de
                   MarketDesliz y aprender tu guion de ventas.
                 </p>
               </div>
 
-              <div className="rounded-2xl overflow-hidden border-none shadow-none bg-primary/5">
+              <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-sm bg-gray-50">
                 <div className="p-0 flex h-full flex-col sm:flex-row">
-                  <div className="w-full sm:w-1/2 p-8 flex items-center justify-center bg-white/20">
+                  <div className="w-full sm:w-1/2 p-8 flex items-center justify-center bg-white">
                     <img
                       className="w-full h-auto object-contain"
                       src="https://storage.googleapis.com/uxpilot-auth.appspot.com/gen_8b73008ec9_4d5be40947b5bb34.png"
@@ -183,9 +183,9 @@ export default function Paso06Capacitacion() {
                   </div>
                   <div className="w-full sm:w-1/2 p-8 space-y-6 flex flex-col justify-center">
                     <div className="flex items-center gap-4">
-                      <div className="p-3 bg-white rounded-2xl">
-                        <div className="w-6 h-6 border-2 border-primary rounded-md flex items-center justify-center">
-                          <div className="w-3 h-3 bg-primary rounded-sm"></div>
+                      <div className="p-3 bg-white border border-gray-200 rounded-2xl">
+                        <div className="w-6 h-6 border-2 border-gray-900 rounded-md flex items-center justify-center">
+                          <div className="w-3 h-3 bg-gray-900 rounded-sm"></div>
                         </div>
                       </div>
                       <h3 className="font-bold text-xl text-gray-900 leading-tight">
@@ -195,8 +195,8 @@ export default function Paso06Capacitacion() {
 
                     <ul className="space-y-4">
                       <li className="flex gap-3">
-                        <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
-                        <p className="text-sm text-muted-foreground">
+                        <CheckCircle2 className="w-5 h-5 text-gray-900 shrink-0" />
+                        <p className="text-sm text-gray-700 font-medium">
                           <span className="font-bold text-gray-900">Tú traes:</span>
                           <br />
                           Camisa blanca de manga larga, limpia y en buenas
@@ -204,8 +204,8 @@ export default function Paso06Capacitacion() {
                         </p>
                       </li>
                       <li className="flex gap-3">
-                        <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
-                        <p className="text-sm text-muted-foreground">
+                        <CheckCircle2 className="w-5 h-5 text-gray-900 shrink-0" />
+                        <p className="text-sm text-gray-700 font-medium">
                           <span className="font-bold text-gray-900">MarketDesliz agrega:</span>
                           <br />
                           Identidad, logo y elementos correspondientes del uniforme.
@@ -213,9 +213,9 @@ export default function Paso06Capacitacion() {
                       </li>
                     </ul>
 
-                    <div className="flex gap-3 p-4 bg-white/40 rounded-2xl items-start">
-                      <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-muted-foreground leading-normal">
+                    <div className="flex gap-3 p-4 bg-white border border-gray-200 rounded-2xl items-start">
+                      <Info className="w-5 h-5 text-gray-900 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-gray-700 leading-normal font-medium">
                         Una vez preparado, deberás utilizar tu uniforme durante cada
                         jornada de venta.
                       </p>
@@ -226,16 +226,16 @@ export default function Paso06Capacitacion() {
             </section>
 
             {/* SECTION 2: MATERIALES */}
-            <section className="bg-white rounded-2xl p-10 border border-gray-100 shadow-sm space-y-8">
+            <section className="bg-white rounded-2xl p-10 border border-gray-200 shadow-sm space-y-8">
               <div className="flex items-center gap-6">
-                <div className="w-14 h-14 bg-primary/5 rounded-2xl flex items-center justify-center text-primary shrink-0">
+                <div className="w-14 h-14 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-center text-gray-900 shrink-0">
                   <FileText className="w-7 h-7" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900">
+                  <h2 className="text-2xl font-black text-gray-900">
                     Tus materiales de capacitación
                   </h2>
-                  <p className="text-muted-foreground font-medium">
+                  <p className="text-gray-700 font-medium">
                     Recibirás dos archivos que deberás aprender y dominar.
                   </p>
                 </div>
@@ -244,13 +244,13 @@ export default function Paso06Capacitacion() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
                 {/* Card 1: Guion */}
-                <div className="bg-primary/5 rounded-2xl border border-gray-100 flex flex-col">
-                  <div className="p-8 flex items-start gap-6 border-b border-white/50">
+                <div className="bg-gray-50 rounded-2xl border border-gray-200 flex flex-col">
+                  <div className="p-8 flex items-start gap-6 border-b border-gray-200">
                     <div className="relative shrink-0">
-                      <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm">
-                        <FileText className="w-6 h-6 text-primary" />
+                      <div className="w-14 h-14 bg-white border border-gray-200 rounded-2xl flex items-center justify-center shadow-sm">
+                        <FileText className="w-6 h-6 text-gray-900" />
                       </div>
-                      <div className="absolute -top-1 -right-1 w-6 h-6 bg-primary rounded-lg flex items-center justify-center text-[10px] font-bold text-white">
+                      <div className="absolute -top-1 -right-1 w-6 h-6 bg-gray-900 rounded-lg flex items-center justify-center text-[10px] font-bold text-white">
                         01
                       </div>
                     </div>
@@ -259,47 +259,47 @@ export default function Paso06Capacitacion() {
                         <h4 className="font-bold text-gray-900 text-lg">
                           Guion oficial de ventas
                         </h4>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-sm text-gray-700 mt-1 font-medium">
                           Guion completo de MarketDesliz paso a paso, de inicio a cierre.
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1.5 rounded-full w-fit">
+                      <div className="flex items-center gap-2 text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-full w-fit">
                         <CheckCircle2 className="w-4 h-4" />
                         <span className="text-[11px] font-bold">Archivo entregado</span>
                       </div>
                     </div>
                     <div className="shrink-0 flex flex-col items-center gap-2">
-                      <div className="w-16 h-16 bg-primary/10 rounded-2xl flex flex-col items-center justify-center text-primary">
+                      <div className="w-16 h-16 bg-gray-50 border border-gray-200 rounded-2xl flex flex-col items-center justify-center text-gray-900">
                         <div className="text-[10px] font-black leading-none">PDF</div>
                       </div>
-                      <span className="text-[9px] text-gray-400 font-bold uppercase">
+                      <span className="text-[9px] text-gray-600 font-bold uppercase">
                         Guion_MarketDesliz.pdf
                       </span>
                       <a
                         href="/docs/Guion_MarketDesliz.pdf"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="h-9 rounded-xl border border-gray-200 text-primary font-bold text-xs gap-2 px-4 shadow-none mt-2 flex items-center hover:bg-primary/5 transition"
+                        className="h-9 rounded-xl border-2 border-gray-200 text-gray-900 font-bold text-xs gap-2 px-4 mt-2 flex items-center hover:border-gray-900 transition"
                       >
                         Abrir guion <ArrowRight className="w-3.5 h-3.5 ml-2" />
                       </a>
                     </div>
                   </div>
-                  <div className="p-4 bg-primary/5 text-center">
-                    <p className="text-xs font-bold text-primary">
+                  <div className="p-4 bg-gray-100 text-center rounded-b-2xl">
+                    <p className="text-xs font-bold text-gray-900">
                       Debes aprenderlo de memoria.
                     </p>
                   </div>
                 </div>
 
                 {/* Card 2: Objeciones */}
-                <div className="bg-primary/5 rounded-2xl border border-gray-100 flex flex-col">
-                  <div className="p-8 flex items-start gap-6 border-b border-white/50">
+                <div className="bg-gray-50 rounded-2xl border border-gray-200 flex flex-col">
+                  <div className="p-8 flex items-start gap-6 border-b border-gray-200">
                     <div className="relative shrink-0">
-                      <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm">
-                        <FileText className="w-6 h-6 text-primary" />
+                      <div className="w-14 h-14 bg-white border border-gray-200 rounded-2xl flex items-center justify-center shadow-sm">
+                        <FileText className="w-6 h-6 text-gray-900" />
                       </div>
-                      <div className="absolute -top-1 -right-1 w-6 h-6 bg-primary rounded-lg flex items-center justify-center text-[10px] font-bold text-white">
+                      <div className="absolute -top-1 -right-1 w-6 h-6 bg-gray-900 rounded-lg flex items-center justify-center text-[10px] font-bold text-white">
                         02
                       </div>
                     </div>
@@ -308,35 +308,35 @@ export default function Paso06Capacitacion() {
                         <h4 className="font-bold text-gray-900 text-lg">
                           Manual de objeciones
                         </h4>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-sm text-gray-700 mt-1 font-medium">
                           Todas las objeciones que puedes encontrar y cómo
                           responderlas correctamente.
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-1.5 rounded-full w-fit">
+                      <div className="flex items-center gap-2 text-gray-900 bg-white border border-gray-200 px-3 py-1.5 rounded-full w-fit">
                         <CheckCircle2 className="w-4 h-4" />
                         <span className="text-[11px] font-bold">Archivo entregado</span>
                       </div>
                     </div>
                     <div className="shrink-0 flex flex-col items-center gap-2">
-                      <div className="w-16 h-16 bg-primary/10 rounded-2xl flex flex-col items-center justify-center text-primary">
+                      <div className="w-16 h-16 bg-gray-50 border border-gray-200 rounded-2xl flex flex-col items-center justify-center text-gray-900">
                         <div className="text-[10px] font-black leading-none">PDF</div>
                       </div>
-                      <span className="text-[9px] text-gray-400 font-bold uppercase">
+                      <span className="text-[9px] text-gray-600 font-bold uppercase">
                         Objeciones_MarketDesliz.pdf
                       </span>
                       <a
                         href="/docs/Objeciones_MarketDesliz.pdf"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="h-9 rounded-xl border border-gray-200 text-primary font-bold text-xs gap-2 px-4 shadow-none mt-2 flex items-center hover:bg-primary/5 transition"
+                        className="h-9 rounded-xl border-2 border-gray-200 text-gray-900 font-bold text-xs gap-2 px-4 mt-2 flex items-center hover:border-gray-900 transition"
                       >
                         Abrir objeciones <ArrowRight className="w-3.5 h-3.5 ml-2" />
                       </a>
                     </div>
                   </div>
-                  <div className="p-4 bg-primary/5 text-center">
-                    <p className="text-xs font-bold text-primary">
+                  <div className="p-4 bg-gray-100 text-center rounded-b-2xl">
+                    <p className="text-xs font-bold text-gray-900">
                       Debes estudiarlo y comprenderlo.
                     </p>
                   </div>
@@ -345,25 +345,25 @@ export default function Paso06Capacitacion() {
             </section>
 
             {/* SECTION 3: SKILLS */}
-            <section className="bg-white rounded-2xl p-10 border border-gray-100 shadow-sm space-y-10">
+            <section className="bg-white rounded-2xl p-10 border border-gray-200 shadow-sm space-y-10">
               <div className="flex items-start gap-6">
-                <div className="w-14 h-14 bg-primary/5 rounded-2xl flex items-center justify-center text-primary shrink-0">
+                <div className="w-14 h-14 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-center text-gray-900 shrink-0">
                   <Trophy className="w-7 h-7" />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900">
+                  <h2 className="text-2xl font-black text-gray-900">
                     No basta con memorizarlo.
                   </h2>
-                  <p className="text-muted-foreground font-medium mt-1">
+                  <p className="text-gray-700 font-medium mt-1">
                     Memoriza las palabras. Domina la intención. Hazlo sonar natural.
                   </p>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-6">
+                  <p className="text-xs font-bold text-gray-600 uppercase tracking-widest mt-6">
                     Durante tu evaluación, el capacitador comprobará que:
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-px bg-gray-100 border border-gray-100 rounded-2xl overflow-hidden">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-px bg-gray-200 border border-gray-200 rounded-2xl overflow-hidden">
                 {[
                   { icon: MessageCircle, label: 'Dominas el guion completo' },
                   { icon: EyeOff, label: 'No dependes de leerlo' },
@@ -379,8 +379,8 @@ export default function Paso06Capacitacion() {
                       key={i}
                       className="bg-white p-6 flex flex-col items-center text-center space-y-4"
                     >
-                      <div className="text-primary">
-                        <Icon className="w-6 h-6 opacity-60" />
+                      <div className="text-gray-700">
+                        <Icon className="w-6 h-6" />
                       </div>
                       <p className="text-[10px] font-bold text-gray-900 leading-tight px-1">
                         {skill.label}
@@ -395,22 +395,22 @@ export default function Paso06Capacitacion() {
             {error && (
               <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700">
                 <AlertCircle size={18} className="shrink-0" />
-                <span className="text-sm font-medium">{error}</span>
+                <span className="text-sm font-bold">{error}</span>
               </div>
             )}
 
             {/* SECTION 4: READY CTA */}
-            <section className="bg-white rounded-2xl p-10 border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-8">
+            <section className="bg-white rounded-2xl p-10 border border-gray-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-8">
               <div className="flex items-center gap-8">
-                <div className="w-20 h-20 bg-primary rounded-2xl flex items-center justify-center text-white relative overflow-hidden shrink-0">
+                <div className="w-20 h-20 bg-gray-900 rounded-2xl flex items-center justify-center text-white relative overflow-hidden shrink-0">
                   <Brain className="w-10 h-10" />
-                  <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                  <div className="absolute inset-0 bg-white/10 animate-pulse"></div>
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900">
+                  <h2 className="text-2xl font-black text-gray-900">
                     ¿Ya estás preparado?
                   </h2>
-                  <p className="text-sm text-muted-foreground font-medium mt-2 max-w-sm leading-relaxed">
+                  <p className="text-sm text-gray-700 font-medium mt-2 max-w-sm leading-relaxed">
                     Cuando hayas aprendido el guion y estudiado las objeciones,
                     solicita tu evaluación presencial con un capacitador de
                     MarketDesliz.
@@ -422,10 +422,10 @@ export default function Paso06Capacitacion() {
                 <button
                   onClick={continuar}
                   disabled={guardando}
-                  className={`rounded-2xl h-14 px-10 text-base font-bold gap-3 flex items-center transition-all shrink-0 ${
+                  className={`rounded-2xl h-14 px-10 text-base font-bold gap-3 flex items-center transition-all shrink-0 border-2 ${
                     guardando
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-                      : 'bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 group'
+                      ? 'bg-gray-200 text-gray-500 border-gray-200 cursor-not-allowed'
+                      : 'bg-gray-900 hover:bg-gray-800 text-white border-gray-900 shadow-lg shadow-gray-900/20 group active:scale-[0.98]'
                   }`}
                 >
                   {guardando ? (
@@ -441,13 +441,13 @@ export default function Paso06Capacitacion() {
                   )}
                 </button>
                 <div className="space-y-1 text-center">
-                  <div className="flex items-center justify-center gap-2 text-gray-400">
+                  <div className="flex items-center justify-center gap-2 text-gray-600">
                     <Lock className="w-3.5 h-3.5" />
                     <span className="text-[10px] font-bold">
                       No necesitas pagar nada desde esta página.
                     </span>
                   </div>
-                  <p className="text-[11px] text-gray-400 font-medium">
+                  <p className="text-[11px] text-gray-600 font-medium">
                     El pago se realiza el día de tu evaluación presencial.
                   </p>
                 </div>
@@ -455,15 +455,15 @@ export default function Paso06Capacitacion() {
             </section>
 
             {/* SECTION 5: FOOTER NOTE */}
-            <section className="bg-primary/5 rounded-2xl p-6 border border-gray-100 flex items-center justify-between relative overflow-hidden">
+            <section className="bg-gray-50 rounded-2xl p-6 border border-gray-200 flex items-center justify-between relative overflow-hidden">
               <div className="flex items-center gap-6 relative z-10">
-                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-primary shadow-sm shrink-0">
+                <div className="w-12 h-12 bg-white border border-gray-200 rounded-full flex items-center justify-center text-gray-900 shadow-sm shrink-0">
                   <Info className="w-6 h-6" />
                 </div>
                 <p className="text-sm text-gray-900 font-bold">
                   Recuerda: tu éxito como vendedor depende de tu preparación.
                   <br />
-                  <span className="text-muted-foreground font-medium">
+                  <span className="text-gray-700 font-medium">
                     Mientras mejor domines el guion, más confianza tendrás y mejores
                     resultados obtendrás.
                   </span>
@@ -471,8 +471,8 @@ export default function Paso06Capacitacion() {
               </div>
 
               <div className="hidden md:flex items-center gap-6 opacity-20 relative z-10">
-                <BarChart3 className="w-12 h-12 text-primary" />
-                <Trophy className="w-12 h-12 text-primary" />
+                <BarChart3 className="w-12 h-12 text-gray-900" />
+                <Trophy className="w-12 h-12 text-gray-900" />
               </div>
 
               <div className="absolute right-0 bottom-0 pointer-events-none">
@@ -480,7 +480,7 @@ export default function Paso06Capacitacion() {
                   <path
                     d="M0 80C50 40 150 40 200 80"
                     stroke="currentColor"
-                    className="text-primary"
+                    className="text-gray-400"
                     strokeWidth="2"
                     strokeDasharray="6 6"
                   />
@@ -490,14 +490,14 @@ export default function Paso06Capacitacion() {
 
             {/* FOOTER */}
             <footer className="py-8 border-t border-gray-100 flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-3 text-gray-400">
+              <div className="flex items-center gap-3 text-gray-600">
                 <Lock size={16} />
                 <div className="text-[11px] font-medium">
-                  <p className="font-bold text-gray-600">Tu información está protegida.</p>
-                  <p>Usamos tus datos solo para el proceso de selección.</p>
+                  <p className="font-bold text-gray-800">Tu información está protegida.</p>
+                  <p className="text-gray-700">Usamos tus datos solo para el proceso de selección.</p>
                 </div>
               </div>
-              <div className="text-xl font-bold tracking-tight">
+              <div className="text-xl font-bold tracking-tight text-gray-900">
                 Market<span className="text-primary">Desliz</span>
               </div>
             </footer>
@@ -523,7 +523,7 @@ const STEPS = [
 
 function ProgressSteps({ stepActual = 6 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm overflow-x-auto">
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
       <div className="flex items-center justify-between gap-2 min-w-[720px]">
         {STEPS.map((step, idx) => {
           const Icon = step.icon;
@@ -533,29 +533,41 @@ function ProgressSteps({ stepActual = 6 }) {
             <div key={step.id} className="flex items-center gap-2 flex-1">
               <div className="flex flex-col items-center gap-2 flex-1">
                 <div
-                  className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all border-2 ${
                     isActive
-                      ? 'bg-primary text-white shadow-md shadow-primary/20 scale-110'
+                      ? 'bg-gray-900 text-white border-gray-900 ring-4 ring-gray-900/15 shadow-lg shadow-gray-900/20 scale-110'
                       : isCompleted
-                      ? 'bg-green-100 text-green-600'
-                      : 'bg-gray-100 text-gray-400'
+                      ? 'bg-white text-gray-900 border-gray-900'
+                      : 'bg-gray-50 text-gray-400 border-gray-200'
                   }`}
                 >
-                  {isCompleted ? <Check size={18} className="stroke-[3px]" /> : <Icon size={18} />}
+                  {isCompleted ? <Check size={20} className="stroke-[3px]" /> : <Icon size={20} />}
                 </div>
                 <div className="text-center">
                   <p className={`text-[10px] font-bold uppercase tracking-wider ${
-                    isActive ? 'text-primary' : isCompleted ? 'text-green-600' : 'text-gray-400'
+                    isActive
+                      ? 'text-gray-900'
+                      : isCompleted
+                      ? 'text-gray-800'
+                      : 'text-gray-500'
                   }`}>
                     Paso {step.id}
                   </p>
-                  <p className={`text-[10px] font-semibold ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>
+                  <p className={`text-[10px] font-semibold pb-1 ${
+                    isActive
+                      ? 'text-gray-900 underline underline-offset-4 decoration-2 decoration-gray-900'
+                      : isCompleted
+                      ? 'text-gray-700'
+                      : 'text-gray-500'
+                  }`}>
                     {step.title}
                   </p>
                 </div>
               </div>
               {idx < STEPS.length - 1 && (
-                <div className={`h-0.5 flex-shrink-0 w-6 rounded-full ${step.id < stepActual ? 'bg-green-300' : 'bg-gray-100'}`} />
+                <div className={`h-0.5 flex-shrink-0 w-6 rounded-full ${
+                  step.id < stepActual ? 'bg-gray-900' : 'bg-gray-200'
+                }`} />
               )}
             </div>
           );

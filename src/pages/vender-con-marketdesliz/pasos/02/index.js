@@ -5,7 +5,7 @@ import { useRouter } from 'next/router';
 import {
   Calendar, Clock, Info, Check, Lock, AlertCircle,
   ClipboardList, CalendarDays, Users, CircleCheck, FileText,
-  GraduationCap, UserCog, UserPlus, Send, Sparkles, PartyPopper
+  GraduationCap, UserCog, UserPlus, Send, Sparkles, PartyPopper, SquarePen
 } from 'lucide-react';
 import HeaderSimple from '../../../../components/Header';
 import pb from '../../../../lib/pocketbase';
@@ -270,6 +270,24 @@ export default function Paso02Disponibilidad() {
     }
   };
 
+  // ─── Editar solicitud (resetear y volver al paso 01) ──
+  const editarSolicitud = async () => {
+    setGuardando(true);
+    setError('');
+    try {
+      await guardarProgreso({
+        puesto: '',
+        datosPuesto: null,
+        pasoActual: 1,
+      });
+      router.push('/vender-con-marketdesliz/pasos/01');
+    } catch (err) {
+      console.error('Error al editar solicitud:', err);
+      setError('No se pudo editar la solicitud. Intenta de nuevo.');
+      setGuardando(false);
+    }
+  };
+
   // ─── Loading ───────────────────────────────────────────
   if (loading) {
     return (
@@ -340,12 +358,33 @@ export default function Paso02Disponibilidad() {
                 </div>
               </div>
 
-              <button
-                onClick={() => router.push('/')}
-                className="bg-gray-900 hover:bg-gray-800 text-white font-bold px-8 py-4 rounded-2xl inline-flex items-center gap-3 transition-all shadow-lg shadow-gray-900/20"
-              >
-                Volver al inicio
-              </button>
+              {error && (
+                <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-center gap-2 text-red-700 text-sm font-bold">
+                  <AlertCircle size={16} className="shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <button
+                  onClick={editarSolicitud}
+                  disabled={guardando}
+                  className={`font-bold px-6 py-3.5 rounded-2xl inline-flex items-center gap-2 transition-all border-2 ${
+                    guardando
+                      ? 'bg-gray-200 text-gray-500 border-gray-200 cursor-not-allowed'
+                      : 'bg-white hover:bg-gray-50 text-gray-900 border-gray-200 hover:border-gray-900'
+                  }`}
+                >
+                  <SquarePen size={16} />
+                  Editar mi solicitud
+                </button>
+                <button
+                  onClick={() => router.push('/')}
+                  className="bg-gray-900 hover:bg-gray-800 text-white font-bold px-8 py-4 rounded-2xl inline-flex items-center gap-3 transition-all shadow-lg shadow-gray-900/20"
+                >
+                  Volver al inicio
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -376,7 +415,8 @@ export default function Paso02Disponibilidad() {
         <div className="max-w-6xl mx-auto w-full px-4 py-8 flex-1">
           <main className="flex flex-col gap-6">
 
-            <ProgressSteps stepActual={2} />
+            {/* ProgressSteps solo para el wizard (Vendedor de Campo) */}
+            {esWizard && <ProgressSteps stepActual={2} />}
 
             {/* TÍTULO */}
             <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
@@ -558,7 +598,7 @@ export default function Paso02Disponibilidad() {
               </div>
             </section>
 
-            {/* ─── CAMPOS ESPECÍFICOS POR PUESTO ─── */}
+            {/* CAMPOS ESPECÍFICOS POR PUESTO */}
             <CamposEspecificos
               puesto={puesto}
               datos={datosExtra}

@@ -36,7 +36,8 @@ import {
   getProductsStats,
   createProduct,
   updateProduct,
-  deleteProduct
+  deleteProduct,
+  createCategoria,     // ✅ NUEVO
 } from '../../lib/productsService';
 import { formatMoney } from '../../lib/utils';
 import pb from '../../lib/pocketbase';
@@ -47,7 +48,7 @@ export default function AdminProductosPage() {
   const router = useRouter();
 
   // ─── Parámetros de URL ────────────────────────────────────────────────
-  const { page = 1, search = '', categoria = 'todos', estado = 'todos', sort = '-created' } = router.query;
+  const { page = 1, search = '', categoriaId = 'todos', estado = 'todos', sort = '-created' } = router.query;
   const currentPage = parseInt(page) || 1;
 
   // ─── Estados ──────────────────────────────────────────────────────────
@@ -72,6 +73,11 @@ export default function AdminProductosPage() {
   const [imagePreviews, setImagePreviews] = useState([]);
   const [saving, setSaving] = useState(false);
 
+  // ✅ NUEVOS estados para creación inline de categoría
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
+
   // ─── Estado del formulario ────────────────────────────────────────────
   const [formData, setFormData] = useState({
     nombre: '',
@@ -84,7 +90,7 @@ export default function AdminProductosPage() {
     stock: '',
     costo: '',
     diasEntrega: '1',
-    sku: '',           // ✅ AGREGADO
+    sku: '',
     activo: true,
     nuevo: false,
     imagen: null,
@@ -92,13 +98,15 @@ export default function AdminProductosPage() {
   });
 
   // ─── Cargar categorías dinámicas ──────────────────────────────────────
-  useEffect(() => {
-    const loadCategories = async () => {
-      const cats = await getProductCategories();
-      setCategories(cats);
-    };
-    loadCategories();
+  const recargarCategorias = useCallback(async () => {
+    const cats = await getProductCategories();
+    setCategories(cats);
+    return cats;
   }, []);
+
+  useEffect(() => {
+    recargarCategorias();
+  }, [recargarCategorias]);
 
   // ─── Cargar datos ──────────────────────────────────────────────────────
   const cargarDatos = useCallback(async (showRefreshing = false) => {
@@ -116,7 +124,7 @@ export default function AdminProductosPage() {
         page: currentPage,
         perPage: ITEMS_PER_PAGE,
         search: search || '',
-        categoria: categoria || 'todos',
+        categoriaId: categoriaId || 'todos',
         estado: estado || 'todos',
         sort: sort || '-created'
       });
@@ -132,7 +140,7 @@ export default function AdminProductosPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [currentPage, search, categoria, estado, sort]);
+  }, [currentPage, search, categoriaId, estado, sort]);
 
   useEffect(() => {
     cargarDatos();
@@ -143,7 +151,7 @@ export default function AdminProductosPage() {
     const query = {
       page: currentPage > 1 ? currentPage : undefined,
       search: search || undefined,
-      categoria: categoria !== 'todos' ? categoria : undefined,
+      categoriaId: categoriaId !== 'todos' ? categoriaId : undefined,
       estado: estado !== 'todos' ? estado : undefined,
       sort: sort !== '-created' ? sort : undefined,
       ...params
@@ -152,7 +160,7 @@ export default function AdminProductosPage() {
       if (query[key] === undefined || query[key] === '') delete query[key];
     });
     router.push({ pathname: '/admin/productos', query }, undefined, { shallow: true });
-  }, [currentPage, search, categoria, estado, sort, router]);
+  }, [currentPage, search, categoriaId, estado, sort, router]);
 
   // ─── Manejadores de eventos ──────────────────────────────────────────
   const handleSearchSubmit = (e) => {
@@ -208,6 +216,33 @@ export default function AdminProductosPage() {
     }
   };
 
+  // ✅ NUEVA: crear categoría desde el mismo modal
+  const handleCreateCategory = async () => {
+    const nombre = newCategoryName.trim();
+    if (!nombre) {
+      setError('El nombre de la categoría es obligatorio');
+      return;
+    }
+
+    setCreatingCategory(true);
+    setError(null);
+    try {
+      const nueva = await createCategoria(nombre, 'products');
+      const cats = await recargarCategorias();
+      setFormData(prev => ({ ...prev, categoriaId: nueva.id }));
+      setNewCategoryName('');
+      setShowNewCategory(false);
+      if (!cats.find(c => c.id === nueva.id)) {
+        setCategories(prev => [...prev, nueva]);
+      }
+    } catch (err) {
+      console.error('Error creando categoría:', err);
+      setError(err?.message || 'No se pudo crear la categoría. Intenta de nuevo.');
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       nombre: '',
@@ -220,7 +255,7 @@ export default function AdminProductosPage() {
       stock: '',
       costo: '',
       diasEntrega: '1',
-      sku: '',           // ✅ AGREGADO
+      sku: '',
       activo: true,
       nuevo: false,
       imagen: null,
@@ -228,6 +263,8 @@ export default function AdminProductosPage() {
     });
     setImagePreview(null);
     setImagePreviews([]);
+    setShowNewCategory(false);
+    setNewCategoryName('');
   };
 
   const handleEdit = (producto) => {
@@ -243,7 +280,7 @@ export default function AdminProductosPage() {
       stock: producto.stock || '',
       costo: producto.costo || '',
       diasEntrega: producto.diasEntrega || '1',
-      sku: producto.sku || '',        // ✅ AGREGADO
+      sku: producto.sku || '',
       activo: producto.activo === true,
       nuevo: producto.nuevo === true,
       imagen: null,
@@ -251,7 +288,6 @@ export default function AdminProductosPage() {
     });
     setImagePreview(producto.imagen || null);
 
-    // ✅ Cargar imágenes adicionales si existen
     if (producto.imagenes && Array.isArray(producto.imagenes) && producto.imagenes.length > 0) {
       const urls = producto.imagenes.map(img => pb.files.getURL(producto, img));
       setImagePreviews(urls);
@@ -265,7 +301,6 @@ export default function AdminProductosPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // ✅ Validación de campos obligatorios
     if (!formData.nombre.trim()) {
       setError('El nombre del producto es obligatorio');
       return;
@@ -448,8 +483,8 @@ export default function AdminProductosPage() {
                 <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <select
                   className="pl-10 pr-8 py-2.5 border border-gray-200 rounded-xl bg-white text-sm"
-                  value={categoria}
-                  onChange={(e) => handleFilterChange('categoria', e.target.value)}
+                  value={categoriaId}
+                  onChange={(e) => handleFilterChange('categoriaId', e.target.value)}
                 >
                   <option value="todos">Todas las categorías</option>
                   {categories.map(cat => (
@@ -485,7 +520,7 @@ export default function AdminProductosPage() {
           </div>
 
           {/* ─── Error ──────────────────────────────────────────────────── */}
-          {error && (
+          {error && !showModal && (
             <div className="mb-6 p-4 bg-red-50 rounded-xl border border-red-200 flex items-center gap-3 text-red-700">
               <AlertCircle size={18} className="shrink-0" />
               <span className="text-sm">{error}</span>
@@ -635,7 +670,6 @@ export default function AdminProductosPage() {
 
               <form onSubmit={handleSubmit} className="p-6">
                 <div className="space-y-4">
-                  {/* Error dentro del modal */}
                   {error && (
                     <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-700 text-sm">
                       <AlertCircle size={16} className="shrink-0" />
@@ -804,9 +838,19 @@ export default function AdminProductosPage() {
                     </div>
                   </div>
 
+                  {/* ✅ CATEGORÍA con creación inline */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Categoría *</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-sm font-medium text-gray-700">Categoría *</label>
+                        <button
+                          type="button"
+                          onClick={() => setShowNewCategory(v => !v)}
+                          className="text-xs font-semibold text-[#6C3BFF] hover:underline flex items-center gap-1"
+                        >
+                          <Plus size={12} /> Nueva categoría
+                        </button>
+                      </div>
                       <div className="relative">
                         <Tag size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <select
@@ -822,6 +866,80 @@ export default function AdminProductosPage() {
                           ))}
                         </select>
                       </div>
+
+                      {/* Aviso si no hay categorías */}
+                      {categories.length === 0 && !showNewCategory && (
+                        <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <p className="text-xs font-medium text-amber-800">
+                                Aún no hay categorías de productos.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setShowNewCategory(true)}
+                                className="text-xs font-bold text-amber-900 hover:underline mt-1"
+                              >
+                                Crear la primera categoría →
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Input inline para crear categoría */}
+                      {showNewCategory && (
+                        <div className="mt-2 p-3 bg-purple-50 border border-purple-200 rounded-xl space-y-2">
+                          <input
+                            type="text"
+                            value={newCategoryName}
+                            onChange={(e) => setNewCategoryName(e.target.value)}
+                            placeholder="Ej: Electrónicos, Hogar, Ropa..."
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#6C3BFF] focus:border-transparent bg-white"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleCreateCategory();
+                              }
+                              if (e.key === 'Escape') {
+                                setShowNewCategory(false);
+                                setNewCategoryName('');
+                              }
+                            }}
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={handleCreateCategory}
+                              disabled={creatingCategory || !newCategoryName.trim()}
+                              className="flex-1 px-3 py-1.5 bg-[#6C3BFF] text-white rounded-lg text-xs font-semibold disabled:opacity-50 hover:bg-[#5a2ee6] transition flex items-center justify-center gap-1"
+                            >
+                              {creatingCategory ? (
+                                <>
+                                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  Creando...
+                                </>
+                              ) : (
+                                <>
+                                  <Save size={12} /> Crear categoría
+                                </>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setShowNewCategory(false); setNewCategoryName(''); }}
+                              className="px-3 py-1.5 bg-white text-gray-700 border border-gray-200 rounded-lg text-xs font-semibold hover:bg-gray-50 transition"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-gray-500">
+                            Se creará con <code className="bg-white px-1 rounded">vertical: "products"</code> y slug automático.
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>

@@ -20,10 +20,10 @@ function DataRow({ icon, text, isBold = false }) {
   return (
     <div
       className={`flex items-center gap-3 text-sm ${
-        isBold ? 'font-semibold text-gray-700' : 'text-muted-foreground font-medium'
+        isBold ? 'font-semibold text-gray-900' : 'text-gray-700 font-medium'
       }`}
     >
-      <span className="text-primary shrink-0">{icon}</span>
+      <span className="text-gray-700 shrink-0">{icon}</span>
       <span className="truncate">{text}</span>
     </div>
   );
@@ -31,19 +31,19 @@ function DataRow({ icon, text, isBold = false }) {
 
 function UploadCard({ label, listo, onUpload }) {
   return (
-    <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100 flex items-center gap-4">
-      <div className="w-12 h-10 bg-white rounded-lg flex items-center justify-center border border-gray-200 text-primary/60 shrink-0">
+    <div className="bg-gray-50 rounded-2xl p-5 border border-gray-200 flex items-center gap-4">
+      <div className="w-12 h-10 bg-white rounded-lg flex items-center justify-center border border-gray-200 text-gray-600 shrink-0">
         <IdCard size={20} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{label}</p>
+        <p className="text-[10px] font-bold text-gray-600 uppercase tracking-tighter">{label}</p>
         {listo ? (
-          <p className="text-xs font-bold text-green-600 flex items-center gap-1">
+          <p className="text-xs font-bold text-gray-900 flex items-center gap-1">
             <Check size={12} className="stroke-[3px]" /> Recibido
           </p>
         ) : (
           <>
-            <label className="text-xs font-bold text-primary cursor-pointer hover:underline">
+            <label className="text-xs font-bold text-gray-900 cursor-pointer hover:underline">
               Subir archivo
               <input
                 type="file"
@@ -56,7 +56,7 @@ function UploadCard({ label, listo, onUpload }) {
                 }}
               />
             </label>
-            <p className="text-[9px] text-gray-400">JPG, PNG o PDF • Máx. {MAX_SIZE_MB} MB</p>
+            <p className="text-[9px] text-gray-600">JPG, PNG o PDF • Máx. {MAX_SIZE_MB} MB</p>
           </>
         )}
       </div>
@@ -66,13 +66,13 @@ function UploadCard({ label, listo, onUpload }) {
 
 function StatusCard({ title, desc }) {
   return (
-    <div className="bg-green-50 rounded-2xl p-5 border border-green-100 flex items-start gap-4">
-      <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center border border-green-200 text-green-500 shadow-sm mt-1 shrink-0">
+    <div className="bg-gray-50 rounded-2xl p-5 border border-gray-200 flex items-start gap-4">
+      <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center border border-gray-200 text-gray-900 shadow-sm mt-1 shrink-0">
         <Check size={14} className="stroke-[3px]" />
       </div>
       <div className="flex-1">
-        <p className="text-xs font-bold text-green-700">{title}</p>
-        <p className="text-[10px] text-green-600 leading-tight mt-1">{desc}</p>
+        <p className="text-xs font-bold text-gray-900">{title}</p>
+        <p className="text-[10px] text-gray-700 leading-tight mt-1 font-medium">{desc}</p>
       </div>
     </div>
   );
@@ -81,10 +81,10 @@ function StatusCard({ title, desc }) {
 function CheckRow({ icon, text, status, ok }) {
   return (
     <div className="flex items-center justify-between text-xs font-bold">
-      <div className="flex items-center gap-3 text-gray-600">
-        <span className="text-primary">{icon}</span> {text}
+      <div className="flex items-center gap-3 text-gray-700">
+        <span className="text-gray-700">{icon}</span> {text}
       </div>
-      <span className={`${ok ? 'text-green-600' : 'text-gray-400'} font-medium text-[10px]`}>
+      <span className={`${ok ? 'text-gray-900' : 'text-gray-500'} font-medium text-[10px]`}>
         {ok ? `✓ ${status}` : status}
       </span>
     </div>
@@ -244,8 +244,8 @@ export default function Paso05Alta() {
           }}
         />
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="mt-4 text-muted-foreground text-sm">Cargando...</p>
+          <div className="w-8 h-8 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+          <p className="mt-4 text-gray-700 text-sm font-medium">Cargando...</p>
         </div>
       </div>
     );
@@ -288,15 +288,15 @@ export default function Paso05Alta() {
                   Vamos a completar <br />
                   <span className="text-primary">tu alta.</span>
                 </h1>
-                <p className="text-muted-foreground text-sm leading-relaxed max-w-sm">
+                <p className="text-gray-700 text-sm leading-relaxed max-w-sm font-medium">
                   Confirma tus datos y entrega la documentación necesaria para
                   preparar tu registro en MarketDesliz.
                 </p>
-                <div className="flex items-center gap-3 bg-primary/5 p-3 rounded-2xl border border-primary/10">
-                  <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+                <div className="flex items-center gap-3 bg-primary/5 p-3 rounded-2xl border border-primary/15">
+                  <div className="w-8 h-8 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0">
                     <Info size={14} className="text-white" />
                   </div>
-                  <p className="text-[11px] text-primary font-medium">
+                  <p className="text-[11px] text-gray-800 font-bold">
                     Esta etapa no requiere ningún pago.
                   </p>
                 </div>
@@ -304,18 +304,18 @@ export default function Paso05Alta() {
             </section>
 
             {/* 1. CONFIRMA TUS DATOS */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
-              <h2 className="text-lg font-bold text-gray-800 mb-6">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+              <h2 className="text-lg font-bold text-gray-900 mb-6">
                 1. Confirma tus datos
               </h2>
               <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
-                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-primary/10 shadow-inner flex-shrink-0 bg-gray-100 flex items-center justify-center">
-                  <User size={40} className="text-gray-300" />
+                <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-gray-200 shadow-inner flex-shrink-0 bg-gray-100 flex items-center justify-center">
+                  <User size={40} className="text-gray-400" />
                 </div>
                 <div className="flex-1 space-y-3 min-w-0">
                   <DataRow
                     icon={<User size={16} />}
-                    text={solicitud?.nombre || user?.nombre || 'Sin nombre'}
+                    text={user?.nombre || 'Sin nombre'}
                     isBold
                   />
                   <DataRow
@@ -334,7 +334,7 @@ export default function Paso05Alta() {
                 <button
                   type="button"
                   onClick={() => router.push('/vender-con-marketdesliz/pasos/03')}
-                  className="flex items-center gap-2 border border-primary/20 text-primary font-bold text-xs px-5 py-2.5 rounded-xl hover:bg-primary/5 transition shrink-0"
+                  className="flex items-center gap-2 border-2 border-gray-200 text-gray-900 font-bold text-xs px-5 py-2.5 rounded-xl hover:border-gray-900 transition shrink-0"
                 >
                   <SquarePen size={14} /> Editar información
                 </button>
@@ -342,11 +342,11 @@ export default function Paso05Alta() {
             </div>
 
             {/* 2. IDENTIFICACIÓN OFICIAL */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
-              <h2 className="text-lg font-bold text-gray-800 mb-1">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+              <h2 className="text-lg font-bold text-gray-900 mb-1">
                 2. Identificación oficial
               </h2>
-              <p className="text-xs text-gray-400 mb-6 font-medium">
+              <p className="text-xs text-gray-600 mb-6 font-medium">
                 Copia de tu credencial (INE, pasaporte o cédula).
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -366,8 +366,8 @@ export default function Paso05Alta() {
                     desc="Frente y reverso completados correctamente."
                   />
                 ) : (
-                  <div className="bg-gray-50 rounded-2xl p-5 border border-dashed border-gray-200 flex items-center justify-center text-center">
-                    <p className="text-[10px] text-gray-400 font-medium">
+                  <div className="bg-gray-50 rounded-2xl p-5 border border-dashed border-gray-300 flex items-center justify-center text-center">
+                    <p className="text-[10px] text-gray-600 font-bold">
                       Sube ambos lados para continuar
                     </p>
                   </div>
@@ -376,31 +376,31 @@ export default function Paso05Alta() {
             </div>
 
             {/* 3. COMPROBANTE DE DOMICILIO */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
-              <h2 className="text-lg font-bold text-gray-800 mb-1">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+              <h2 className="text-lg font-bold text-gray-900 mb-1">
                 3. Comprobante de domicilio
               </h2>
-              <p className="text-xs text-gray-400 mb-6 font-medium">
+              <p className="text-xs text-gray-600 mb-6 font-medium">
                 Sube una copia legible de tu comprobante (no mayor a 3 meses).
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-2 bg-white rounded-2xl p-5 border border-dashed border-primary/30 flex items-center justify-center gap-6">
-                  <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shrink-0">
+                <div className="md:col-span-2 bg-white rounded-2xl p-5 border border-dashed border-gray-300 flex items-center justify-center gap-6">
+                  <div className="w-14 h-14 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-center text-gray-900 shrink-0">
                     {comprobanteListo ? <Check size={24} className="stroke-[3px]" /> : <Home size={24} />}
                   </div>
                   <div className="min-w-0">
                     {comprobanteListo ? (
                       <>
-                        <p className="text-xs font-extrabold text-green-600">
+                        <p className="text-xs font-extrabold text-gray-900">
                           Comprobante cargado
                         </p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">
+                        <p className="text-[10px] text-gray-600 mt-0.5 font-medium">
                           Listo para revisión
                         </p>
                       </>
                     ) : (
                       <>
-                        <label className="text-xs font-extrabold text-primary cursor-pointer hover:underline">
+                        <label className="text-xs font-extrabold text-gray-900 cursor-pointer hover:underline">
                           Subir comprobante
                           <input
                             type="file"
@@ -413,7 +413,7 @@ export default function Paso05Alta() {
                             }}
                           />
                         </label>
-                        <p className="text-[10px] text-gray-400 mt-0.5">
+                        <p className="text-[10px] text-gray-600 mt-0.5 font-medium">
                           JPG, PNG o PDF • Máx. {MAX_SIZE_MB} MB
                         </p>
                       </>
@@ -426,8 +426,8 @@ export default function Paso05Alta() {
                     desc="Tu comprobante ha sido cargado correctamente."
                   />
                 ) : (
-                  <div className="bg-gray-50 rounded-2xl p-5 border border-dashed border-gray-200 flex items-center justify-center text-center">
-                    <p className="text-[10px] text-gray-400 font-medium">
+                  <div className="bg-gray-50 rounded-2xl p-5 border border-dashed border-gray-300 flex items-center justify-center text-center">
+                    <p className="text-[10px] text-gray-600 font-bold">
                       Pendiente de subir
                     </p>
                   </div>
@@ -436,13 +436,13 @@ export default function Paso05Alta() {
             </div>
 
             {/* 4. REVISIÓN DEL EXPEDIENTE */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
               <div className="flex flex-col md:flex-row items-center md:items-start gap-12">
                 <div className="flex-1 space-y-4 w-full">
-                  <h2 className="text-lg font-bold text-gray-800 mb-1">
+                  <h2 className="text-lg font-bold text-gray-900 mb-1">
                     4. Revisión del expediente
                   </h2>
-                  <p className="text-xs text-gray-400 mb-6 font-medium">
+                  <p className="text-xs text-gray-600 mb-6 font-medium">
                     Verificamos que toda tu información esté completa.
                   </p>
                   <div className="space-y-3">
@@ -472,24 +472,26 @@ export default function Paso05Alta() {
                     />
                   </div>
                 </div>
-                <div className="bg-gray-50 rounded-2xl p-8 flex flex-col items-center justify-center border border-gray-100 min-w-[200px]">
+                <div className="bg-gray-50 rounded-2xl p-8 flex flex-col items-center justify-center border border-gray-200 min-w-[200px]">
                   <div
-                    className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-xl mb-4 transition-colors ${
-                      expedienteCompleto ? 'bg-primary' : 'bg-gray-300'
+                    className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-xl mb-4 transition-colors border-2 ${
+                      expedienteCompleto
+                        ? 'bg-gray-900 border-gray-900'
+                        : 'bg-gray-300 border-gray-300'
                     }`}
                   >
                     <Check size={32} className="stroke-[3px]" />
                   </div>
-                  <p className="text-2xl font-black text-primary">
+                  <p className="text-2xl font-black text-gray-900">
                     {totalCompletos} de 4
                   </p>
-                  <p className="text-[10px] font-extrabold text-primary/70 uppercase tracking-widest">
+                  <p className="text-[10px] font-extrabold text-gray-600 uppercase tracking-widest">
                     completos
                   </p>
                 </div>
               </div>
-              <div className="mt-8 bg-primary/5 p-3 rounded-2xl flex items-center gap-3 text-[10px] text-primary/70 font-medium">
-                <Info size={14} className="shrink-0" />
+              <div className="mt-8 bg-gray-50 border border-gray-200 p-3 rounded-2xl flex items-center gap-3 text-[10px] text-gray-700 font-medium">
+                <Info size={14} className="shrink-0 text-gray-900" />
                 <p>
                   Tu información será utilizada para tu registro como vendedor
                   dentro de MarketDesliz.
@@ -501,15 +503,15 @@ export default function Paso05Alta() {
             {error && (
               <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3 text-red-700">
                 <AlertCircle size={18} className="shrink-0" />
-                <span className="text-sm font-medium">{error}</span>
+                <span className="text-sm font-bold">{error}</span>
               </div>
             )}
 
             {/* FOOTER CTA */}
-            <section className="bg-primary/5 border border-primary/10 rounded-2xl p-8 flex flex-col md:flex-row items-center justify-between gap-8">
+            <section className="bg-primary/5 border border-primary/15 rounded-2xl p-8 flex flex-col md:flex-row items-center justify-between gap-8">
               <div className="flex items-center gap-6">
-                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center relative shrink-0">
-                  <div className="w-14 h-14 bg-white rounded-2xl shadow-md flex items-center justify-center text-primary">
+                <div className="w-20 h-20 bg-white border border-gray-200 rounded-full flex items-center justify-center relative shrink-0">
+                  <div className="w-14 h-14 bg-gray-50 border border-gray-200 rounded-2xl shadow-sm flex items-center justify-center text-gray-900">
                     <GraduationCap size={28} />
                   </div>
                 </div>
@@ -520,7 +522,7 @@ export default function Paso05Alta() {
                       {expedienteCompleto ? 'completo.' : 'casi listo.'}
                     </span>
                   </h2>
-                  <p className="text-xs text-muted-foreground font-medium mt-1">
+                  <p className="text-xs text-gray-700 font-medium mt-1">
                     {expedienteCompleto
                       ? 'El siguiente paso es prepararte para vender.'
                       : 'Completa los documentos pendientes para continuar.'}
@@ -531,10 +533,10 @@ export default function Paso05Alta() {
                 <button
                   onClick={continuar}
                   disabled={guardando || !expedienteCompleto}
-                  className={`font-bold py-4 px-8 rounded-2xl flex items-center justify-center gap-4 transition shadow-xl ${
+                  className={`font-bold py-4 px-8 rounded-2xl flex items-center justify-center gap-4 transition-all border-2 ${
                     guardando || !expedienteCompleto
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-                      : 'bg-primary text-white shadow-primary/20 hover:bg-primary/90'
+                      ? 'bg-gray-200 text-gray-500 border-gray-200 cursor-not-allowed'
+                      : 'bg-gray-900 text-white border-gray-900 shadow-xl shadow-gray-900/20 hover:bg-gray-800 active:scale-[0.98]'
                   }`}
                 >
                   {guardando ? (
@@ -548,33 +550,33 @@ export default function Paso05Alta() {
                     </>
                   )}
                 </button>
-                <div className="bg-white rounded-2xl p-4 border border-gray-100 flex items-center justify-between group cursor-default">
+                <div className="bg-white rounded-2xl p-4 border border-gray-200 flex items-center justify-between group cursor-default">
                   <div>
-                    <p className="text-[10px] font-black text-gray-800">
+                    <p className="text-[10px] font-black text-gray-900">
                       Lo que sigue •{' '}
                       <span className="text-primary uppercase">
                         06 Capacitación
                       </span>
                     </p>
-                    <p className="text-[9px] text-gray-400 leading-tight mt-1 max-w-[180px]">
+                    <p className="text-[9px] text-gray-600 leading-tight mt-1 max-w-[180px] font-medium">
                       Recibirás tu uniforme y tu guion de ventas...
                     </p>
                   </div>
-                  <ChevronRight size={16} className="text-primary/30" />
+                  <ChevronRight size={16} className="text-gray-400" />
                 </div>
               </div>
             </section>
 
             {/* FOOTER */}
             <footer className="py-8 border-t border-gray-100 flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-3 text-gray-400">
+              <div className="flex items-center gap-3 text-gray-600">
                 <Lock size={16} />
                 <div className="text-[11px] font-medium">
-                  <p className="font-bold text-gray-600">Tu información está protegida.</p>
-                  <p>Usamos tus datos solo para el proceso de selección.</p>
+                  <p className="font-bold text-gray-800">Tu información está protegida.</p>
+                  <p className="text-gray-700">Usamos tus datos solo para el proceso de selección.</p>
                 </div>
               </div>
-              <div className="text-xl font-bold tracking-tight">
+              <div className="text-xl font-bold tracking-tight text-gray-900">
                 Market<span className="text-primary">Desliz</span>
               </div>
             </footer>
@@ -600,7 +602,7 @@ const STEPS = [
 
 function ProgressSteps({ stepActual = 5 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm overflow-x-auto">
+    <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm overflow-x-auto">
       <div className="flex items-center justify-between gap-2 min-w-[720px]">
         {STEPS.map((step, idx) => {
           const Icon = step.icon;
@@ -610,29 +612,41 @@ function ProgressSteps({ stepActual = 5 }) {
             <div key={step.id} className="flex items-center gap-2 flex-1">
               <div className="flex flex-col items-center gap-2 flex-1">
                 <div
-                  className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all border-2 ${
                     isActive
-                      ? 'bg-primary text-white shadow-md shadow-primary/20 scale-110'
+                      ? 'bg-gray-900 text-white border-gray-900 ring-4 ring-gray-900/15 shadow-lg shadow-gray-900/20 scale-110'
                       : isCompleted
-                      ? 'bg-green-100 text-green-600'
-                      : 'bg-gray-100 text-gray-400'
+                      ? 'bg-white text-gray-900 border-gray-900'
+                      : 'bg-gray-50 text-gray-400 border-gray-200'
                   }`}
                 >
-                  {isCompleted ? <Check size={18} className="stroke-[3px]" /> : <Icon size={18} />}
+                  {isCompleted ? <Check size={20} className="stroke-[3px]" /> : <Icon size={20} />}
                 </div>
                 <div className="text-center">
                   <p className={`text-[10px] font-bold uppercase tracking-wider ${
-                    isActive ? 'text-primary' : isCompleted ? 'text-green-600' : 'text-gray-400'
+                    isActive
+                      ? 'text-gray-900'
+                      : isCompleted
+                      ? 'text-gray-800'
+                      : 'text-gray-500'
                   }`}>
                     Paso {step.id}
                   </p>
-                  <p className={`text-[10px] font-semibold ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>
+                  <p className={`text-[10px] font-semibold pb-1 ${
+                    isActive
+                      ? 'text-gray-900 underline underline-offset-4 decoration-2 decoration-gray-900'
+                      : isCompleted
+                      ? 'text-gray-700'
+                      : 'text-gray-500'
+                  }`}>
                     {step.title}
                   </p>
                 </div>
               </div>
               {idx < STEPS.length - 1 && (
-                <div className={`h-0.5 flex-shrink-0 w-6 rounded-full ${step.id < stepActual ? 'bg-green-300' : 'bg-gray-100'}`} />
+                <div className={`h-0.5 flex-shrink-0 w-6 rounded-full ${
+                  step.id < stepActual ? 'bg-gray-900' : 'bg-gray-200'
+                }`} />
               )}
             </div>
           );
