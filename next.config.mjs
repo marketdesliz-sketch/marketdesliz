@@ -1,11 +1,16 @@
 /** @type {import('next').NextConfig} */
+const isStaticExport = process.env.STATIC_EXPORT === 'true';
+
 const nextConfig = {
-  output: 'export',              // Genera carpeta 'out' con archivos estáticos
+  // ✅ Solo exporta estático cuando se compila para móvil (Capacitor).
+  // En Vercel, `output` queda undefined y los API Routes funcionan.
+  ...(isStaticExport && { output: 'export' }),
+
   images: {
-    unoptimized: true,           // Desactiva optimización de imágenes de Next (necesario para estático)
+    unoptimized: true,           // Necesario para estático (y no molesta en SSR)
   },
-  // trailingSlash: true,           // Opcional, mejora compatibilidad con rutas en Capacitor
-  // Si usas variables de entorno, asegúrate de definirlas en .env o en el build
+
+  // trailingSlash: true,        // Opcional
 };
 
 export default nextConfig;
