@@ -15,11 +15,13 @@ import pb from '../../../lib/pocketbase';
 import {
   getEsheParallel,
   getEsheParallelById,
-  getColecciones
+  getColecciones,
+  getEsheCategorias,       // ✅ NUEVO
 } from '../../../lib/esheParallelService';
 import { formatMoney, formatDate } from '../../../lib/utils';
-import { Button } from '../../../../components/ui/button';
-import { Card, CardContent } from '../../../../components/ui/card';
+// ⚠️ Verifica cuál de estos dos paths existe en tu proyecto:
+import { Button } from '../../../components/ui/button';
+import { Card, CardContent } from '../../../components/ui/card';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -30,7 +32,7 @@ export default function AdminEsheParallelPage() {
   const {
     page = 1,
     search = '',
-    categoria = 'todas',
+    categoriaId = 'todas',    // ✅ Renombrado
     coleccion = '',
     genero = '',
     destacados = '',
@@ -49,14 +51,15 @@ export default function AdminEsheParallelPage() {
 
   // Filtros locales
   const [searchTerm, setSearchTerm] = useState(search || '');
-  const [filterCategoria, setFilterCategoria] = useState(categoria || 'todas');
+  const [filterCategoriaId, setFilterCategoriaId] = useState(categoriaId || 'todas');  // ✅
   const [filterColeccion, setFilterColeccion] = useState(coleccion || '');
   const [filterGenero, setFilterGenero] = useState(genero || '');
   const [filterDestacados, setFilterDestacados] = useState(destacados === 'true');
   const [sortBy, setSortBy] = useState(sort || '-created');
 
-  // Lista de colecciones únicas
+  // Listas dinámicas
   const [coleccionesDisponibles, setColeccionesDisponibles] = useState([]);
+  const [categoriasDisponibles, setCategoriasDisponibles] = useState([]);  // ✅ NUEVO
 
   // ─── Stats ────────────────────────────────────────────────────────────
   const [stats, setStats] = useState({
@@ -74,13 +77,6 @@ export default function AdminEsheParallelPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
-  // Categorías estáticas
-  const CATEGORIAS = [
-    'Blazers', 'Camisas', 'Playeras', 'Pantalones', 'Jeans',
-    'Vestidos', 'Faldas', 'Sudaderas', 'Chamarras', 'Abrigos',
-    'Suéteres', 'Shorts', 'Accesorios', 'Calzado', 'Bolsos', 'Otro'
-  ];
-
   const GENEROS = ['Mujer', 'Hombre', 'Unisex', 'Niños', 'Bebés'];
 
   // ─── Cargar datos ─────────────────────────────────────────────────────
@@ -91,12 +87,11 @@ export default function AdminEsheParallelPage() {
       setError(null);
       setSuccess('');
 
-      // Cargar productos paginados (ya incluye filtros)
       const result = await getEsheParallel({
         page: currentPage,
         perPage: ITEMS_PER_PAGE,
         search: searchTerm,
-        categoria: filterCategoria,
+        categoriaId: filterCategoriaId,   // ✅ Cambio
         genero: filterGenero,
         coleccion: filterColeccion,
         soloDestacados: filterDestacados,
@@ -107,11 +102,13 @@ export default function AdminEsheParallelPage() {
       setTotalItems(result.totalItems);
       setTotalPages(result.totalPages);
 
-      // Cargar stats y colecciones solo en la primera carga
       if (!showRefreshing) {
         await cargarStats();
         const cols = await getColecciones();
         setColeccionesDisponibles(cols);
+
+        const cats = await getEsheCategorias();   // ✅ NUEVO
+        setCategoriasDisponibles(cats);
       }
 
     } catch (err) {
@@ -121,7 +118,7 @@ export default function AdminEsheParallelPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [currentPage, searchTerm, filterCategoria, filterColeccion, filterGenero, filterDestacados, sortBy]);
+  }, [currentPage, searchTerm, filterCategoriaId, filterColeccion, filterGenero, filterDestacados, sortBy]);
 
   // ─── Cargar stats ─────────────────────────────────────────────────────
   const cargarStats = async () => {
@@ -135,7 +132,6 @@ export default function AdminEsheParallelPage() {
         pb.collection('eshe_parallel').getList(1, 1, { filter: 'stock = 0', fields: 'id' }),
       ]);
 
-      // Visitas totales
       let visitas = 0;
       try {
         const records = await pb.collection('eshe_parallel').getFullList({
@@ -167,7 +163,7 @@ export default function AdminEsheParallelPage() {
     const query = {
       page: currentPage > 1 ? currentPage : undefined,
       search: searchTerm || undefined,
-      categoria: filterCategoria !== 'todas' ? filterCategoria : undefined,
+      categoriaId: filterCategoriaId !== 'todas' ? filterCategoriaId : undefined,  // ✅
       coleccion: filterColeccion || undefined,
       genero: filterGenero || undefined,
       destacados: filterDestacados ? 'true' : undefined,
@@ -178,7 +174,7 @@ export default function AdminEsheParallelPage() {
       if (query[key] === undefined || query[key] === '') delete query[key];
     });
     router.push({ pathname: '/admin/eshe-parallel', query }, undefined, { shallow: true });
-  }, [currentPage, searchTerm, filterCategoria, filterColeccion, filterGenero, filterDestacados, sortBy, router]);
+  }, [currentPage, searchTerm, filterCategoriaId, filterColeccion, filterGenero, filterDestacados, sortBy, router]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────
   const handleSearchSubmit = (e) => {
@@ -189,8 +185,8 @@ export default function AdminEsheParallelPage() {
   };
 
   const handleCategoriaChange = (val) => {
-    setFilterCategoria(val);
-    actualizarURL({ categoria: val, page: 1 });
+    setFilterCategoriaId(val);   // ✅
+    actualizarURL({ categoriaId: val, page: 1 });
   };
 
   const handleColeccionChange = (val) => {
@@ -221,7 +217,7 @@ export default function AdminEsheParallelPage() {
 
   const limpiarFiltros = () => {
     setSearchTerm('');
-    setFilterCategoria('todas');
+    setFilterCategoriaId('todas');   // ✅
     setFilterColeccion('');
     setFilterGenero('');
     setFilterDestacados(false);
@@ -283,7 +279,7 @@ export default function AdminEsheParallelPage() {
     const data = productos.map(p => ({
       'ID': p.id,
       'Nombre': p.nombre,
-      'Categoría': p.categoria,
+      'Categoría': p.categoriaNombre || '',   // ✅
       'Subcategoría': p.subcategoria,
       'Colección': p.coleccion,
       'Género': p.genero,
@@ -457,13 +453,18 @@ export default function AdminEsheParallelPage() {
                   />
                 </form>
 
+                {/* ✅ Categorías dinámicas desde PocketBase */}
                 <select
-                  value={filterCategoria}
+                  value={filterCategoriaId}
                   onChange={(e) => handleCategoriaChange(e.target.value)}
                   className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
                 >
                   <option value="todas">Todas las categorías</option>
-                  {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+                  {categoriasDisponibles.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.categoriaPadreId ? `  └─ ${c.nombre}` : c.nombre}
+                    </option>
+                  ))}
                 </select>
 
                 <select
@@ -514,11 +515,15 @@ export default function AdminEsheParallelPage() {
               </div>
 
               {/* Filtros activos */}
-              {(searchTerm || filterCategoria !== 'todas' || filterGenero || filterColeccion || filterDestacados) && (
+              {(searchTerm || filterCategoriaId !== 'todas' || filterGenero || filterColeccion || filterDestacados) && (
                 <div className="mt-3 flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
                   <span>Filtros activos:</span>
                   {searchTerm && <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full">{searchTerm}</span>}
-                  {filterCategoria !== 'todas' && <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full">{filterCategoria}</span>}
+                  {filterCategoriaId !== 'todas' && (
+                    <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full">
+                      {categoriasDisponibles.find(c => c.id === filterCategoriaId)?.nombre || filterCategoriaId}
+                    </span>
+                  )}
                   {filterGenero && <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full">{filterGenero}</span>}
                   {filterColeccion && <span className="px-2 py-0.5 bg-primary/10 text-primary rounded-full">{filterColeccion}</span>}
                   {filterDestacados && <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">Destacados</span>}
@@ -544,7 +549,7 @@ export default function AdminEsheParallelPage() {
                 No se encontraron productos
               </h3>
               <p className="text-sm text-muted-foreground mb-4">
-                {searchTerm || filterCategoria !== 'todas'
+                {searchTerm || filterCategoriaId !== 'todas'
                   ? 'Intenta con otros filtros de búsqueda'
                   : 'Registra el primer producto de Éshé Parallel'}
               </p>
@@ -562,7 +567,6 @@ export default function AdminEsheParallelPage() {
                     key={producto.id}
                     className="border-none shadow-sm rounded-2xl overflow-hidden hover:shadow-md transition-shadow group"
                   >
-                    {/* Imagen */}
                     <div className="aspect-[3/4] bg-muted/30 relative overflow-hidden">
                       {producto.imagen ? (
                         <img
@@ -576,7 +580,6 @@ export default function AdminEsheParallelPage() {
                         </div>
                       )}
 
-                      {/* Badges flotantes */}
                       <div className="absolute top-2 left-2 flex flex-col gap-1">
                         {producto.nuevo && (
                           <span className="bg-primary text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
@@ -595,7 +598,6 @@ export default function AdminEsheParallelPage() {
                         )}
                       </div>
 
-                      {/* Destacado */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -611,7 +613,6 @@ export default function AdminEsheParallelPage() {
                         />
                       </button>
 
-                      {/* Stock */}
                       {producto.stock === 0 && (
                         <div className="absolute bottom-0 inset-x-0 bg-red-500/90 text-white text-[10px] font-bold py-1 text-center">
                           AGOTADO
@@ -619,7 +620,6 @@ export default function AdminEsheParallelPage() {
                       )}
                     </div>
 
-                    {/* Contenido */}
                     <CardContent className="p-3">
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <div className="flex-1 min-w-0">
@@ -634,11 +634,11 @@ export default function AdminEsheParallelPage() {
                         </div>
                       </div>
 
-                      {/* Categoría + Género */}
+                      {/* ✅ categoriaNombre en lugar de categoria */}
                       <div className="flex items-center gap-1 flex-wrap mb-2">
-                        {producto.categoria && (
+                        {producto.categoriaNombre && (
                           <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                            {producto.categoria}
+                            {producto.categoriaNombre}
                           </span>
                         )}
                         {producto.genero && (
@@ -648,7 +648,6 @@ export default function AdminEsheParallelPage() {
                         )}
                       </div>
 
-                      {/* Precio y stock */}
                       <div className="flex items-end justify-between mb-3">
                         <div>
                           <p className="text-base font-black text-gray-900">
@@ -667,7 +666,6 @@ export default function AdminEsheParallelPage() {
                         </span>
                       </div>
 
-                      {/* Tallas */}
                       {producto.talla && producto.talla.length > 0 && (
                         <div className="flex flex-wrap gap-1 mb-3">
                           {producto.talla.slice(0, 5).map(t => (
@@ -678,7 +676,6 @@ export default function AdminEsheParallelPage() {
                         </div>
                       )}
 
-                      {/* Acciones */}
                       <div className="flex gap-2 pt-2 border-t border-gray-100">
                         <Button
                           onClick={() => verDetalle(producto)}
@@ -705,7 +702,6 @@ export default function AdminEsheParallelPage() {
                         </Button>
                       </div>
 
-                      {/* Toggle activo */}
                       <button
                         onClick={() => toggleActivo(producto)}
                         className={`w-full mt-2 text-[10px] font-bold uppercase tracking-wider py-1.5 rounded-lg transition ${
@@ -721,7 +717,6 @@ export default function AdminEsheParallelPage() {
                 ))}
               </div>
 
-              {/* Paginación */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between gap-4 mt-8 pt-4 border-t border-gray-100">
                   <span className="text-sm text-muted-foreground">
@@ -771,7 +766,6 @@ export default function AdminEsheParallelPage() {
 
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {/* Imagen */}
                 <div className="aspect-[3/4] bg-muted/30 rounded-2xl overflow-hidden">
                   {selectedProducto.imagen ? (
                     <img src={selectedProducto.imagen} alt={selectedProducto.nombre} className="w-full h-full object-cover" />
@@ -782,7 +776,6 @@ export default function AdminEsheParallelPage() {
                   )}
                 </div>
 
-                {/* Info */}
                 <div className="space-y-3">
                   <div>
                     {selectedProducto.sku && (
@@ -791,9 +784,10 @@ export default function AdminEsheParallelPage() {
                     <h3 className="text-xl font-bold text-gray-900">{selectedProducto.nombre}</h3>
                   </div>
 
+                  {/* ✅ categoriaNombre */}
                   <div className="flex flex-wrap gap-2">
-                    {selectedProducto.categoria && (
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">{selectedProducto.categoria}</span>
+                    {selectedProducto.categoriaNombre && (
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">{selectedProducto.categoriaNombre}</span>
                     )}
                     {selectedProducto.subcategoria && (
                       <span className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">{selectedProducto.subcategoria}</span>
@@ -852,7 +846,6 @@ export default function AdminEsheParallelPage() {
                     </div>
                   )}
 
-                  {/* Badges */}
                   <div className="flex flex-wrap gap-2 pt-2">
                     {selectedProducto.nuevo && (
                       <span className="text-xs bg-primary text-white px-2.5 py-1 rounded-full">Nuevo</span>

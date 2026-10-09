@@ -10,3 +10,5 @@ dist/
 keys/
 *.key
 *.pem
+.env.local.backup
+oalive.sh

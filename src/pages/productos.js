@@ -319,9 +319,9 @@ export default function ProductosPage() {
 
         // 2. Categorías con conteo de productos
         const todasCategorias = await pb.collection('categorias').getFullList({
-          filter: 'activo = true',
+          filter: 'activo = true && vertical = "products"',
           sort: 'nombre',
-          fields: 'id,nombre',
+          fields: 'id,nombre,slug',
         });
 
         const conteo = {};
@@ -335,7 +335,12 @@ export default function ProductosPage() {
           .map((cat) => ({
             id: cat.id,
             nombre: cat.nombre,
-            slug: cat.nombre.toLowerCase().replace(/\s+/g, '-'),
+            slug: cat.slug || cat.nombre
+              .toLowerCase()
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-+|-+$/g, ''),
             count: conteo[cat.id] || 0,
           }))
           .filter((cat) => cat.count > 0)
@@ -494,7 +499,7 @@ export default function ProductosPage() {
               >
                 Categorías populares
               </h2>
-              <TextLink label="Ver todas" onClick={() => navigateTo('/categorias')} />
+              <TextLink label="Ver todas" onClick={() => navigateTo('/productos/categoria/todos')} />
             </div>
 
             {loading ? (
@@ -515,7 +520,7 @@ export default function ProductosPage() {
               <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
                 {categorias.map((cat) => {
                   const handleClick = cat.esMasCategorias
-                    ? () => navigateTo('/categorias')
+                    ? () => navigateTo('/productos/categoria/todos')
                     : () => navigateTo(`/productos/categoria/${cat.slug}`);
                   return (
                     <CategoryCard key={cat.id} cat={cat} onClick={handleClick} />
@@ -538,7 +543,7 @@ export default function ProductosPage() {
               >
                 Productos destacados
               </h2>
-              <TextLink label="Ver todos" onClick={() => navigateTo('/explorar')} />
+              <TextLink label="Ver todos" onClick={() => navigateTo('/productos/categoria/todos')} />
             </div>
 
             {loading ? (
@@ -557,7 +562,7 @@ export default function ProductosPage() {
               </p>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
-                {filteredProducts.slice(0, 8).map((producto) => (
+                {filteredProducts.slice(0, 12).map((producto) => (
                   <ProductCard
                     key={producto.id}
                     producto={producto}

@@ -50,7 +50,7 @@ function getCategoriaInfoFromStatic(categoriaTexto) {
           if (
             cat.name?.toLowerCase() === categoriaTexto.toLowerCase() ||
             cat.name?.toLowerCase().replace(/\s+/g, '-') ===
-              categoriaTexto.toLowerCase()
+            categoriaTexto.toLowerCase()
           ) {
             return {
               nombre: cat.name,
@@ -74,7 +74,7 @@ function getSubcategoriaInfoFromStatic(categoriaTexto, subcategoriaTexto) {
           if (
             cat.name?.toLowerCase() === categoriaTexto?.toLowerCase() ||
             cat.name?.toLowerCase().replace(/\s+/g, '-') ===
-              categoriaTexto?.toLowerCase()
+            categoriaTexto?.toLowerCase()
           ) {
             return {
               nombre: cat.name,
@@ -163,9 +163,8 @@ function ActionPill({
       onMouseLeave={() => setHover(false)}
       onTouchStart={() => setHover(true)}
       onTouchEnd={() => setTimeout(() => setHover(false), 120)}
-      className={`flex items-center justify-center gap-2 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${
-        square ? '' : 'flex-1'
-      }`}
+      className={`flex items-center justify-center gap-2 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${square ? '' : 'flex-1'
+        }`}
       style={{
         height: square ? '40px' : '44px',
         width: square ? '40px' : 'auto',
@@ -312,7 +311,7 @@ function ProductoRelacionadoCard({ producto }) {
               className="text-[10px] uppercase tracking-[0.16em]"
               style={{ color: T.inkFaint, fontWeight: 500 }}
             >
-              Paga
+              Paga Semanalmente
             </span>
             <span
               className="text-[13.5px] tabular-nums"
@@ -555,7 +554,7 @@ export default function ProductoDetalle() {
         productoData.imagen = '/images/placeholder.png';
       }
 
-      productoData.precioContado = Math.round(productoData.precioTotal * 0.9);
+      productoData.precioContado = Math.round(productoData.precioTotal * 0.75);
 
       if (productoData.stock === 0) {
         setStockLevel('agotado');
@@ -611,7 +610,7 @@ export default function ProductoDetalle() {
           .collection('categorias')
           .getOne(productoData.categoriaId);
         catInfo = { id: cat.id, nombre: cat.nombre, slug: cat.slug };
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!catInfo && productoData.categoria) {
@@ -634,7 +633,7 @@ export default function ProductoDetalle() {
           .collection('subcategorias')
           .getOne(productoData.subcategoriaId);
         subInfo = { id: subcat.id, nombre: subcat.nombre, slug: subcat.slug };
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!subInfo && productoData.categoria) {
@@ -663,7 +662,7 @@ export default function ProductoDetalle() {
         id: prod.id,
         nombre: prod.nombre,
         precio: prod.precio,
-        precioContado: Math.round(prod.precio * 0.9),
+        precioContado: Math.round(prod.precio * 0.75),
         pagoSemanal: prod.pagoSemanal || Math.round(prod.precio * 0.05),
         imagen: prod.imagen
           ? pb.files.getURL(prod, prod.imagen)
@@ -1268,11 +1267,10 @@ export default function ProductoDetalle() {
                         width: '64px',
                         height: '64px',
                         borderRadius: '6px',
-                        border: `1px solid ${
-                          currentImageIndex === index
-                            ? T.accent
-                            : T.line
-                        }`,
+                        border: `1px solid ${currentImageIndex === index
+                          ? T.accent
+                          : T.line
+                          }`,
                         opacity: currentImageIndex === index ? 1 : 0.55,
                         background: 'transparent',
                         padding: 0,
@@ -1414,17 +1412,17 @@ export default function ProductoDetalle() {
                     className="text-[11px] uppercase tracking-[0.16em]"
                     style={{ color: T.inkFaint, fontWeight: 500 }}
                   >
-                    Precio de contado
+                    Precio total a crédito
                   </span>
                   <span
-                    className="text-[22px] tabular-nums tracking-[-0.02em]"
+                    className="text-[22px] tabular-nums"
                     style={{
-                      color: T.green,
+                      color: T.ink,
                       fontWeight: 500,
                       fontFeatureSettings: '"tnum"',
                     }}
                   >
-                    {formatMoney(producto.precioContado)}
+                    {formatMoney(producto.precioTotal)}
                   </span>
                 </div>
                 <div
@@ -1435,17 +1433,17 @@ export default function ProductoDetalle() {
                     className="text-[11px] uppercase tracking-[0.16em]"
                     style={{ color: T.inkFaint, fontWeight: 500 }}
                   >
-                    Precio total a crédito
+                    Precio de contado
                   </span>
                   <span
-                    className="text-[17px] tabular-nums"
+                    className="text-[17px] tabular-nums tracking-[-0.02em]"
                     style={{
-                      color: T.ink,
+                      color: T.green,
                       fontWeight: 500,
                       fontFeatureSettings: '"tnum"',
                     }}
                   >
-                    {formatMoney(producto.precioTotal)}
+                    {formatMoney(producto.precioContado)}
                   </span>
                 </div>
                 <div
@@ -1661,8 +1659,7 @@ export default function ProductoDetalle() {
                         frecuenciaPago === 'semanal'
                           ? 'Pago semanal'
                           : 'Pago quincenal',
-                        `${formatMoney(planCalculado.pagoMonto)} × ${
-                          planCalculado.totalPeriodos
+                        `${formatMoney(planCalculado.pagoMonto)} × ${planCalculado.totalPeriodos
                         } ${frecuenciaPago === 'semanal' ? 'sem' : 'quin'}`,
                         T.ink,
                       ],
@@ -1691,7 +1688,7 @@ export default function ProductoDetalle() {
                     ))}
                     {planCalculado.ultimoPago > 0 &&
                       planCalculado.ultimoPago !==
-                        planCalculado.pagoMonto && (
+                      planCalculado.pagoMonto && (
                         <div className="flex items-baseline justify-between gap-3">
                           <span
                             className="text-[11px]"
@@ -2287,9 +2284,8 @@ export default function ProductoDetalle() {
                       className="flex flex-col items-start gap-2 p-5 text-left transition-all duration-200"
                       style={{
                         background: hover ? bg : T.bg,
-                        border: `1px solid ${
-                          hover ? fg : T.line
-                        }`,
+                        border: `1px solid ${hover ? fg : T.line
+                          }`,
                         borderRadius: '8px',
                         cursor: 'pointer',
                         WebkitTapHighlightColor: 'transparent',

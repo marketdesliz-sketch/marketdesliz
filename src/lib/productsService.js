@@ -37,7 +37,7 @@ function formatProduct(record) {
     nombre: record.nombre || '',
     descripcion: record.descripcion || '',
     precio: record.precio || 0,
-    precioContado: Math.round((record.precio || 0) * 0.9),
+    precioContado: Math.round((record.precio || 0) * 0.75),
     enganche: record.enganche || Math.round((record.precio || 0) * 0.15),
     pagoSemanal: record.pagoSemanal || Math.round((record.precio || 0) * 0.05),
     semanas: record.semanas || 12,
@@ -464,20 +464,59 @@ export async function getProductsPaginated({
  */
 export async function getProductCategories() {
   try {
-    // ✅ Filtrado por vertical = "products"
     const categorias = await pb.collection('categorias').getFullList({
       filter: 'activo = true && vertical = "products"',
-      sort: 'nombre',
-      fields: 'id,nombre'
+      sort: 'orden,nombre',
+      fields: 'id,nombre,slug,orden,categoriaPadreId',
     });
 
-    if (categorias.length > 0) {
-      return categorias.map(c => ({ id: c.id, nombre: c.nombre }));
-    }
+    if (categorias.length === 0) return [];
+
+    const padres = categorias.filter((c) => !c.categoriaPadreId);
+    const hijos = categorias.filter((c) => c.categoriaPadreId);
+
+    const planas = [];
+    padres.forEach((padre) => {
+      const hijosDeEste = hijos.filter((h) => h.categoriaPadreId === padre.id);
+      planas.push({
+        id: padre.id,
+        nombre: padre.nombre,
+        slug: padre.slug,
+        esPadre: true,
+        tieneHijos: hijosDeEste.length > 0,
+        depth: 0,
+      });
+      hijosDeEste.forEach((hijo) => {
+        planas.push({
+          id: hijo.id,
+          nombre: hijo.nombre,
+          slug: hijo.slug,
+          esPadre: false,
+          tieneHijos: false,
+          depth: 1,
+        });
+      });
+    });
+
+    // Huérfanos (hijos sin padre válido)
+    hijos.forEach((hijo) => {
+      if (!padres.find((p) => p.id === hijo.categoriaPadreId)) {
+        planas.push({
+          id: hijo.id,
+          nombre: hijo.nombre,
+          slug: hijo.slug,
+          esPadre: false,
+          tieneHijos: false,
+          depth: 1,
+        });
+      }
+    });
+
+    return planas;
   } catch (e) {
     console.warn('⚠️ No se pudieron cargar categorías desde PocketBase', e);
+    return [];
   }
-  return [];
 }
 
 /**

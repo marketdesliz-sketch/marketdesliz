@@ -27,7 +27,8 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
-  RefreshCw
+  RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import AdminLayoutMinimal from '../../layouts/AdminLayoutMinimal';
 import {
@@ -77,6 +78,10 @@ export default function AdminProductosPage() {
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [creatingCategory, setCreatingCategory] = useState(false);
+
+  // ✅ Cálculo automático de enganche y semanas
+  const [autoCalcular, setAutoCalcular] = useState(true);
+  const [enganchePorcentaje, setEnganchePorcentaje] = useState(25);
 
   // ─── Estado del formulario ────────────────────────────────────────────
   const [formData, setFormData] = useState({
@@ -185,6 +190,8 @@ export default function AdminProductosPage() {
   // ─── Handlers del formulario ─────────────────────────────────────────
   const handleInputChange = (e) => {
     const { name, value, type, checked, files } = e.target;
+
+    // ─── Archivos ───
     if (name === 'imagen') {
       const file = files[0];
       setFormData({ ...formData, imagen: file });
@@ -195,7 +202,10 @@ export default function AdminProductosPage() {
       } else {
         setImagePreview(null);
       }
-    } else if (name === 'imagenes') {
+      return;
+    }
+
+    if (name === 'imagenes') {
       const fileList = Array.from(files);
       setFormData({ ...formData, imagenes: fileList });
       const previews = [];
@@ -209,11 +219,45 @@ export default function AdminProductosPage() {
         };
         reader.readAsDataURL(file);
       });
-    } else if (type === 'checkbox') {
-      setFormData({ ...formData, [name]: checked });
-    } else {
-      setFormData({ ...formData, [name]: value });
+      return;
     }
+
+    // ─── Checkbox ───
+    if (type === 'checkbox') {
+      setFormData({ ...formData, [name]: checked });
+      return;
+    }
+
+    // ─── Inputs normales (con cálculo automático) ───
+    let nuevo = { ...formData, [name]: value };
+
+    if (autoCalcular) {
+      // Si cambia el precio → recalcular enganche según el % seleccionado
+      if (name === 'precio') {
+        const precio = parseFloat(value) || 0;
+        if (precio > 0) {
+          nuevo.enganche = String(Math.round(precio * (enganchePorcentaje / 100)));
+        } else {
+          nuevo.enganche = '';
+        }
+      }
+
+      // Recalcular semanas con los valores actualizados
+      const precio = parseFloat(nuevo.precio) || 0;
+      const enganche = parseFloat(nuevo.enganche) || 0;
+      const pagoSemanal = parseFloat(nuevo.pagoSemanal) || 0;
+
+      if (precio > 0 && pagoSemanal > 0) {
+        const saldoRestante = precio - enganche;
+        if (saldoRestante > 0) {
+          nuevo.semanas = String(Math.ceil(saldoRestante / pagoSemanal));
+        } else if (saldoRestante <= 0) {
+          nuevo.semanas = '1';
+        }
+      }
+    }
+
+    setFormData(nuevo);
   };
 
   // ✅ NUEVA: crear categoría desde el mismo modal
@@ -715,6 +759,36 @@ export default function AdminProductosPage() {
                     />
                   </div>
 
+                  {/* ✅ Toggle cálculo automático */}
+                  <div className="flex items-center justify-between p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${autoCalcular ? 'bg-[#6C3BFF] text-white' : 'bg-gray-200 text-gray-500'
+                        }`}>
+                        <Sparkles size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Cálculo automático</p>
+                        <p className="text-xs text-gray-500">
+                          {autoCalcular
+                            ? 'Enganche (25%) y semanas se calculan solos'
+                            : 'Puedes editar todos los campos manualmente'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAutoCalcular(v => !v)}
+                      className={`relative w-11 h-6 rounded-full transition-colors ${autoCalcular ? 'bg-[#6C3BFF]' : 'bg-gray-300'
+                        }`}
+                      aria-label="Activar cálculo automático"
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${autoCalcular ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                      />
+                    </button>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Precio total *</label>
@@ -753,7 +827,42 @@ export default function AdminProductosPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Enganche *</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-sm font-medium text-gray-700">Enganche *</label>
+                        {autoCalcular && (
+                          <div className="flex items-center gap-1">
+                            {[15, 20, 25].map(pct => (
+                              <button
+                                key={pct}
+                                type="button"
+                                onClick={() => {
+                                  setEnganchePorcentaje(pct);
+                                  const precio = parseFloat(formData.precio) || 0;
+                                  if (precio > 0) {
+                                    const nuevoEnganche = String(Math.round(precio * (pct / 100)));
+                                    const pagoSemanal = parseFloat(formData.pagoSemanal) || 0;
+                                    const saldo = precio - parseFloat(nuevoEnganche);
+                                    const semanasCalc = pagoSemanal > 0
+                                      ? String(Math.ceil(saldo / pagoSemanal))
+                                      : formData.semanas;
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      enganche: nuevoEnganche,
+                                      semanas: saldo > 0 ? semanasCalc : '1',
+                                    }));
+                                  }
+                                }}
+                                className={`px-2 py-0.5 text-[10px] font-bold rounded transition ${enganchePorcentaje === pct
+                                  ? 'bg-[#6C3BFF] text-white'
+                                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                  }`}
+                              >
+                                {pct}%
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <div className="relative">
                         <DollarSign size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
@@ -838,6 +947,49 @@ export default function AdminProductosPage() {
                     </div>
                   </div>
 
+                  {/* Preview del plan de pagos */}
+                  {autoCalcular && formData.precio && formData.pagoSemanal && formData.enganche && (() => {
+                    const precio = parseFloat(formData.precio) || 0;
+                    const enganche = parseFloat(formData.enganche) || 0;
+                    const pagoSemanal = parseFloat(formData.pagoSemanal) || 0;
+                    if (precio <= 0 || pagoSemanal <= 0) return null;
+
+                    const saldo = precio - enganche;
+                    const periodosCompletos = Math.floor(saldo / pagoSemanal);
+                    const ultimoPago = saldo - periodosCompletos * pagoSemanal;
+                    const totalSemanas = ultimoPago > 0 ? periodosCompletos + 1 : periodosCompletos;
+
+                    return (
+                      <div className="mt-2 p-4 bg-green-50 border border-green-200 rounded-xl space-y-2">
+                        <p className="text-xs font-bold text-green-900 uppercase tracking-wider">
+                          Plan de pagos generado
+                        </p>
+                        <div className="space-y-1 text-xs text-green-800">
+                          <div className="flex justify-between">
+                            <span>Saldo a financiar</span>
+                            <span className="font-semibold">${saldo.toLocaleString('es-MX')}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Pagos completos</span>
+                            <span className="font-semibold">
+                              {periodosCompletos} × ${pagoSemanal.toLocaleString('es-MX')}
+                            </span>
+                          </div>
+                          {ultimoPago > 0 && (
+                            <div className="flex justify-between">
+                              <span>Último pago</span>
+                              <span className="font-semibold">${ultimoPago.toLocaleString('es-MX')}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between pt-2 border-t border-green-200 mt-2">
+                            <span className="font-bold text-green-900">Total semanas</span>
+                            <span className="font-bold text-green-900">{totalSemanas}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* ✅ CATEGORÍA con creación inline */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -861,8 +1013,16 @@ export default function AdminProductosPage() {
                           className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-[#6C3BFF] appearance-none"
                         >
                           <option value="">Selecciona una categoría</option>
-                          {categories.map(cat => (
-                            <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                          {categories.map((cat) => (
+                            <option
+                              key={cat.id}
+                              value={cat.id}
+                              disabled={cat.esPadre && cat.tieneHijos}
+                            >
+                              {cat.depth === 1 ? '└─ ' : ''}
+                              {cat.nombre}
+                              {cat.esPadre && cat.tieneHijos ? ' (agrupador)' : ''}
+                            </option>
                           ))}
                         </select>
                       </div>

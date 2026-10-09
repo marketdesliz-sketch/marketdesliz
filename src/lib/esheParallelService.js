@@ -4,13 +4,14 @@ import pb from './pocketbase';
 // ─── ÉSHÉ PARALLEL ───────────────────────────────────────
 
 /**
- * Obtiene productos de Éshé Parallel con paginación y filtros
+ * Obtiene productos de Éshé Parallel con paginación y filtros.
+ * Nota: `categoria` (select) ya no existe; ahora es `categoriaId` (relation).
  */
 export async function getEsheParallel({
   page = 1,
   perPage = 20,
   search = '',
-  categoria = 'todos',
+  categoriaId = 'todos',
   genero = '',
   coleccion = '',
   temporada = '',
@@ -23,10 +24,16 @@ export async function getEsheParallel({
 
   if (search) {
     const s = search.replace(/"/g, '\\"');
-    filters.push(`(nombre ~ "${s}" || descripcion ~ "${s}" || categoria ~ "${s}" || color ~ "${s}" || material ~ "${s}")`);
+    // Buscar por nombre, descripción, color, material
+    // y por el nombre de la categoría relacionada (join implícito con `categoriaId.nombre`)
+    filters.push(
+      `(nombre ~ "${s}" || descripcion ~ "${s}" || color ~ "${s}" || material ~ "${s}" || categoriaId.nombre ~ "${s}")`
+    );
   }
 
-  if (categoria && categoria !== 'todos') filters.push(`categoria = "${categoria}"`);
+  if (categoriaId && categoriaId !== 'todos') {
+    filters.push(`categoriaId = "${categoriaId}"`);
+  }
   if (genero) filters.push(`genero = "${genero}"`);
   if (coleccion) filters.push(`coleccion = "${coleccion}"`);
   if (temporada) filters.push(`temporada = "${temporada}"`);
@@ -40,7 +47,7 @@ export async function getEsheParallel({
     const result = await pb.collection('eshe_parallel').getList(page, perPage, {
       filter,
       sort,
-      expand: 'usuarioId',
+      expand: 'categoriaId,usuarioId',
     });
 
     return {
@@ -62,7 +69,7 @@ export async function getEsheParallel({
 export async function getEsheParallelById(id) {
   try {
     const record = await pb.collection('eshe_parallel').getOne(id, {
-      expand: 'usuarioId',
+      expand: 'categoriaId,usuarioId',
     });
     return mapProducto(record);
   } catch (error) {
@@ -80,6 +87,7 @@ export async function getEsheParallelDestacados(limit = 8) {
       filter: 'activo = true && destacado = true',
       sort: '-created',
       limit,
+      expand: 'categoriaId',
     });
     return records.map(mapProducto);
   } catch (error) {
@@ -90,14 +98,16 @@ export async function getEsheParallelDestacados(limit = 8) {
 
 /**
  * Productos relacionados (misma categoría)
+ * @param {string} categoriaId - ID de la categoría (antes era el nombre)
  */
-export async function getEsheParallelRelacionados(categoria, productoId, limit = 6) {
-  if (!categoria) return [];
+export async function getEsheParallelRelacionados(categoriaId, productoId, limit = 6) {
+  if (!categoriaId) return [];
   try {
     const records = await pb.collection('eshe_parallel').getFullList({
-      filter: `categoria = "${categoria}" && id != "${productoId}" && activo = true`,
+      filter: `categoriaId = "${categoriaId}" && id != "${productoId}" && activo = true`,
       sort: '-created',
       limit,
+      expand: 'categoriaId',
     });
     return records.map(mapProducto);
   } catch (error) {
@@ -114,6 +124,7 @@ export async function getEsheParallelByUsuario(userId) {
     const records = await pb.collection('eshe_parallel').getFullList({
       filter: `usuarioId = "${userId}"`,
       sort: '-created',
+      expand: 'categoriaId',
     });
     return records.map(mapProducto);
   } catch (error) {
@@ -150,6 +161,23 @@ export async function getColecciones() {
     return Array.from(set).sort();
   } catch (error) {
     console.error('Error en getColecciones:', error);
+    return [];
+  }
+}
+
+/**
+ * Obtiene las categorías del vertical eshe_parallel desde PocketBase
+ */
+export async function getEsheCategorias() {
+  try {
+    const categorias = await pb.collection('categorias').getFullList({
+      filter: 'activo = true && vertical = "eshe_parallel"',
+      sort: 'orden,nombre',
+      fields: 'id,nombre,slug,orden,categoriaPadreId',
+    });
+    return categorias;
+  } catch (error) {
+    console.error('Error en getEsheCategorias:', error);
     return [];
   }
 }
@@ -200,7 +228,12 @@ function mapProducto(record) {
     id: record.id,
     nombre: record.nombre || '',
     descripcion: record.descripcion || '',
-    categoria: record.categoria || '',
+
+    // ✅ Cambio: categoría por relación
+    categoriaId: record.categoriaId || null,
+    categoriaNombre: record.expand?.categoriaId?.nombre || '',
+    categoriaSlug: record.expand?.categoriaId?.slug || '',
+
     subcategoria: record.subcategoria || '',
     coleccion: record.coleccion || '',
     talla: tallasArr,

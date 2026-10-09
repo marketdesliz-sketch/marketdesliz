@@ -142,39 +142,10 @@ function normalizeItem(item, tipo) {
   return base;
 }
 
-const filterItems = (items, categoriaId, subcategoriaId, activeFilters = {}) => {
+const filterItems = (items, categoriaId) => {
   if (!items.length) return [];
-  let filtered = [...items];
-
-  if (categoriaId) {
-    filtered = filtered.filter((item) => item.categoriaId === categoriaId);
-  }
-
-  if (subcategoriaId) {
-    filtered = filtered.filter(
-      (item) => item.subcategoriaId === subcategoriaId
-    );
-  }
-
-  if (Object.keys(activeFilters).length > 0) {
-    Object.entries(activeFilters).forEach(([, filterItemsArr]) => {
-      if (filterItemsArr.length > 0) {
-        filtered = filtered.filter((item) => {
-          const categoriaNombre = item.expand?.categoriaId?.nombre || '';
-          return filterItemsArr.some((fi) => {
-            const s = fi.toLowerCase().trim();
-            return (
-              categoriaNombre.toLowerCase().includes(s) ||
-              item.nombre.toLowerCase().includes(s) ||
-              item.descripcion.toLowerCase().includes(s)
-            );
-          });
-        });
-      }
-    });
-  }
-
-  return filtered;
+  if (!categoriaId) return items;
+  return items.filter((item) => item.categoriaId === categoriaId);
 };
 
 const getNombreFromSlug = (slug) => {
@@ -370,66 +341,50 @@ function Breadcrumb({
   );
 }
 
-// ─── CategoryFilters ────────────────────────────────────────────
 function CategoryFilters({
-  onFilterChange,
-  activeFilters,
   tipo,
-  onClearAll,
   items,
-  categoriasMap,
+  categoriasTree,
+  categoriaSlug,
+  subcategoriaSlug,
 }) {
   const [expanded, setExpanded] = useState({});
 
+  // Auto-expandir el padre de la categoría activa
   useEffect(() => {
-    const secciones = getFiltroSecciones(tipo);
     const initial = {};
-    secciones.forEach((sec, idx) => {
-      initial[sec.id] = idx === 0;
+    categoriasTree.forEach((cat) => {
+      initial[cat.id] = cat.slug === categoriaSlug;
     });
     setExpanded(initial);
-  }, [tipo]);
+  }, [categoriasTree, categoriaSlug]);
 
   const toggle = (id) =>
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  const secciones = useMemo(() => getFiltroSecciones(tipo), [tipo]);
-
+  // Contar productos por categoría
   const counts = useMemo(() => {
     const countsMap = {};
     if (!items) return countsMap;
     items.forEach((item) => {
-      const catName = item.expand?.categoriaId?.nombre || '';
-      if (catName) countsMap[catName] = (countsMap[catName] || 0) + 1;
+      const cid = item.categoriaId;
+      if (cid) countsMap[cid] = (countsMap[cid] || 0) + 1;
     });
     return countsMap;
   }, [items]);
 
-  const hasActiveFilters = Object.values(activeFilters).some(
-    (arr) => arr?.length > 0
-  );
-
-  if (secciones.length === 0) {
-    return (
-      <div
-        className="shrink-0 p-5"
-        style={{
-          width: '288px',
-          background: T.bg,
-          border: `1px solid ${T.line}`,
-          borderRadius: '8px',
-          position: 'sticky',
-          top: '24px',
-        }}
-      >
-        <p
-          className="text-[12px] text-center"
-          style={{ color: T.inkFaint, fontWeight: 450 }}
-        >
-          No hay filtros disponibles
-        </p>
-      </div>
+  const countPadre = (padre) => {
+    if (!padre.hijos || padre.hijos.length === 0) {
+      return counts[padre.id] || 0;
+    }
+    return padre.hijos.reduce(
+      (acc, hijo) => acc + (counts[hijo.id] || 0),
+      0
     );
+  };
+
+  if (!categoriasTree || categoriasTree.length === 0) {
+    return null;
   }
 
   return (
@@ -444,8 +399,9 @@ function CategoryFilters({
         top: '24px',
       }}
     >
+      {/* Header */}
       <div
-        className="flex items-center justify-between px-5 py-4"
+        className="flex items-center px-5 py-4"
         style={{ borderBottom: `1px solid ${T.line}` }}
       >
         <h3
@@ -457,136 +413,136 @@ function CategoryFilters({
             strokeWidth={1.75}
             style={{ color: T.accent }}
           />
-          Filtros
+          Categorías
         </h3>
-        {hasActiveFilters && (
-          <button
-            onClick={onClearAll}
-            className="text-[11px] transition-colors"
-            style={{
-              color: T.accent,
-              fontWeight: 500,
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              WebkitTapHighlightColor: 'transparent',
-            }}
-          >
-            Limpiar
-          </button>
-        )}
       </div>
 
+      {/* Árbol */}
       <div className="p-4 flex flex-col gap-1">
-        {secciones.map((section, sIdx) => (
-          <div
-            key={section.id}
-            className="pb-3"
-            style={{
-              borderTop: sIdx === 0 ? 'none' : `1px solid ${T.line}`,
-              paddingTop: sIdx === 0 ? 0 : '12px',
-            }}
-          >
-            <button
-              onClick={() => toggle(section.id)}
-              className="flex items-center justify-between w-full py-2 text-left"
+        {categoriasTree.map((padre, sIdx) => {
+          const totalPadre = countPadre(padre);
+          const isExpanded = expanded[padre.id];
+          const isPadreActive =
+            categoriaSlug === padre.slug && !subcategoriaSlug;
+          const tieneHijos = padre.hijos && padre.hijos.length > 0;
+
+          return (
+            <div
+              key={padre.id}
+              className="pb-3"
+              style={{
+                borderTop: sIdx === 0 ? 'none' : `1px solid ${T.line}`,
+                paddingTop: sIdx === 0 ? 0 : '12px',
+              }}
             >
-              <span
-                className="text-[10px] uppercase tracking-[0.18em]"
-                style={{ color: T.inkMid, fontWeight: 500 }}
-              >
-                {section.title}
-              </span>
-              <span className="flex items-center gap-2">
-                <span
-                  className="text-[10px] px-1.5 py-0.5 tabular-nums"
+              {/* Fila del padre */}
+              <div className="flex items-center justify-between gap-2 py-1">
+                <Link
+                  href={`/${tipo}/categoria/${padre.slug}`}
+                  className="flex-1 text-[10px] uppercase tracking-[0.18em] transition-colors"
                   style={{
-                    color: T.inkFaint,
-                    background: 'rgba(15,15,15,0.04)',
-                    borderRadius: '4px',
-                    fontWeight: 500,
-                    fontFeatureSettings: '"tnum"',
+                    color: isPadreActive ? T.accent : T.inkMid,
+                    fontWeight: isPadreActive ? 700 : 500,
+                    textDecoration: 'none',
+                    WebkitTapHighlightColor: 'transparent',
                   }}
                 >
-                  {section.categories.reduce(
-                    (acc, cat) => acc + (counts[cat.name] || 0),
-                    0
-                  )}
-                </span>
-                {expanded[section.id] ? (
-                  <Minus
-                    size={12}
-                    strokeWidth={1.75}
-                    style={{ color: T.inkFaint }}
-                  />
-                ) : (
-                  <Plus
-                    size={12}
-                    strokeWidth={1.75}
-                    style={{ color: T.inkFaint }}
-                  />
-                )}
-              </span>
-            </button>
+                  {padre.nombre}
+                </Link>
 
-            {expanded[section.id] && (
-              <div className="flex flex-col gap-1.5 pt-1">
-                {section.categories.map((cat) => {
-                  const isActive = activeFilters[section.id]?.includes(
-                    cat.name
-                  );
-                  const count = counts[cat.name] || 0;
-                  if (count === 0) return null;
-                  return (
-                    <label
-                      key={cat.name}
-                      className="flex items-center gap-2.5 cursor-pointer"
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 tabular-nums"
+                    style={{
+                      color: T.inkFaint,
+                      background: 'rgba(15,15,15,0.04)',
+                      borderRadius: '4px',
+                      fontWeight: 500,
+                      fontFeatureSettings: '"tnum"',
+                    }}
+                  >
+                    {totalPadre}
+                  </span>
+                  {tieneHijos && (
+                    <button
+                      type="button"
+                      onClick={() => toggle(padre.id)}
+                      className="flex items-center justify-center transition-colors"
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '2px',
+                        color: T.inkFaint,
+                        WebkitTapHighlightColor: 'transparent',
+                      }}
+                      aria-label={isExpanded ? 'Contraer' : 'Expandir'}
                     >
-                      <input
-                        type="checkbox"
-                        checked={isActive}
-                        onChange={(e) =>
-                          onFilterChange(
-                            section.id,
-                            cat.name,
-                            e.target.checked
-                          )
-                        }
-                        style={{
-                          width: '14px',
-                          height: '14px',
-                          accentColor: T.accent,
-                          cursor: 'pointer',
-                        }}
-                      />
-                      <span
-                        className="text-[12.5px] flex-1"
-                        style={{
-                          color: isActive ? T.accent : T.inkMid,
-                          fontWeight: isActive ? 500 : 450,
-                        }}
-                      >
-                        {cat.name}
-                      </span>
-                      <span
-                        className="text-[11px] tabular-nums"
-                        style={{
-                          color: T.inkFaint,
-                          fontWeight: 450,
-                          fontFeatureSettings: '"tnum"',
-                        }}
-                      >
-                        {count}
-                      </span>
-                    </label>
-                  );
-                })}
+                      {isExpanded ? (
+                        <Minus size={12} strokeWidth={1.75} />
+                      ) : (
+                        <Plus size={12} strokeWidth={1.75} />
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        ))}
+
+              {/* Hijos */}
+              {isExpanded && tieneHijos && (
+                <div className="flex flex-col gap-0.5 pt-1">
+                  {padre.hijos.map((hijo) => {
+                    const count = counts[hijo.id] || 0;
+                    const isHijoActive = subcategoriaSlug === hijo.slug;
+                    return (
+                      <Link
+                        key={hijo.id}
+                        href={`/${tipo}/categoria/${padre.slug}/${hijo.slug}`}
+                        className="flex items-center justify-between gap-2 py-1.5 px-2 -mx-2 rounded transition-colors"
+                        style={{
+                          color: isHijoActive ? T.accent : T.inkMid,
+                          fontWeight: isHijoActive ? 600 : 450,
+                          fontSize: '12.5px',
+                          textDecoration: 'none',
+                          background: isHijoActive
+                            ? 'rgba(79, 46, 232, 0.06)'
+                            : 'transparent',
+                          WebkitTapHighlightColor: 'transparent',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isHijoActive) {
+                            e.currentTarget.style.background =
+                              'rgba(15,15,15,0.03)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isHijoActive) {
+                            e.currentTarget.style.background = 'transparent';
+                          }
+                        }}
+                      >
+                        <span className="truncate">{hijo.nombre}</span>
+                        <span
+                          className="text-[11px] tabular-nums shrink-0"
+                          style={{
+                            color: T.inkFaint,
+                            fontWeight: 450,
+                            fontFeatureSettings: '"tnum"',
+                          }}
+                        >
+                          {count}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
+      {/* Pick Up */}
       <div className="px-4 pb-4">
         <div
           className="p-3.5"
@@ -829,9 +785,10 @@ function ProductCard({ item, tipo, onSelect, favorites, toggleFavorite }) {
 }
 
 // ─── PÁGINA PRINCIPAL ───────────────────────────────────────────
-export default function CategoriaPage() {
+export default function CategoriaPage({ tipoForzado = null }) {
   const router = useRouter();
-  const { tipo, slug = [] } = router.query;
+  const { tipo: tipoRouter, slug = [] } = router.query;
+  const tipo = tipoForzado || tipoRouter;
   const categoriaSlug = slug[0];
   const subcategoriaSlug = slug[1];
 
@@ -840,14 +797,16 @@ export default function CategoriaPage() {
   const [categoriaNombre, setCategoriaNombre] = useState('');
   const [subcategoriaNombre, setSubcategoriaNombre] = useState('');
   const [loading, setLoading] = useState(true);
-  const [activeFilters, setActiveFilters] = useState({});
   const [sortBy, setSortBy] = useState('relevance');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
   const [categoriaInfo, setCategoriaInfo] = useState(null);
   const [categoriaId, setCategoriaId] = useState(null);
+  const [subcategorias, setSubcategorias] = useState([]);
   const [categoriasMap, setCategoriasMap] = useState({});
+  const [categoriasTree, setCategoriasTree] = useState([]);
   const [favorites, setFavorites] = useState([]);
+
 
   const notifications = [];
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -873,24 +832,64 @@ export default function CategoriaPage() {
         setLoading(true);
         const busqueda = router.query.busqueda;
 
-        // 1. Mapa de categorías (id → nombre)
+        // 1. Cargar TODAS las categorías de products con jerarquía
         let categoriasMapLocal = {};
+        let arbol = [];
         try {
           const categoriasList = await pb
             .collection('categorias')
             .getFullList({
-              filter: 'activo = true',
-              fields: 'id,nombre',
+              filter: 'activo = true && vertical = "products"',
+              sort: 'orden,nombre',
+              fields: 'id,nombre,slug,orden,categoriaPadreId',
             });
+
           categoriasList.forEach((c) => {
             categoriasMapLocal[c.id] = c.nombre;
           });
-          setCategoriasMap(categoriasMapLocal);
-        } catch (e) {
-          console.warn(
-            'No se pudieron cargar categorías desde PocketBase:',
-            e
+
+          const padres = categoriasList.filter((c) => !c.categoriaPadreId);
+          const hijos = categoriasList.filter((c) => c.categoriaPadreId);
+
+          arbol = padres.map((padre) => ({
+            id: padre.id,
+            nombre: padre.nombre,
+            slug: padre.slug,
+            hijos: hijos
+              .filter((h) => h.categoriaPadreId === padre.id)
+              .map((h) => ({
+                id: h.id,
+                nombre: h.nombre,
+                slug: h.slug,
+              })),
+          }));
+
+          // Huérfanos (hijos sin padre válido) — se agregan al final
+          const huerfanos = hijos.filter(
+            (h) => !padres.find((p) => p.id === h.categoriaPadreId)
           );
+          if (huerfanos.length > 0) {
+            arbol.push({
+              id: 'otros',
+              nombre: 'Otros',
+              slug: 'otros',
+              hijos: huerfanos.map((h) => ({
+                id: h.id,
+                nombre: h.nombre,
+                slug: h.slug,
+              })),
+            });
+          }
+
+          // 🔍 DEBUG - ver qué se cargó
+          console.log('🌳 Árbol de categorías:', arbol);
+          console.log('📊 Padres:', padres.map(p => ({ id: p.id, nombre: p.nombre })));
+          console.log('📊 Hijos:', hijos.map(h => ({ id: h.id, nombre: h.nombre, padre: h.categoriaPadreId })));
+
+          setCategoriasMap(categoriasMapLocal);
+          setCategoriasTree(arbol);
+        } catch (e) {
+          console.warn('No se pudieron cargar categorías desde PocketBase:', e);
         }
 
         // 2. Obtener ID de categoría desde el slug
@@ -899,56 +898,64 @@ export default function CategoriaPage() {
         let catNombre = '';
 
         if (categoriaSlug && categoriaSlug !== 'todos') {
-          const staticInfo = getCategoriaInfoFromStatic(categoriaSlug);
-          if (staticInfo) {
-            catInfo = staticInfo;
-            catNombre = staticInfo.nombre;
-            try {
-              const catRecord = await pb
-                .collection('categorias')
-                .getFirstListItem(
-                  `nombre ~ "${staticInfo.nombre}" && activo = true`,
-                  { fields: 'id,nombre' }
-                );
-              if (catRecord) {
-                catId = catRecord.id;
-                catNombre = catRecord.nombre;
-              }
-            } catch (e) {
-              try {
-                const catRecord = await pb
-                  .collection('categorias')
-                  .getFirstListItem(
-                    `slug = "${categoriaSlug}" && activo = true`,
-                    { fields: 'id,nombre' }
-                  );
-                if (catRecord) {
-                  catId = catRecord.id;
-                  catNombre = catRecord.nombre;
-                }
-              } catch (e2) {
-                console.warn(
-                  `⚠️ Categoría no encontrada para slug: ${categoriaSlug}`
-                );
-              }
+          // 1. Lookup por slug EXACTO en PocketBase (caso normal)
+          try {
+            const catRecord = await pb
+              .collection('categorias')
+              .getFirstListItem(
+                `slug = "${categoriaSlug}" && activo = true`,
+                { fields: 'id,nombre,slug' }
+              );
+            if (catRecord) {
+              catId = catRecord.id;
+              catNombre = catRecord.nombre;
+              catInfo = {
+                id: catRecord.id,
+                nombre: catRecord.nombre,
+                slug: catRecord.slug,
+              };
             }
-          } else {
+          } catch (e1) {
+            // 2. Fallback: buscar por nombre (LIKE)
             try {
               const catRecord = await pb
                 .collection('categorias')
                 .getFirstListItem(
                   `nombre ~ "${categoriaSlug}" && activo = true`,
-                  { fields: 'id,nombre' }
+                  { fields: 'id,nombre,slug' }
                 );
               if (catRecord) {
                 catId = catRecord.id;
                 catNombre = catRecord.nombre;
-                catInfo = { nombre: catNombre, slug: categoriaSlug };
+                catInfo = {
+                  id: catRecord.id,
+                  nombre: catRecord.nombre,
+                  slug: catRecord.slug,
+                };
               }
-            } catch (e) {
-              console.warn(
-                `⚠️ Categoría no encontrada en PocketBase: ${categoriaSlug}`
-              );
+            } catch (e2) {
+              // 3. Fallback final: usar catálogo estático
+              const staticInfo = getCategoriaInfoFromStatic(categoriaSlug);
+              if (staticInfo) {
+                catInfo = staticInfo;
+                catNombre = staticInfo.nombre;
+                try {
+                  const catRecord = await pb
+                    .collection('categorias')
+                    .getFirstListItem(
+                      `nombre ~ "${staticInfo.nombre}" && activo = true`,
+                      { fields: 'id,nombre,slug' }
+                    );
+                  if (catRecord) {
+                    catId = catRecord.id;
+                    catNombre = catRecord.nombre;
+                  }
+                } catch (e3) {
+                  console.warn(
+                    `⚠️ Categoría no encontrada en PocketBase: ${categoriaSlug}`
+                  );
+                }
+              }
             }
           }
         }
@@ -961,9 +968,24 @@ export default function CategoriaPage() {
           return;
         }
 
+        // ✅ Cargar subcategorías (hijas)
+        let subcats = [];
+        if (catId) {
+          try {
+            subcats = await pb.collection('categorias').getFullList({
+              filter: `categoriaPadreId = "${catId}" && activo = true`,
+              sort: 'orden,nombre',
+              fields: 'id,nombre,slug,orden',
+            });
+          } catch (e) {
+            console.warn('No se pudieron cargar subcategorías:', e);
+          }
+        }
+
         setCategoriaId(catId);
         setCategoriaNombre(catNombre);
         setCategoriaInfo(catInfo);
+        setSubcategorias(subcats);
         setSubcategoriaNombre(getNombreFromSlug(subcategoriaSlug));
 
         // 3. Cargar productos
@@ -982,7 +1004,16 @@ export default function CategoriaPage() {
           }
 
           if (catId) {
-            filter += ` && categoriaId = "${catId}"`;
+            if (subcats.length > 0) {
+              // Productos de la padre Y de todas las hijas
+              const ids = [catId, ...subcats.map((s) => s.id)];
+              const cond = ids
+                .map((id) => `categoriaId = "${id}"`)
+                .join(' || ');
+              filter += ` && (${cond})`;
+            } else {
+              filter += ` && categoriaId = "${catId}"`;
+            }
           }
 
           records = await pb.collection('products').getFullList({
@@ -1007,27 +1038,18 @@ export default function CategoriaPage() {
   const itemsFiltrados = useMemo(() => {
     if (items.length === 0) return [];
 
-    let subcategoriaId = null;
-    if (subcategoriaSlug && categoriaInfo?.subcategorias) {
-      const sub = categoriaInfo.subcategorias.find(
-        (s) => s.slug === subcategoriaSlug
-      );
-      if (sub) {
-        const itemWithSub = items.find(
-          (i) => i.subcategoria === sub.nombre || i.subcategoriaId
-        );
-        if (itemWithSub) {
-          subcategoriaId = itemWithSub.subcategoriaId;
-        }
-      }
+    // Resolver subcategoría activa desde la URL
+    let subId = null;
+    if (subcategoriaSlug && subcategorias.length > 0) {
+      const sub = subcategorias.find((s) => s.slug === subcategoriaSlug);
+      if (sub) subId = sub.id;
     }
 
-    let filtered = filterItems(
-      items,
-      categoriaId,
-      subcategoriaId,
-      activeFilters
-    );
+    // Si hay subcategoría en la URL → filtrar por ella
+    // Si no → filtrar por la categoría padre (que ya incluye a las hijas)
+    const catFiltro = subId || categoriaId;
+
+    let filtered = filterItems(items, catFiltro);
 
     const busqueda = router.query.busqueda;
     if (busqueda?.trim()) {
@@ -1054,7 +1076,7 @@ export default function CategoriaPage() {
     items,
     categoriaId,
     subcategoriaSlug,
-    activeFilters,
+    subcategorias,
     sortBy,
     router.query.busqueda,
     categoriaInfo,
@@ -1064,27 +1086,6 @@ export default function CategoriaPage() {
     setFilteredItems(itemsFiltrados);
     setCurrentPage(1);
   }, [itemsFiltrados]);
-
-  // ─── Handlers ───────────────────────────────────────────
-  const handleFilterChange = useCallback((section, item, isChecked) => {
-    setActiveFilters((prev) => {
-      const n = { ...prev };
-      if (isChecked) {
-        if (!n[section]) n[section] = [];
-        if (!n[section].includes(item)) n[section].push(item);
-      } else {
-        if (n[section]) {
-          n[section] = n[section].filter((i) => i !== item);
-          if (!n[section].length) delete n[section];
-        }
-      }
-      return n;
-    });
-  }, []);
-
-  const handleClearAllFilters = useCallback(() => {
-    setActiveFilters({});
-  }, []);
 
   const handleSelect = (itemId) => router.push(`/${tipo}/solicitar/${itemId}`);
 
@@ -1099,8 +1100,8 @@ export default function CategoriaPage() {
   const tipoLabel = esServicio
     ? 'servicios'
     : esInstrumento
-    ? 'instrumentos'
-    : 'productos';
+      ? 'instrumentos'
+      : 'productos';
 
   // ─── Loading ────────────────────────────────────────────
   if (loading) {
@@ -1167,81 +1168,16 @@ export default function CategoriaPage() {
               {/* ─── Sidebar filtros ─────────────────── */}
               <div className="hidden lg:block">
                 <CategoryFilters
-                  onFilterChange={handleFilterChange}
-                  activeFilters={activeFilters}
                   tipo={tipo}
-                  onClearAll={handleClearAllFilters}
                   items={items}
-                  categoriasMap={categoriasMap}
+                  categoriasTree={categoriasTree}
+                  categoriaSlug={categoriaSlug}
+                  subcategoriaSlug={subcategoriaSlug}
                 />
               </div>
 
               {/* ─── Resultados ──────────────────────── */}
               <div className="flex-1 min-w-0">
-                {/* Filtros activos como pills */}
-                {Object.values(activeFilters).some((a) => a?.length > 0) && (
-                  <div className="flex flex-wrap gap-2 mb-5">
-                    {Object.entries(activeFilters).flatMap(([, arr]) =>
-                      (arr || []).map((item) => (
-                        <span
-                          key={item}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5"
-                          style={{
-                            background: 'rgba(79, 46, 232, 0.06)',
-                            color: T.accent,
-                            borderRadius: '6px',
-                            fontSize: '11.5px',
-                            fontWeight: 500,
-                          }}
-                        >
-                          {item}
-                          <button
-                            onClick={() => {
-                              const section = Object.keys(
-                                activeFilters
-                              ).find((k) =>
-                                activeFilters[k]?.includes(item)
-                              );
-                              if (section)
-                                handleFilterChange(section, item, false);
-                            }}
-                            style={{
-                              color: T.accent,
-                              background: 'transparent',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: 0,
-                              WebkitTapHighlightColor: 'transparent',
-                            }}
-                            aria-label={`Quitar ${item}`}
-                          >
-                            <X size={11} strokeWidth={2} />
-                          </button>
-                        </span>
-                      ))
-                    )}
-                    <button
-                      onClick={handleClearAllFilters}
-                      className="text-[11px] px-2 transition-colors"
-                      style={{
-                        color: T.inkFaint,
-                        background: 'transparent',
-                        border: 'none',
-                        cursor: 'pointer',
-                        WebkitTapHighlightColor: 'transparent',
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.color = T.inkSoft)
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.color = T.inkFaint)
-                      }
-                    >
-                      Limpiar todo
-                    </button>
-                  </div>
-                )}
-
                 {filteredItems.length === 0 ? (
                   <div
                     className="flex flex-col items-center justify-center py-20 px-6 text-center"
