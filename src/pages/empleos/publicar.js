@@ -1,4 +1,4 @@
-// src/pages/bolsa-trabajo/publicar.js
+// src/pages/empleos/publicar.js
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
@@ -212,7 +212,7 @@ export default function PublicarOfertaPage() {
   const [showPreview, setShowPreview] = useState(false);
 
   const [formData, setFormData] = useState({
-    tipo: 'busco_trabajo',
+    tipo: 'busco_empleo',
     titulo: '',
     descripcion: '',
     categoria: '',
@@ -316,7 +316,7 @@ export default function PublicarOfertaPage() {
     setError('');
 
     try {
-      await pb.collection('bolsa_trabajo').create({
+      await pb.collection('empleos').create({
         userId: user.id,
         tipo: formData.tipo,
         titulo: formData.titulo.trim(),
@@ -333,7 +333,7 @@ export default function PublicarOfertaPage() {
       setEnviado(true);
       // Guardamos el ID para poder limpiarlo si el componente se desmonta
       redirectTimeoutRef.current = setTimeout(
-        () => router.push('/bolsa-trabajo'),
+        () => router.push('/empleos'),
         3000
       );
     } catch (err) {
@@ -387,11 +387,11 @@ export default function PublicarOfertaPage() {
     return (
       <>
         <Head>
-          <title>Publicar en Bolsa de Trabajo | MarketDesliz</title>
+          <title>Publicar en Empleos | MarketDesliz</title>
           <meta name="theme-color" content="#0F0F0F" />
         </Head>
         <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
-          <BackButton fallback="/bolsa-trabajo" />
+          <BackButton fallback="/empleos" />
           <TerminalBar mode="rotating" />
           <Header notifications={notifications} unreadCount={unreadCount} />
           <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-20 w-full">
@@ -456,11 +456,11 @@ export default function PublicarOfertaPage() {
     return (
       <>
         <Head>
-          <title>Publicar en Bolsa de Trabajo | MarketDesliz</title>
+          <title>Publicar en Empleos | MarketDesliz</title>
           <meta name="theme-color" content="#0F0F0F" />
         </Head>
         <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
-          <BackButton fallback="/bolsa-trabajo" />
+          <BackButton fallback="/empleos" />
           <TerminalBar mode="rotating" />
           <Header notifications={notifications} unreadCount={unreadCount} />
           <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-20 w-full">
@@ -494,8 +494,7 @@ export default function PublicarOfertaPage() {
                 className="text-[15px] leading-[1.6] mb-8 max-w-sm mx-auto"
                 style={{ color: T.inkSoft, fontWeight: 450 }}
               >
-                Necesitas iniciar sesión para publicar una oferta en la Bolsa
-                de Trabajo.
+                Necesitas iniciar sesión para publicar una oferta en Empleos.
               </p>
               <button
                 onClick={openLogin}
@@ -529,12 +528,12 @@ export default function PublicarOfertaPage() {
   return (
     <>
       <Head>
-        <title>Publicar en Bolsa de Trabajo | MarketDesliz</title>
+        <title>Publicar en Empleos | MarketDesliz</title>
         <meta name="theme-color" content="#0F0F0F" />
       </Head>
 
       <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
-        <BackButton fallback="/bolsa-trabajo" />
+        <BackButton fallback="/empleos" />
         <TerminalBar mode="rotating" />
         <Header notifications={notifications} unreadCount={unreadCount} />
 
@@ -550,7 +549,7 @@ export default function PublicarOfertaPage() {
                 fontFeatureSettings: '"ss01"',
               }}
             >
-              Bolsa de trabajo · Publicar
+              Empleos · Publicar
             </p>
 
             <h1
@@ -599,8 +598,8 @@ export default function PublicarOfertaPage() {
                   value={formData.tipo}
                   onChange={handleChange}
                 >
-                  <option value="busco_trabajo">Busco trabajo</option>
-                  <option value="ofrezco_trabajo">Ofrezco trabajo</option>
+                  <option value="busco_empleo">Busco empleo</option>
+                  <option value="ofrezco_empleo">Ofrezco empleo</option>
                 </FieldSelect>
               </div>
 
@@ -882,11 +881,11 @@ export default function PublicarOfertaPage() {
                   className="inline-flex items-center gap-1.5 px-2.5 py-1"
                   style={{
                     background:
-                      formData.tipo === 'ofrezco_trabajo'
+                      formData.tipo === 'ofrezco_empleo'
                         ? 'rgba(79, 46, 232, 0.08)'
                         : 'rgba(26, 127, 75, 0.08)',
                     color:
-                      formData.tipo === 'ofrezco_trabajo' ? T.accent : T.green,
+                      formData.tipo === 'ofrezco_empleo' ? T.accent : T.green,
                     borderRadius: '4px',
                     fontSize: '10px',
                     textTransform: 'uppercase',
@@ -894,9 +893,9 @@ export default function PublicarOfertaPage() {
                     fontWeight: 600,
                   }}
                 >
-                  {formData.tipo === 'ofrezco_trabajo'
-                    ? 'Ofrezco trabajo'
-                    : 'Busco trabajo'}
+                  {formData.tipo === 'ofrezco_empleo'
+                    ? 'Ofrezco empleo'
+                    : 'Busco empleo'}
                 </span>
                 <span
                   className="text-[10px] uppercase tracking-[0.15em]"

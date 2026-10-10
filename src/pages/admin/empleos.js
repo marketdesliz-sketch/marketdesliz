@@ -1,4 +1,4 @@
-// src/pages/admin/bolsa-trabajo.js
+// src/pages/admin/empleos.js
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
@@ -29,8 +29,8 @@ import { formatDate, formatPhone } from '../../lib/utils';
 
 const ITEMS_PER_PAGE = 10;
 
-// ─── Servicio interno para la bolsa de trabajo ──────────────────────────
-const bolsaTrabajoService = {
+// ─── Servicio interno para empleos ──────────────────────────
+const empleosService = {
   /**
    * Obtiene ofertas con paginación, filtros y ordenamiento
    */
@@ -43,7 +43,7 @@ const bolsaTrabajoService = {
         filter += `estado = "${estado}"`;
       }
 
-      // Filtro por tipo (busco_trabajo / ofrezco_trabajo)
+      // Filtro por tipo (busco_empleo / ofrezco_empleo)
       if (tipo) {
         filter += filter ? ` && tipo = "${tipo}"` : `tipo = "${tipo}"`;
       }
@@ -59,7 +59,7 @@ const bolsaTrabajoService = {
         filter += filter ? ` && (titulo ~ "${term}" || descripcion ~ "${term}")` : `(titulo ~ "${term}" || descripcion ~ "${term}")`;
       }
 
-      const result = await pb.collection('bolsa_trabajo').getList(page, perPage, {
+      const result = await pb.collection('empleos').getList(page, perPage, {
         filter: filter || undefined,
         sort: sort,
         expand: 'userId'
@@ -88,11 +88,11 @@ const bolsaTrabajoService = {
         aprobado: 0,
         rechazado: 0,
         total: 0,
-        porTipo: { busco_trabajo: 0, ofrezco_trabajo: 0 },
+        porTipo: { busco_empleo: 0, ofrezco_empleo: 0 },
         porCategoria: {}
       };
 
-      const all = await pb.collection('bolsa_trabajo').getFullList({
+      const all = await pb.collection('empleos').getFullList({
         fields: 'estado,tipo,categoria'
       });
 
@@ -119,7 +119,7 @@ const bolsaTrabajoService = {
       fechaRevision: new Date().toISOString(),
       revisadoPor: adminId
     };
-    const oferta = await pb.collection('bolsa_trabajo').update(id, updateData);
+    const oferta = await pb.collection('empleos').update(id, updateData);
     // Enviar notificación
     if (oferta.userId) {
       await pb.collection('notificaciones').create({
@@ -127,9 +127,9 @@ const bolsaTrabajoService = {
         tipoUsuario: 'cliente',
         tipo: 'sistema',
         titulo: '✅ Publicación aprobada',
-        mensaje: `Tu oferta "${oferta.titulo}" ha sido aprobada en la Bolsa de Trabajo.`,
+        mensaje: `Tu oferta "${oferta.titulo}" ha sido aprobada en Empleos.`,
         entidadId: id,
-        entidadTipo: 'bolsa_trabajo'
+        entidadTipo: 'empleo'
       });
     }
     return oferta;
@@ -142,7 +142,7 @@ const bolsaTrabajoService = {
       fechaRevision: new Date().toISOString(),
       revisadoPor: adminId
     };
-    const oferta = await pb.collection('bolsa_trabajo').update(id, updateData);
+    const oferta = await pb.collection('empleos').update(id, updateData);
     // Opcional: notificar al usuario
     if (oferta.userId) {
       await pb.collection('notificaciones').create({
@@ -152,7 +152,7 @@ const bolsaTrabajoService = {
         titulo: '❌ Publicación rechazada',
         mensaje: `Tu oferta "${oferta.titulo}" ha sido rechazada. Motivo: ${motivo}`,
         entidadId: id,
-        entidadTipo: 'bolsa_trabajo'
+        entidadTipo: 'empleo'
       });
     }
     return oferta;
@@ -160,7 +160,7 @@ const bolsaTrabajoService = {
 };
 
 // ─── Componente principal ────────────────────────────────────────────────
-export default function AdminBolsaTrabajoPage() {
+export default function AdminEmpleosPage() {
   const router = useRouter();
 
   // ─── Estado local ──────────────────────────────────────────────────────
@@ -208,7 +208,7 @@ export default function AdminBolsaTrabajoPage() {
     Object.keys(query).forEach(key => {
       if (query[key] === undefined || query[key] === '') delete query[key];
     });
-    router.push({ pathname: '/admin/bolsa-trabajo', query }, undefined, { shallow: true });
+    router.push({ pathname: '/admin/empleos', query }, undefined, { shallow: true });
   }, [estado, tipo, categoria, search, sort, currentPage, router]);
 
   // ─── Cargar datos ──────────────────────────────────────────────────────
@@ -218,11 +218,11 @@ export default function AdminBolsaTrabajoPage() {
       setError(null);
 
       // Cargar estadísticas (solo la primera vez o cuando cambia algo que las afecte)
-      const stats = await bolsaTrabajoService.getEstadisticas();
+      const stats = await empleosService.getEstadisticas();
       setEstadisticas(stats);
 
       // Cargar ofertas con filtros
-      const result = await bolsaTrabajoService.getOfertas({
+      const result = await empleosService.getOfertas({
         page: currentPage,
         perPage: ITEMS_PER_PAGE,
         estado,
@@ -253,7 +253,7 @@ export default function AdminBolsaTrabajoPage() {
   const handleAprobar = async (id) => {
     try {
       const adminId = pb.authStore.model?.id;
-      await bolsaTrabajoService.aprobar(id, adminId);
+      await empleosService.aprobar(id, adminId);
       await cargarDatos();
       setShowModal(false);
       setSelectedOferta(null);
@@ -272,7 +272,7 @@ export default function AdminBolsaTrabajoPage() {
     }
     try {
       const adminId = pb.authStore.model?.id;
-      await bolsaTrabajoService.rechazar(selectedOferta.id, motivoRechazo, adminId);
+      await empleosService.rechazar(selectedOferta.id, motivoRechazo, adminId);
       await cargarDatos();
       setShowModal(false);
       setSelectedOferta(null);
@@ -333,7 +333,7 @@ export default function AdminBolsaTrabajoPage() {
   return (
     <>
       <Head>
-        <title>Revisar Bolsa de Trabajo | Admin</title>
+        <title>Revisar Empleos | Admin</title>
       </Head>
 
       <AdminLayoutMinimal>
@@ -346,7 +346,7 @@ export default function AdminBolsaTrabajoPage() {
                 <Briefcase size={20} className="text-[#6C3BFF]" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Revisar Bolsa de Trabajo</h1>
+                <h1 className="text-2xl font-bold text-gray-900">Revisar Empleos</h1>
                 <p className="text-sm text-gray-500">Aprueba o rechaza las ofertas publicadas</p>
               </div>
             </div>
@@ -454,8 +454,8 @@ export default function AdminBolsaTrabajoPage() {
                 className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-[#6C3BFF]/25"
               >
                 <option value="">Todos los tipos</option>
-                <option value="busco_trabajo">Busco trabajo</option>
-                <option value="ofrezco_trabajo">Ofrezco trabajo</option>
+                <option value="busco_empleo">Busco empleo</option>
+                <option value="ofrezco_empleo">Ofrezco empleo</option>
               </select>
               <select
                 value={categoria}
@@ -518,7 +518,7 @@ export default function AdminBolsaTrabajoPage() {
                 {ofertas.map((oferta) => {
                   const EstadoIcono = getEstadoConfig(oferta.estado).icono;
                   const estadoConfig = getEstadoConfig(oferta.estado);
-                  const esOfertaTrabajo = oferta.tipo === 'ofrezco_trabajo';
+                  const esOfertaEmpleo = oferta.tipo === 'ofrezco_empleo';
 
                   return (
                     <div key={oferta.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-all">
@@ -526,12 +526,12 @@ export default function AdminBolsaTrabajoPage() {
                       <div className="p-5 border-b border-gray-100 bg-gray-50/30">
                         <div className="flex flex-wrap justify-between items-start gap-3">
                           <div className="flex items-center gap-2">
-                            <div className={`w-8 h-8 ${esOfertaTrabajo ? 'bg-blue-50' : 'bg-green-50'} rounded-lg flex items-center justify-center`}>
-                              {esOfertaTrabajo ? <Building2 size={14} className="text-blue-600" /> : <Search size={14} className="text-green-600" />}
+                            <div className={`w-8 h-8 ${esOfertaEmpleo ? 'bg-blue-50' : 'bg-green-50'} rounded-lg flex items-center justify-center`}>
+                              {esOfertaEmpleo ? <Building2 size={14} className="text-blue-600" /> : <Search size={14} className="text-green-600" />}
                             </div>
                             <div>
-                              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${esOfertaTrabajo ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                                {esOfertaTrabajo ? 'Ofrezco trabajo' : 'Busco trabajo'}
+                              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${esOfertaEmpleo ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                                {esOfertaEmpleo ? 'Ofrezco empleo' : 'Busco empleo'}
                               </span>
                               <p className="text-xs text-gray-400 mt-1">
                                 Publicado: {formatDate(oferta.created)}

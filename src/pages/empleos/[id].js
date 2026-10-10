@@ -1,4 +1,4 @@
-// src/pages/bolsa-trabajo/[id].js
+// src/pages/empleos/[id].js
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
@@ -218,11 +218,11 @@ function ShareButton({ label, color, onClick }) {
 
 function SimilarCard({ oferta }) {
   const [hover, setHover] = useState(false);
-  const esOferta = oferta.tipo === 'ofrezco_trabajo';
+  const esOferta = oferta.tipo === 'ofrezco_empleo';
 
   return (
     <Link
-      href={`/bolsa-trabajo/${oferta.id}`}
+      href={`/empleos/${oferta.id}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       className="flex flex-col transition-all duration-300"
@@ -333,7 +333,7 @@ export default function OfertaDetallePage() {
       setError(null);
 
       const data = await pb
-        .collection('bolsa_trabajo')
+        .collection('empleos')
         .getOne(id, { expand: 'userId' });
 
       if (!data) throw new Error('Oferta no encontrada');
@@ -348,7 +348,7 @@ export default function OfertaDetallePage() {
 
       // Cargar similares (misma categoría, excluyendo esta)
       try {
-        const sim = await pb.collection('bolsa_trabajo').getList(1, 3, {
+        const sim = await pb.collection('empleos').getList(1, 3, {
           filter: `categoria = "${data.categoria}" && estado = "aprobado" && activo = true && id != "${id}"`,
           sort: '-created',
         });
@@ -465,7 +465,7 @@ export default function OfertaDetallePage() {
           <meta name="theme-color" content="#0F0F0F" />
         </Head>
         <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
-          <BackButton fallback="/bolsa-trabajo" />
+          <BackButton fallback="/empleos" />
           <TerminalBar mode="rotating" />
           <Header />
           <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-20 w-full">
@@ -489,7 +489,7 @@ export default function OfertaDetallePage() {
                   fontFeatureSettings: '"ss01"',
                 }}
               >
-                Bolsa de trabajo
+                empleos
               </p>
               <h1
                 className="text-[32px] md:text-[44px] leading-[1.05] tracking-[-0.03em] mb-4"
@@ -505,7 +505,7 @@ export default function OfertaDetallePage() {
                 className="text-[15px] leading-[1.6] mb-8 max-w-sm mx-auto"
                 style={{ color: T.inkSoft, fontWeight: 450 }}
               >
-                Las ofertas de la bolsa de trabajo están disponibles solo para
+                Las ofertas de empleos están disponibles solo para
                 usuarios con cuenta en MarketDesliz.
               </p>
               <button
@@ -570,7 +570,7 @@ export default function OfertaDetallePage() {
       <>
         <Head><title>Oferta no encontrada | MarketDesliz</title></Head>
         <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
-          <BackButton fallback="/bolsa-trabajo" />
+          <BackButton fallback="/empleos" />
           <TerminalBar mode="rotating" />
           <Header />
           <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-20 w-full">
@@ -593,7 +593,7 @@ export default function OfertaDetallePage() {
                 {error || 'La oferta que buscas no existe o fue eliminada.'}
               </p>
               <Link
-                href="/bolsa-trabajo"
+                href="/empleos"
                 className="inline-flex items-center gap-2 h-11 px-6 text-white text-[13px]"
                 style={{
                   background: T.accent,
@@ -603,7 +603,7 @@ export default function OfertaDetallePage() {
                   WebkitTapHighlightColor: 'transparent',
                 }}
               >
-                <ChevronLeft size={14} strokeWidth={1.75} /> Volver a bolsa
+                <ChevronLeft size={14} strokeWidth={1.75} /> Volver a Empleos
               </Link>
             </div>
           </main>
@@ -613,29 +613,29 @@ export default function OfertaDetallePage() {
     );
   }
 
-  const esOferta = oferta.tipo === 'ofrezco_trabajo';
+  const esOferta = oferta.tipo === 'ofrezco_empleo';
   const esAutor = user?.id && user.id === oferta.userId;
   const pendiente = oferta.estado !== 'aprobado';
 
   return (
     <>
       <Head>
-        <title>{oferta.titulo} | Bolsa de Trabajo MarketDesliz</title>
+        <title>{oferta.titulo} | Empleos MarketDesliz</title>
         <meta
           name="description"
-          content={oferta.descripcion?.substring(0, 160) || `Oferta de trabajo en ${getNombreCategoria(oferta.categoria)}`}
+          content={oferta.descripcion?.substring(0, 160) || `Oferta de empleo en ${getNombreCategoria(oferta.categoria)}`}
         />
         <meta property="og:title" content={`${oferta.titulo} | MarketDesliz`} />
         <meta
           property="og:description"
-          content={oferta.descripcion?.substring(0, 160) || 'Bolsa de trabajo'}
+          content={oferta.descripcion?.substring(0, 160) || 'Empleos'}
         />
         <meta property="og:type" content="website" />
         <meta name="theme-color" content="#0F0F0F" />
       </Head>
 
       <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
-        <BackButton fallback="/bolsa-trabajo" />
+        <BackButton fallback="/empleos" />
         <TerminalBar mode="rotating" />
         <Header />
 
@@ -652,11 +652,11 @@ export default function OfertaDetallePage() {
               </Link>
               <span style={{ color: T.inkGhost }}>/</span>
               <Link
-                href="/bolsa-trabajo"
+                href="/empleos"
                 className="transition-colors"
                 style={{ color: T.inkSoft, textDecoration: 'none' }}
               >
-                Bolsa de trabajo
+                Empleos
               </Link>
               <span style={{ color: T.inkGhost }}>/</span>
               <span
@@ -810,7 +810,7 @@ export default function OfertaDetallePage() {
                   <Badge
                     variant={esOferta ? 'ofrezco' : 'busco'}
                     icon={esOferta ? Building2 : Search}
-                    label={esOferta ? 'Ofrezco trabajo' : 'Busco trabajo'}
+                    label={esOferta ? 'Ofrezco empleo' : 'Busco empleo'}
                   />
                   <span
                     className="text-[11px] tabular-nums flex items-center gap-1.5"
@@ -1055,7 +1055,7 @@ export default function OfertaDetallePage() {
               <div className="flex items-baseline justify-between mb-5">
                 <SectionLabel>Ofertas similares</SectionLabel>
                 <Link
-                  href={`/bolsa-trabajo?categoria=${oferta.categoria}`}
+                  href={`/empleos?categoria=${oferta.categoria}`}
                   className="text-[11px] uppercase tracking-[0.18em] transition-colors"
                   style={{
                     color: T.inkSoft,

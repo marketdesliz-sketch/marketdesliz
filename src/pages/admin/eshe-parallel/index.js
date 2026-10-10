@@ -19,7 +19,6 @@ import {
   getEsheCategorias,       // ✅ NUEVO
 } from '../../../lib/esheParallelService';
 import { formatMoney, formatDate } from '../../../lib/utils';
-// ⚠️ Verifica cuál de estos dos paths existe en tu proyecto:
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent } from '../../../components/ui/card';
 

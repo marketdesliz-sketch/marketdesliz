@@ -159,7 +159,7 @@ const ADMIN_SECTIONS = [
       { name: 'Fruta', path: '/admin/fruta' },
       { name: 'Ganado', path: '/admin/ganado' },
       { name: 'Éshé Parallel', path: '/admin/eshe-parallel' },
-      { name: 'Bolsa de Trabajo', path: '/admin/bolsa-trabajo' },
+      { name: 'Empleos', path: '/admin/empleos' },
     ],
   },
   {

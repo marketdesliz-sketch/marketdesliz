@@ -134,9 +134,9 @@ const APARTADOS = [
     cta: 'Ver tandas',
   },
   {
-    id: 'bolsa-trabajo',
+    id: 'empleos',
     numero: '07',
-    titulo: 'Bolsa de trabajo',
+    titulo: 'Empleos',
     subtitulo: 'Encuentra oportunidades cerca de ti',
     descripcion:
       'Publica o encuentra ofertas de trabajo en tu comunidad. Conexión directa entre empresas y candidatos sin intermediarios.',
@@ -146,7 +146,7 @@ const APARTADOS = [
       'Contacta directamente a la empresa',
       'O publica tu propia oferta gratis',
     ],
-    ruta: '/bolsa-trabajo',
+    ruta: '/empleos',
     cta: 'Ver ofertas',
   },
 ];
@@ -224,7 +224,7 @@ export default function ComoFuncionaPage() {
         <title>Cómo funciona | MarketDesliz</title>
         <meta
           name="description"
-          content="Descubre cómo funciona MarketDesliz: compra a crédito con pagos semanales, tandas exclusivas, negocios aliados, servicios, fruta, ganado y bolsa de trabajo."
+          content="Descubre cómo funciona MarketDesliz: compra a crédito con pagos semanales, tandas exclusivas, negocios aliados, servicios, fruta, ganado y empleos."
         />
         <meta name="theme-color" content="#0F0F0F" />
       </Head>
@@ -272,7 +272,7 @@ export default function ComoFuncionaPage() {
               style={{ color: T.inkSoft, fontWeight: 400 }}
             >
               Desde productos a crédito hasta tandas, negocios, servicios,
-              fruta, ganado y bolsa de trabajo.
+              fruta, ganado y empleos.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 mt-8">

@@ -531,12 +531,12 @@ export const CATEGORIAS = {
   // ============================================================
   // SIMPLES (sin mega menú)
   // ============================================================
-  bolsaTrabajo: {
-    id: 'categoria_bolsa_trabajo',
-    nombre: "Bolsa de Trabajo",
-    slug: "bolsa-trabajo",
+  empleos: {
+    id: 'categoria_empleos',
+    nombre: "empleos",
+    slug: "empleos",
     icono: "Briefcase",
-    href: "/bolsa-trabajo",
+    href: "/empleos",
     simple: true,
     descripcion: "Ofertas de empleo y búsqueda de trabajo.",
     activo: true,
@@ -577,7 +577,7 @@ export const MENU_SUPERIOR = [
   { nombre: "Ganado", href: "/ganado", slug: "ganado", key: "ganado" },
   { nombre: "Instrumentos", href: "/instrumentos", slug: "instrumentos", key: "instrumentos" },
   { nombre: "Tandas", href: "/tandas", slug: "tandas", key: "tandas" },
-  { nombre: "Bolsa de Trabajo", href: "/bolsa-trabajo", slug: "bolsa-trabajo", simple: true },
+  { nombre: "Empleos", href: "/empleos", slug: "empleos", simple: true },
   { nombre: "Catálogos", href: "/catalogos", slug: "catalogos", simple: true },
   { nombre: "Temporada", href: "/temporada", slug: "temporada", simple: true },
   {

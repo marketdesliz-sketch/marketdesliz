@@ -111,7 +111,7 @@ export default function WelcomePage() {
   const columnaDer = [
     { title: 'Ganado', path: '/ganado' },
     { title: 'Tandas exclusivas', path: '/tandas' },
-    { title: 'Bolsa de trabajo', path: '/bolsa-trabajo' },
+    { title: 'Bolsa de empleos', path: '/empleos' },
   ];
 
   return (

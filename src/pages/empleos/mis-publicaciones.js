@@ -1,4 +1,4 @@
-// src/pages/bolsa-trabajo/mis-publicaciones.js
+// src/pages/empleos/mis-publicaciones.js
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
@@ -150,7 +150,7 @@ function EstadoBadge({ estado }) {
 }
 
 function TipoBadge({ tipo }) {
-  const esOferta = tipo === 'ofrezco_trabajo';
+  const esOferta = tipo === 'ofrezco_empleo';
   const Icon = esOferta ? Building2 : Search;
   return (
     <span
@@ -377,7 +377,7 @@ export default function MisPublicacionesPage() {
       setLoading(true);
       setError(null);
 
-      const data = await pb.collection('bolsa_trabajo').getFullList({
+      const data = await pb.collection('empleos').getFullList({
         filter: `userId = "${user.id}"`,
         sort: '-created',
       });
@@ -408,7 +408,7 @@ export default function MisPublicacionesPage() {
     };
     if (query.estado === undefined) delete query.estado;
     router.push(
-      { pathname: '/bolsa-trabajo/mis-publicaciones', query },
+      { pathname: '/empleos/mis-publicaciones', query },
       undefined,
       { shallow: true }
     );
@@ -441,7 +441,7 @@ export default function MisPublicacionesPage() {
   const abrirEditar = (pub) => {
     setEditando(pub);
     setFormEdit({
-      tipo: pub.tipo || 'busco_trabajo',
+      tipo: pub.tipo || 'busco_empleo',
       titulo: pub.titulo || '',
       descripcion: pub.descripcion || '',
       categoria: pub.categoria || '',
@@ -504,7 +504,7 @@ export default function MisPublicacionesPage() {
 
     setSavingEdit(true);
     try {
-      await pb.collection('bolsa_trabajo').update(editando.id, {
+      await pb.collection('empleos').update(editando.id, {
         tipo: formEdit.tipo,
         titulo: formEdit.titulo.trim(),
         descripcion: formEdit.descripcion.trim(),
@@ -538,7 +538,7 @@ export default function MisPublicacionesPage() {
     if (!eliminando) return;
     setDeleting(true);
     try {
-      await pb.collection('bolsa_trabajo').delete(eliminando.id);
+      await pb.collection('empleos').delete(eliminando.id);
       setEliminando(null);
       await cargarPublicaciones();
       setToast({ message: 'Publicación eliminada.', type: 'success' });
@@ -584,7 +584,7 @@ export default function MisPublicacionesPage() {
       <>
         <Head><title>Inicia sesión | MarketDesliz</title></Head>
         <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
-          <BackButton fallback="/bolsa-trabajo" />
+          <BackButton fallback="/empleos" />
           <TerminalBar mode="rotating" />
           <Header />
           <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-20 w-full">
@@ -646,7 +646,7 @@ export default function MisPublicacionesPage() {
       <>
         <Head><title>Error | MarketDesliz</title></Head>
         <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
-          <BackButton fallback="/bolsa-trabajo" />
+          <BackButton fallback="/empleos" />
           <TerminalBar mode="rotating" />
           <Header />
           <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-20 w-full">
@@ -699,13 +699,13 @@ export default function MisPublicacionesPage() {
         <title>Mis Publicaciones | MarketDesliz</title>
         <meta
           name="description"
-          content="Gestiona tus ofertas publicadas en la Bolsa de Trabajo de MarketDesliz."
+          content="Gestiona tus ofertas publicadas en empleos de MarketDesliz."
         />
         <meta name="theme-color" content="#0F0F0F" />
       </Head>
 
       <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
-        <BackButton fallback="/bolsa-trabajo" />
+        <BackButton fallback="/empleos" />
         <TerminalBar mode="rotating" />
         <Header notifications={notifications} unreadCount={unreadCount} />
 
@@ -721,7 +721,7 @@ export default function MisPublicacionesPage() {
                 fontFeatureSettings: '"ss01"',
               }}
             >
-              Bolsa de trabajo · Mis publicaciones
+              Empleos · Mis publicaciones
             </p>
 
             <h1
@@ -746,7 +746,7 @@ export default function MisPublicacionesPage() {
             </p>
 
             <Link
-              href="/bolsa-trabajo/publicar"
+              href="/empleos/publicar"
               className="inline-flex items-center gap-2 h-11 px-5 text-white text-[13px]"
               style={{
                 background: T.accent,
@@ -881,7 +881,7 @@ export default function MisPublicacionesPage() {
               </p>
               {filtroEstado === 'todas' && (
                 <Link
-                  href="/bolsa-trabajo/publicar"
+                  href="/empleos/publicar"
                   className="inline-flex items-center gap-2 h-10 px-5 text-white text-[13px]"
                   style={{
                     background: T.accent,
@@ -1062,7 +1062,7 @@ export default function MisPublicacionesPage() {
                     >
                       {esAprobada && (
                         <Link
-                          href={`/bolsa-trabajo/${pub.id}`}
+                          href={`/empleos/${pub.id}`}
                           className="inline-flex items-center gap-2 h-9 px-4 text-white text-[12.5px]"
                           style={{
                             background: T.accent,
@@ -1231,8 +1231,8 @@ export default function MisPublicacionesPage() {
                   value={formEdit.tipo}
                   onChange={handleEditChange}
                 >
-                  <option value="busco_trabajo">Busco trabajo</option>
-                  <option value="ofrezco_trabajo">Ofrezco trabajo</option>
+                  <option value="busco_empleo">Busco empleo</option>
+                  <option value="ofrezco_empleo">Ofrezco empleo</option>
                 </FieldSelect>
               </div>
 

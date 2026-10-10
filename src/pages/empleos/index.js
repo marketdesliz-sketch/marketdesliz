@@ -1,4 +1,4 @@
-// src/pages/bolsa-trabajo/index.js
+// src/pages/empleos/index.js
 import { useEffect, useState, useCallback } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -20,9 +20,9 @@ import BackButton from '../../components/BackButton';
 
 // ═════════════════════════════════════════════════════════════════════════
 // IMAGEN EDITORIAL DEL HERO · LOCAL
-// Guárdala en: /public/images/bolsa-trabajo-hero.jpg
+// Guárdala en: /public/images/empleos-hero.jpg
 // ═════════════════════════════════════════════════════════════════════════
-const HERO_IMAGE = '/images/bolsa-trabajo-hero.jpg';
+const HERO_IMAGE = '/images/empleos-hero.jpg';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -198,7 +198,7 @@ function CategoryCard({ cat, isActive, count, onClick }) {
 // TypeBadge · badge de tipo de oferta
 // ─────────────────────────────────────────────────────────────────────────
 function TypeBadge({ tipo }) {
-  const esOferta = tipo === 'ofrezco_trabajo';
+  const esOferta = tipo === 'ofrezco_empleo';
   const Icon = esOferta ? Building2 : Search;
   const fg = esOferta ? T.accent : T.green;
   const bg = esOferta
@@ -390,7 +390,7 @@ function OfertaCard({ oferta }) {
 // ─────────────────────────────────────────────────────────────────────────
 // Página principal — lógica SIN CAMBIOS (excepto gate de auth)
 // ─────────────────────────────────────────────────────────────────────────
-export default function BolsaTrabajoPage() {
+export default function EmpleosPage() {
   const router = useRouter();
   const {
     tipo = 'todos',
@@ -427,10 +427,10 @@ export default function BolsaTrabajoPage() {
 
     const cargarContadores = async () => {
       try {
-        const tipos = ['busco_trabajo', 'ofrezco_trabajo'];
+        const tipos = ['busco_empleo', 'ofrezco_empleo'];
         const tipoCounts = {};
         for (const t of tipos) {
-          const result = await pb.collection('bolsa_trabajo').getList(1, 1, {
+          const result = await pb.collection('empleos').getList(1, 1, {
             filter: `estado = "aprobado" && activo = true && tipo = "${t}"`,
             fields: 'id',
           });
@@ -443,7 +443,7 @@ export default function BolsaTrabajoPage() {
 
         const catCounts = {};
         for (const cat of CATEGORIAS_BOLSA) {
-          const result = await pb.collection('bolsa_trabajo').getList(1, 1, {
+          const result = await pb.collection('empleos').getList(1, 1, {
             filter: `estado = "aprobado" && activo = true && categoria = "${cat}"`,
             fields: 'id',
           });
@@ -486,7 +486,7 @@ export default function BolsaTrabajoPage() {
       else if (sortBy === 'salary') sortField = 'salario';
 
       const result = await pb
-        .collection('bolsa_trabajo')
+        .collection('empleos')
         .getList(currentPage, ITEMS_PER_PAGE, {
           filter,
           sort: sortField,
@@ -526,7 +526,7 @@ export default function BolsaTrabajoPage() {
         if (!query[key] || query[key] === 'todos') delete query[key];
       });
       router.push(
-        { pathname: '/bolsa-trabajo', query },
+        { pathname: '/empleos', query },
         undefined,
         { shallow: true }
       );
@@ -572,7 +572,7 @@ export default function BolsaTrabajoPage() {
     setBusqueda('');
     setSortBy('newest');
     setCurrentPage(1);
-    router.push('/bolsa-trabajo', undefined, { shallow: true });
+    router.push('/empleos', undefined, { shallow: true });
   };
 
   const ofertasFiltradas = ofertas;
@@ -610,7 +610,7 @@ export default function BolsaTrabajoPage() {
     return (
       <>
         <Head>
-          <title>Bolsa de Trabajo | MarketDesliz</title>
+          <title>Empleos | MarketDesliz</title>
           <meta
             name="description"
             content="Encuentra trabajo u ofrece empleo en tu comunidad. Publica tu oferta laboral de forma gratuita."
@@ -641,7 +641,7 @@ export default function BolsaTrabajoPage() {
                   fontFeatureSettings: '"ss01"',
                 }}
               >
-                Bolsa de trabajo
+              Empleos
               </p>
               <h1
                 className="text-[32px] md:text-[44px] leading-[1.05] tracking-[-0.03em] mb-4"
@@ -657,7 +657,7 @@ export default function BolsaTrabajoPage() {
                 className="text-[15px] leading-[1.6] mb-8 max-w-sm mx-auto"
                 style={{ color: T.inkSoft, fontWeight: 450 }}
               >
-                La bolsa de trabajo está disponible solo para usuarios con
+                Los empleos están disponible solo para usuarios con
                 cuenta en MarketDesliz.
               </p>
               <button
@@ -716,7 +716,7 @@ export default function BolsaTrabajoPage() {
   return (
     <>
       <Head>
-        <title>Bolsa de Trabajo | MarketDesliz</title>
+        <title>Empleos | MarketDesliz</title>
         <meta
           name="description"
           content="Encuentra trabajo u ofrece empleo en tu comunidad. Publica tu oferta laboral de forma gratuita."
@@ -748,7 +748,7 @@ export default function BolsaTrabajoPage() {
             >
               <img
                 src={HERO_IMAGE}
-                alt="Bolsa de trabajo MarketDesliz"
+                alt="Empleos MarketDesliz"
                 className="absolute inset-0 w-full h-full object-cover"
                 style={{
                   filter: 'grayscale(100%) contrast(1.15) brightness(1.02)',
@@ -771,7 +771,7 @@ export default function BolsaTrabajoPage() {
                 fontFeatureSettings: '"ss01"',
               }}
             >
-              Bolsa de trabajo · MarketDesliz
+              Empleos · MarketDesliz
             </p>
 
             <h1
@@ -798,7 +798,7 @@ export default function BolsaTrabajoPage() {
 
             <div className="flex flex-wrap items-center gap-5 mt-8">
               <button
-                onClick={() => router.push('/bolsa-trabajo/publicar')}
+                onClick={() => router.push('/empleos/publicar')}
                 className="inline-flex items-center gap-2 h-11 px-5 text-white text-[13px]"
                 style={{
                   background: T.accent,
@@ -817,7 +817,7 @@ export default function BolsaTrabajoPage() {
               </button>
 
               <Link
-                href="/bolsa-trabajo/mis-publicaciones"
+                href="/empleos/mis-publicaciones"
                 className="inline-flex items-center gap-2 text-[12px] uppercase tracking-[0.18em] transition-colors"
                 style={{
                   color: T.inkSoft,
@@ -965,8 +965,8 @@ export default function BolsaTrabajoPage() {
                   }}
                 >
                   <option value="todos">Todos los tipos</option>
-                  <option value="ofrezco_trabajo">Ofrezco trabajo</option>
-                  <option value="busco_trabajo">Busco trabajo</option>
+                  <option value="ofrezco_empleo">Ofrezco empleo</option>
+                  <option value="busco_empleo">Busco empleo</option>
                 </select>
 
                 <select
@@ -1064,9 +1064,9 @@ export default function BolsaTrabajoPage() {
                     fontWeight: 600,
                   }}
                 >
-                  {filtroTipo === 'ofrezco_trabajo'
-                    ? 'Ofrezco trabajo'
-                    : 'Busco trabajo'}
+                  {filtroTipo === 'ofrezco_empleo'
+                    ? 'Ofrezco empleo'
+                    : 'Busco empleo'}
                 </span>
               )}
               {(filtroTipo !== 'todos' || filtroCategoria || busqueda) && (
@@ -1097,8 +1097,8 @@ export default function BolsaTrabajoPage() {
             <div className="flex flex-wrap items-center gap-2">
               {[
                 { id: 'todos', label: 'Todos', icon: LayoutGrid },
-                { id: 'ofrezco_trabajo', label: 'Ofrezco trabajo', icon: Building2 },
-                { id: 'busco_trabajo', label: 'Busco trabajo', icon: Search },
+                { id: 'ofrezco_empleo', label: 'Ofrezco empleo', icon: Building2 },
+                { id: 'busco_empleo', label: 'Busco empleo', icon: Search },
               ].map(({ id, label, icon: Icon }) => {
                 const isActive = filtroTipo === id;
                 const count = counts.tipos[id] || 0;
@@ -1240,7 +1240,7 @@ export default function BolsaTrabajoPage() {
                     comunidad.
                   </p>
                   <Link
-                    href="/bolsa-trabajo/publicar"
+                    href="/empleos/publicar"
                     className="inline-block mt-3 text-[12.5px]"
                     style={{ color: T.accent, fontWeight: 500 }}
                   >
@@ -1369,7 +1369,7 @@ export default function BolsaTrabajoPage() {
               </div>
 
               <button
-                onClick={() => router.push('/bolsa-trabajo/publicar')}
+                onClick={() => router.push('/empleos/publicar')}
                 className="shrink-0 px-6 h-11 text-white text-[13px] transition-colors duration-200 inline-flex items-center gap-2"
                 style={{
                   background: T.accent,
