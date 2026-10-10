@@ -1,7 +1,7 @@
 // src/layouts/AdminLayoutMinimal.jsx
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   ShieldCheck,
@@ -42,7 +42,12 @@ const menuItems = [
 
 export default function AdminLayoutMinimal({ children, showActions = true }) {
   const router = useRouter();
-  const [user] = useState(() => pb.authStore.model);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    // Solo en cliente, después del mount, para evitar hydration mismatch
+    setUser(pb.authStore.model);
+  }, []);
 
   const navigateTo = (path) => {
     router.push(path);

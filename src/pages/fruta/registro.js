@@ -8,6 +8,7 @@ import {
   AlertCircle, Zap, Package, Sprout, Lock,
 } from 'lucide-react';
 import pb from '../../lib/pocketbase';
+import { getFrutaCategorias } from '../../lib/frutasService';
 import { useAuth } from '../../contexts/AuthContext';
 import { T } from '../../lib/tokens';
 import TerminalBar from '../../components/TerminalBar';
@@ -221,7 +222,7 @@ function FileInput({ onChange, multiple = false, accept = 'image/*' }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function RegistroFrutaPage() {
   const router = useRouter();
@@ -232,7 +233,8 @@ export default function RegistroFrutaPage() {
   const [error, setError] = useState('');
   const [frutaData, setFrutaData] = useState({
     nombre: '',
-    categoria: '',
+    // ✅ Cambio: categoriaId (relation) en vez de categoria (text)
+    categoriaId: '',
     descripcion: '',
     precio: '',
     precioAnterior: '',
@@ -253,6 +255,9 @@ export default function RegistroFrutaPage() {
   const [imagenesPreviews, setImagenesPreviews] = useState([]);
   const [saving, setSaving] = useState(false);
 
+  // ✅ Nuevo estado: categorías dinámicas desde PocketBase
+  const [categoriasList, setCategoriasList] = useState([]);
+
   const [municipiosList, setMunicipiosList] = useState([]);
   const [localidadesList, setLocalidadesList] = useState([]);
 
@@ -263,6 +268,19 @@ export default function RegistroFrutaPage() {
       openLogin();
     }
   }, [authLoading, user, step, openLogin]);
+
+  // ✅ Cargar categorías del vertical "frutas" (padres + hijos)
+  useEffect(() => {
+    const cargarCategorias = async () => {
+      try {
+        const cats = await getFrutaCategorias();
+        setCategoriasList(cats);
+      } catch (err) {
+        console.error('Error cargando categorías:', err);
+      }
+    };
+    cargarCategorias();
+  }, []);
 
   // Cargar municipios de Veracruz
   useEffect(() => {
@@ -300,19 +318,6 @@ export default function RegistroFrutaPage() {
       setLocalidadesList([]);
     }
   }, [frutaData.municipioId]);
-
-  const categorias = [
-    'Frutas',
-    'Verduras',
-    'Cítricos',
-    'Tropicales',
-    'Frutos rojos',
-    'Frutos secos',
-    'Tubérculos',
-    'Hojas verdes',
-    'Hierbas',
-    'Otro',
-  ];
 
   const unidades = ['kg', 'pieza', 'manojo', 'caja', 'docena', 'litro', 'gramo'];
 
@@ -353,7 +358,8 @@ export default function RegistroFrutaPage() {
       openLogin();
       return;
     }
-    if (!frutaData.nombre || !frutaData.categoria || !frutaData.precio || !frutaData.unidad) {
+    // ✅ Cambio: validar categoriaId en vez de categoria
+    if (!frutaData.nombre || !frutaData.categoriaId || !frutaData.precio || !frutaData.unidad) {
       setError('Completa los campos obligatorios (nombre, categoría, precio, unidad)');
       return;
     }
@@ -576,16 +582,35 @@ export default function RegistroFrutaPage() {
 
                   <div>
                     <FieldLabel required>Categoría</FieldLabel>
+                    {/* ✅ SelectField dinámico desde PocketBase */}
                     <SelectField
-                      name="categoria"
-                      value={frutaData.categoria}
+                      name="categoriaId"
+                      value={frutaData.categoriaId}
                       onChange={handleInputChange}
                     >
                       <option value="">Selecciona una categoría</option>
-                      {categorias.map((cat) => (
-                        <option key={cat} value={cat}>{cat}</option>
+                      {categoriasList.map((cat) => (
+                        <option
+                          key={cat.id}
+                          value={cat.id}
+                          disabled={cat.esPadre && cat.tieneHijos}
+                        >
+                          {cat.depth === 1 ? '└─ ' : ''}
+                          {cat.nombre}
+                          {cat.esPadre && cat.tieneHijos ? ' (agrupador)' : ''}
+                        </option>
                       ))}
                     </SelectField>
+
+                    {/* Aviso si aún no hay categorías */}
+                    {categoriasList.length === 0 && (
+                      <p
+                        className="text-[11.5px] mt-2"
+                        style={{ color: T.inkFaint, fontWeight: 450 }}
+                      >
+                        Aún no hay categorías disponibles. Pide al administrador que las cree.
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -690,17 +715,6 @@ export default function RegistroFrutaPage() {
 
                 {/* Contacto */}
                 <FormSection title="Contacto">
-                  <div>
-                    <FieldLabel>Correo electrónico</FieldLabel>
-                    <TextField
-                      name="email"
-                      type="email"
-                      value={frutaData.email}
-                      onChange={handleInputChange}
-                      placeholder="correo@ejemplo.com"
-                    />
-                  </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <FieldLabel>Teléfono</FieldLabel>
@@ -930,11 +944,13 @@ export default function RegistroFrutaPage() {
                     >
                       Tu producto aparecerá en la categoría
                     </p>
+                    {/* ✅ Lookup del nombre por ID */}
                     <p
                       className="text-[15px] mt-1"
                       style={{ color: T.accent, fontWeight: 500 }}
                     >
-                      {frutaData.categoria}
+                      {categoriasList.find((c) => c.id === frutaData.categoriaId)?.nombre ||
+                        'tu categoría'}
                     </p>
                     <p
                       className="text-[12px] mt-2"

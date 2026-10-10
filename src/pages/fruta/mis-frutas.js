@@ -215,7 +215,8 @@ function FrutaAdminCard({ fruta }) {
             </div>
 
             <div className="flex items-center gap-2 text-[11.5px] flex-wrap">
-              {fruta.categoria && (
+              {/* ✅ categoriaNombre en vez de categoria */}
+              {fruta.categoriaNombre && (
                 <span
                   className="px-2 py-0.5"
                   style={{
@@ -228,7 +229,7 @@ function FrutaAdminCard({ fruta }) {
                     fontSize: '9.5px',
                   }}
                 >
-                  {fruta.categoria}
+                  {fruta.categoriaNombre}
                 </span>
               )}
               {(fruta.municipioNombre || fruta.localidadNombre) && (
@@ -472,7 +473,7 @@ function FrutaAdminCard({ fruta }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function MisFrutasPage() {
   const router = useRouter();
@@ -482,7 +483,8 @@ export default function MisFrutasPage() {
   const [frutas, setFrutas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filtroCategoria, setFiltroCategoria] = useState('todas');
+  // ✅ Renombrado a filtroCategoriaId (guarda ID, no nombre)
+  const [filtroCategoriaId, setFiltroCategoriaId] = useState('todas');
   const [filtroEstado, setFiltroEstado] = useState('todas');
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
@@ -495,10 +497,11 @@ export default function MisFrutasPage() {
       setLoading(true);
       setError(null);
 
+      // ✅ expand con categoriaId
       const records = await pb.collection('frutas').getFullList({
         filter: `usuarioId = "${user.id}"`,
         sort: '-created',
-        expand: 'municipioId,localidadId',
+        expand: 'categoriaId,municipioId,localidadId',
       });
 
       const frutasData = records.map((f) => {
@@ -516,7 +519,10 @@ export default function MisFrutasPage() {
           id: f.id,
           nombre: f.nombre || '',
           descripcion: f.descripcion || '',
-          categoria: f.categoria || '',
+          // ✅ Categoría por relación
+          categoriaId: f.categoriaId || null,
+          categoriaNombre: f.expand?.categoriaId?.nombre || '',
+          categoriaSlug: f.expand?.categoriaId?.slug || '',
           precio: f.precio || 0,
           precioAnterior: f.precioAnterior || 0,
           unidad: f.unidad || 'kg',
@@ -533,6 +539,9 @@ export default function MisFrutasPage() {
           actualizado: f.updated,
           municipioNombre: f.expand?.municipioId?.nombre || '',
           localidadNombre: f.expand?.localidadId?.nombre || '',
+          // ✅ Nuevos campos del schema
+          telefono: f.telefono || '',
+          whatsapp: f.whatsapp || '',
         };
       });
 
@@ -567,16 +576,26 @@ export default function MisFrutasPage() {
     return { total, activos, inactivos, enTemporada, visitasTotales, stockTotal };
   }, [frutas]);
 
+  // ✅ Categorías disponibles como { id, nombre } — derivadas de las categorías de las frutas del usuario
   const categoriasDisponibles = useMemo(() => {
-    const set = new Set(frutas.map((f) => f.categoria).filter(Boolean));
-    return ['todas', ...Array.from(set).sort()];
+    const map = new Map();
+    frutas.forEach((f) => {
+      if (f.categoriaId && !map.has(f.categoriaId)) {
+        map.set(f.categoriaId, f.categoriaNombre || f.categoriaId);
+      }
+    });
+    const lista = Array.from(map.entries())
+      .map(([id, nombre]) => ({ id, nombre }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    return [{ id: 'todas', nombre: 'Todas las categorías' }, ...lista];
   }, [frutas]);
 
   const frutasFiltradas = useMemo(() => {
     let result = frutas;
 
-    if (filtroCategoria !== 'todas') {
-      result = result.filter((f) => f.categoria === filtroCategoria);
+    // ✅ Filtro por ID
+    if (filtroCategoriaId !== 'todas') {
+      result = result.filter((f) => f.categoriaId === filtroCategoriaId);
     }
 
     if (filtroEstado === 'activos') {
@@ -589,17 +608,18 @@ export default function MisFrutasPage() {
       result = result.filter((f) => f.stock === 0);
     }
 
+    // ✅ Búsqueda incluye categoriaNombre
     if (searchTerm.trim()) {
       const s = searchTerm.toLowerCase();
       result = result.filter(
         (f) =>
           f.nombre.toLowerCase().includes(s) ||
-          f.categoria.toLowerCase().includes(s)
+          f.categoriaNombre.toLowerCase().includes(s)
       );
     }
 
     return result;
-  }, [frutas, filtroCategoria, filtroEstado, searchTerm]);
+  }, [frutas, filtroCategoriaId, filtroEstado, searchTerm]);
 
   const totalPages = Math.ceil(frutasFiltradas.length / itemsPerPage);
   const paginatedFrutas = useMemo(() => {
@@ -607,9 +627,10 @@ export default function MisFrutasPage() {
     return frutasFiltradas.slice(start, start + itemsPerPage);
   }, [frutasFiltradas, currentPage]);
 
+  // ✅ Reset página con el nuevo nombre
   useEffect(() => {
     setCurrentPage(1);
-  }, [filtroCategoria, filtroEstado, searchTerm]);
+  }, [filtroCategoriaId, filtroEstado, searchTerm]);
 
   const notifications = [
     { id: 1, title: '¡Fruta fresca de temporada!', description: 'Descubre lo nuevo esta semana', time: 'Hace 2 horas', read: false },
@@ -934,12 +955,13 @@ export default function MisFrutasPage() {
           {categoriasDisponibles.length > 1 && (
             <section className="mb-8">
               <div className="flex flex-wrap gap-2">
+                {/* ✅ Pills con {id, nombre} */}
                 {categoriasDisponibles.map((cat) => (
                   <CategoryPill
-                    key={cat}
-                    label={cat === 'todas' ? 'Todas las categorías' : cat}
-                    active={filtroCategoria === cat}
-                    onClick={() => setFiltroCategoria(cat)}
+                    key={cat.id}
+                    label={cat.nombre}
+                    active={filtroCategoriaId === cat.id}
+                    onClick={() => setFiltroCategoriaId(cat.id)}
                   />
                 ))}
               </div>
@@ -965,7 +987,7 @@ export default function MisFrutasPage() {
                 className="text-[15px] mb-1"
                 style={{ color: T.ink, fontWeight: 500 }}
               >
-                {searchTerm || filtroCategoria !== 'todas' || filtroEstado !== 'todas'
+                {searchTerm || filtroCategoriaId !== 'todas' || filtroEstado !== 'todas'
                   ? 'No se encontraron productos'
                   : 'No tienes productos registrados'}
               </h3>
@@ -973,7 +995,7 @@ export default function MisFrutasPage() {
                 className="text-[13px] max-w-md mb-6"
                 style={{ color: T.inkSoft, fontWeight: 450 }}
               >
-                {searchTerm || filtroCategoria !== 'todas' || filtroEstado !== 'todas'
+                {searchTerm || filtroCategoriaId !== 'todas' || filtroEstado !== 'todas'
                   ? 'Cambia los filtros para ver otros productos.'
                   : 'Registra tu primer producto y empieza a vender.'}
               </p>

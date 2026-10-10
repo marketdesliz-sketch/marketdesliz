@@ -7,6 +7,7 @@ import {
   Apple, CheckCircle, AlertCircle, Sprout, X,
 } from 'lucide-react';
 import pb from '../../lib/pocketbase';
+import { getFrutaCategorias } from '../../lib/frutasService';
 import { useAuth } from '../../contexts/AuthContext';
 import { T } from '../../lib/tokens';
 import TerminalBar from '../../components/TerminalBar';
@@ -15,7 +16,7 @@ import Footer from '../../components/Footer';
 import BackButton from '../../components/BackButton';
 
 // ─────────────────────────────────────────────────────────────────────────
-// Sub-componentes de formulario (idénticos a negocios/servicios)
+// Sub-componentes de formulario
 // ─────────────────────────────────────────────────────────────────────────
 function FieldLabel({ children, required = false }) {
   return (
@@ -220,7 +221,7 @@ function FileInput({ onChange, multiple = false, accept = 'image/*' }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function EditarFrutaPage() {
   const router = useRouter();
@@ -236,7 +237,7 @@ export default function EditarFrutaPage() {
 
   const [formData, setFormData] = useState({
     nombre: '',
-    categoria: '',
+    categoriaId: '',
     descripcion: '',
     precio: '',
     precioAnterior: '',
@@ -246,7 +247,6 @@ export default function EditarFrutaPage() {
     localidadId: '',
     telefono: '',
     whatsapp: '',
-    email: '',
     temporada: false,
     destacado: false,
     nuevo: false,
@@ -259,23 +259,24 @@ export default function EditarFrutaPage() {
   const [imagenesExistentes, setImagenesExistentes] = useState([]);
   const [imagenesAEliminar, setImagenesAEliminar] = useState([]);
 
+  const [categoriasList, setCategoriasList] = useState([]);
   const [municipiosList, setMunicipiosList] = useState([]);
   const [localidadesList, setLocalidadesList] = useState([]);
 
-  const categorias = [
-    'Frutas',
-    'Verduras',
-    'Cítricos',
-    'Tropicales',
-    'Frutos rojos',
-    'Frutos secos',
-    'Tubérculos',
-    'Hojas verdes',
-    'Hierbas',
-    'Otro',
-  ];
-
   const unidades = ['kg', 'pieza', 'manojo', 'caja', 'docena', 'litro', 'gramo'];
+
+  // Cargar categorías del vertical "frutas"
+  useEffect(() => {
+    const cargarCategorias = async () => {
+      try {
+        const cats = await getFrutaCategorias();
+        setCategoriasList(cats);
+      } catch (err) {
+        console.error('Error cargando categorías:', err);
+      }
+    };
+    cargarCategorias();
+  }, []);
 
   // Carga inicial con id
   useEffect(() => {
@@ -358,7 +359,7 @@ export default function EditarFrutaPage() {
 
       setFormData({
         nombre: frutaData.nombre || '',
-        categoria: frutaData.categoria || '',
+        categoriaId: frutaData.categoriaId || '',
         descripcion: frutaData.descripcion || '',
         precio: frutaData.precio || '',
         precioAnterior: frutaData.precioAnterior || '',
@@ -368,7 +369,6 @@ export default function EditarFrutaPage() {
         localidadId: frutaData.localidadId || '',
         telefono: frutaData.telefono || '',
         whatsapp: frutaData.whatsapp || '',
-        email: frutaData.email || '',
         temporada: frutaData.temporada === true,
         destacado: frutaData.destacado === true,
         nuevo: frutaData.nuevo === true,
@@ -430,7 +430,7 @@ export default function EditarFrutaPage() {
   };
 
   const guardarCambios = async () => {
-    if (!formData.nombre || !formData.categoria || !formData.precio || !formData.unidad) {
+    if (!formData.nombre || !formData.categoriaId || !formData.precio || !formData.unidad) {
       setError('Completa los campos obligatorios (nombre, categoría, precio, unidad)');
       return;
     }
@@ -635,15 +635,32 @@ export default function EditarFrutaPage() {
                 <div>
                   <FieldLabel required>Categoría</FieldLabel>
                   <SelectField
-                    name="categoria"
-                    value={formData.categoria}
+                    name="categoriaId"
+                    value={formData.categoriaId}
                     onChange={handleInputChange}
                   >
                     <option value="">Selecciona una categoría</option>
-                    {categorias.map((cat) => (
-                      <option key={cat} value={cat}>{cat}</option>
+                    {categoriasList.map((cat) => (
+                      <option
+                        key={cat.id}
+                        value={cat.id}
+                        disabled={cat.esPadre && cat.tieneHijos}
+                      >
+                        {cat.depth === 1 ? '└─ ' : ''}
+                        {cat.nombre}
+                        {cat.esPadre && cat.tieneHijos ? ' (agrupador)' : ''}
+                      </option>
                     ))}
                   </SelectField>
+
+                  {categoriasList.length === 0 && (
+                    <p
+                      className="text-[11.5px] mt-2"
+                      style={{ color: T.inkFaint, fontWeight: 450 }}
+                    >
+                      Aún no hay categorías disponibles. Pide al administrador que las cree.
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -747,17 +764,6 @@ export default function EditarFrutaPage() {
 
               {/* Contacto */}
               <FormSection title="Contacto">
-                <div>
-                  <FieldLabel>Correo electrónico</FieldLabel>
-                  <TextField
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    placeholder="correo@ejemplo.com"
-                  />
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <FieldLabel>Teléfono</FieldLabel>

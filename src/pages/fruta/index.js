@@ -1,38 +1,76 @@
 // src/pages/fruta/index.js
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import {
   Grid2X2, Heart, Package, Apple, Banana, Carrot, Cherry,
-  Citrus, Sprout, Search, Salad,
+  Citrus, Sprout, Search, Salad, Leaf, Wheat, Grape, TreePine,
 } from 'lucide-react';
 import pb from '../../lib/pocketbase';
 import { formatMoney } from '../../lib/utils';
-import { getFrutas } from '../../lib/frutasService';
+import { getFrutas, getFrutaCategorias } from '../../lib/frutasService';
 import { useAuth } from '../../contexts/AuthContext';
 import { T } from '../../lib/tokens';
 import TerminalBar from '../../components/TerminalBar';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer';
 import BackButton from '../../components/BackButton';
+import FrutaCard from '../../components/fruta/FrutaCard';
 
 // ═════════════════════════════════════════════════════════════════════════
 // IMAGEN EDITORIAL DEL HERO · LOCAL
-// Guárdala en: /public/images/fruta-hero.jpg
 // ═════════════════════════════════════════════════════════════════════════
 const HERO_IMAGE = '/images/fruta-hero.jpg';
 
+// Máximo de categorías padre visibles en la home
+const MAX_CATEGORIAS_VISIBLES = 5;
+
 // ─────────────────────────────────────────────────────────────────────────
-// Categorías básicas · SIN CAMBIOS
+// Mapa de íconos por slug/nombre · misma mecánica que productos.js
 // ─────────────────────────────────────────────────────────────────────────
-const CATEGORIAS_BASICAS = [
-  { nombre: 'Frutas', icon: Apple },
-  { nombre: 'Verduras', icon: Carrot },
-  { nombre: 'Cítricos', icon: Citrus },
-  { nombre: 'Tropicales', icon: Banana },
-  { nombre: 'Frutos rojos', icon: Cherry },
-  { nombre: 'Más categorías', icon: Grid2X2, esMasCategorias: true },
-];
+const iconMap = {
+  'frutas': Apple,
+  'fruta': Apple,
+  'verduras': Carrot,
+  'verdura': Carrot,
+  'citricos': Citrus,
+  'cítricos': Citrus,
+  'citrico': Citrus,
+  'tropicales': Banana,
+  'tropical': Banana,
+  'frutos rojos': Cherry,
+  'frutos-rojos': Cherry,
+  'frutos secos': Wheat,
+  'frutos-secos': Wheat,
+  'tuberculos': Wheat,
+  'tubérculos': Wheat,
+  'hojas verdes': Leaf,
+  'hojas-verdes': Leaf,
+  'hierbas': Leaf,
+  'organicos': Sprout,
+  'orgánicos': Sprout,
+  'uvas': Grape,
+  'arboles': TreePine,
+  'árboles': TreePine,
+  'mas categorias': Grid2X2,
+  'más categorías': Grid2X2,
+};
+
+const getIcon = (nombre, slug) => {
+  const key1 = (slug || '').toLowerCase().trim();
+  const key2 = (nombre || '').toLowerCase().trim();
+
+  if (iconMap[key1]) return iconMap[key1];
+  if (iconMap[key2]) return iconMap[key2];
+
+  // Fuzzy match
+  for (const [key, icon] of Object.entries(iconMap)) {
+    if (key1.includes(key) || key.includes(key1)) return icon;
+    if (key2.includes(key) || key.includes(key2)) return icon;
+  }
+
+  return Package;
+};
 
 // ─────────────────────────────────────────────────────────────────────────
 // TextLink
@@ -56,6 +94,9 @@ function TextLink({ label, onClick }) {
         textTransform: 'uppercase',
         WebkitTapHighlightColor: 'transparent',
         transitionTimingFunction: T.ease,
+        background: 'transparent',
+        border: 'none',
+        cursor: 'pointer',
       }}
     >
       {label} →
@@ -122,206 +163,51 @@ function CategoryCard({ cat, isActive, onClick }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// FrutaCard · minimal con badges de nuevo/temporada
-// ─────────────────────────────────────────────────────────────────────────
-function FrutaCard({ producto, isFavorite, onToggleFavorite, onClick }) {
-  const [hover, setHover] = useState(false);
-
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      className="cursor-pointer flex flex-col transition-all duration-300"
-      style={{
-        background: T.bg,
-        border: `1px solid ${hover ? 'rgba(15,15,15,0.14)' : T.line}`,
-        borderRadius: '8px',
-        overflow: 'hidden',
-        transform: hover ? 'translateY(-2px)' : 'translateY(0)',
-        boxShadow: hover
-          ? '0 1px 2px rgba(15,15,15,0.04), 0 8px 24px rgba(15,15,15,0.06)'
-          : 'none',
-        transitionTimingFunction: T.ease,
-        WebkitTapHighlightColor: 'transparent',
-      }}
-    >
-      {/* Imagen */}
-      <div
-        className="relative w-full overflow-hidden"
-        style={{ aspectRatio: '4 / 3', background: 'rgba(15, 15, 15, 0.03)' }}
-      >
-        {producto.imagen ? (
-          <img
-            src={producto.imagen}
-            alt={producto.nombre}
-            className="w-full h-full object-cover transition-transform duration-500"
-            style={{
-              transform: hover ? 'scale(1.04)' : 'scale(1)',
-              transitionTimingFunction: T.ease,
-            }}
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Package size={32} strokeWidth={1.5} style={{ color: T.inkGhost }} />
-          </div>
-        )}
-
-        {/* Favorito */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFavorite();
-          }}
-          aria-label={isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}
-          className="absolute top-3 right-3 flex items-center justify-center"
-          style={{
-            width: '32px',
-            height: '32px',
-            background: 'rgba(250, 250, 249, 0.92)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
-            borderRadius: '50%',
-            WebkitTapHighlightColor: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          <Heart
-            size={14}
-            strokeWidth={1.75}
-            style={{
-              color: isFavorite ? '#C53030' : T.inkMid,
-              fill: isFavorite ? '#C53030' : 'transparent',
-            }}
-          />
-        </button>
-
-        {/* Badge Nuevo */}
-        {producto.nuevo && (
-          <div className="absolute top-3 left-3">
-            <span
-              className="inline-flex items-center gap-1 px-2 py-0.5"
-              style={{
-                background: 'rgba(79, 46, 232, 0.92)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                color: '#FFFFFF',
-                borderRadius: '4px',
-                fontSize: '9px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.15em',
-                fontWeight: 600,
-              }}
-            >
-              Nuevo
-            </span>
-          </div>
-        )}
-
-        {/* Badge Temporada */}
-        {producto.temporada && !producto.nuevo && (
-          <div className="absolute top-3 left-3">
-            <span
-              className="inline-flex items-center gap-1 px-2 py-0.5"
-              style={{
-                background: 'rgba(26, 127, 75, 0.92)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                color: '#FFFFFF',
-                borderRadius: '4px',
-                fontSize: '9px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.15em',
-                fontWeight: 600,
-              }}
-            >
-              <Sprout size={9} strokeWidth={2.5} /> Temporada
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Info */}
-      <div className="px-4 py-3.5 flex flex-col gap-1.5 flex-1">
-        <h3
-          className="text-[13.5px] leading-snug tracking-[-0.005em] truncate"
-          style={{ color: T.ink, fontWeight: 500 }}
-        >
-          {producto.nombre}
-        </h3>
-
-        {producto.categoria && (
-          <p
-            className="text-[11px] uppercase tracking-[0.15em] truncate"
-            style={{ color: T.inkFaint, fontWeight: 500 }}
-          >
-            {producto.categoria}
-          </p>
-        )}
-
-        <p
-          className="text-[15px] tabular-nums tracking-[-0.01em] mt-0.5"
-          style={{
-            color: T.ink,
-            fontWeight: 500,
-            fontFeatureSettings: '"tnum"',
-          }}
-        >
-          {formatMoney(producto.precio)}
-          {producto.unidad && (
-            <span
-              className="text-[11px] ml-1"
-              style={{ color: T.inkSoft, fontWeight: 450 }}
-            >
-              / {producto.unidad}
-            </span>
-          )}
-        </p>
-
-        {producto.precioAnterior > 0 && producto.precioAnterior > producto.precio && (
-          <p
-            className="text-[11.5px] line-through tabular-nums"
-            style={{ color: T.inkFaint, fontWeight: 450, fontFeatureSettings: '"tnum"' }}
-          >
-            {formatMoney(producto.precioAnterior)}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function FrutaPage() {
   const router = useRouter();
   const { user } = useAuth();
 
   const [frutas, setFrutas] = useState([]);
+  const [categorias, setCategorias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategoria, setSelectedCategoria] = useState('todos');
+  const [selectedCategoriaId, setSelectedCategoriaId] = useState('');
 
-  // Cargar favoritos
+  // ─── Cargar favoritos ────────────────────────────────────
   useEffect(() => {
     const saved = localStorage.getItem('frutas_favorites');
     if (saved) setFavorites(JSON.parse(saved));
   }, []);
 
-  // Cargar frutas
+  // ─── Cargar categorías (solo padre) ──────────────────────
+  useEffect(() => {
+    const cargarCategorias = async () => {
+      try {
+        const todas = await getFrutaCategorias();
+        // Solo padres en la home
+        const padres = todas.filter((c) => c.depth === 0);
+        setCategorias(padres);
+      } catch (error) {
+        console.error('Error cargando categorías:', error);
+      }
+    };
+    cargarCategorias();
+  }, []);
+
+  // ─── Cargar frutas ───────────────────────────────────────
   const cargarFrutas = useCallback(async () => {
     try {
       setLoading(true);
       const result = await getFrutas({
         page: 1,
-        perPage: 100,
+        perPage: 12,
         search: searchTerm,
-        categoria: selectedCategoria,
+        categoriaId: selectedCategoriaId || 'todos',
         sort: 'orden, nombre',
       });
       setFrutas(result.items);
@@ -330,7 +216,7 @@ export default function FrutaPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, selectedCategoria]);
+  }, [searchTerm, selectedCategoriaId]);
 
   useEffect(() => {
     cargarFrutas();
@@ -344,12 +230,44 @@ export default function FrutaPage() {
     localStorage.setItem('frutas_favorites', JSON.stringify(newFavorites));
   };
 
-  const handleCategoriaClick = (cat) => {
-    const nueva = cat === selectedCategoria ? 'todos' : cat;
-    setSelectedCategoria(nueva);
+  // ─── Handler de categoría (toggle por ID) ────────────────
+  const handleCategoriaClick = (id) => {
+    const nueva = id === selectedCategoriaId ? '' : id;
+    setSelectedCategoriaId(nueva);
   };
 
   const navigateTo = (path) => router.push(path);
+
+  // Categoría activa (para mostrar el nombre en el título)
+  const categoriaActiva = useMemo(
+    () => categorias.find((c) => c.id === selectedCategoriaId),
+    [categorias, selectedCategoriaId]
+  );
+
+  // Categorías visibles en home (5 + "Más categorías" si hay más)
+  const categoriasParaMostrar = useMemo(() => {
+    const tieneMas = categorias.length > MAX_CATEGORIAS_VISIBLES;
+    const visibles = tieneMas
+      ? categorias.slice(0, MAX_CATEGORIAS_VISIBLES)
+      : categorias;
+
+    const conIcono = visibles.map((cat) => ({
+      ...cat,
+      icon: getIcon(cat.nombre, cat.slug),
+    }));
+
+    if (tieneMas) {
+      conIcono.push({
+        id: '__mas__',
+        nombre: 'Más categorías',
+        slug: 'mas-categorias',
+        icon: Grid2X2,
+        esMasCategorias: true,
+      });
+    }
+
+    return conIcono;
+  }, [categorias]);
 
   const notifications = [
     { id: 1, title: '¡Fruta fresca de temporada!', description: 'Descubre lo nuevo de esta semana', time: 'Hace 2 horas', read: false },
@@ -435,43 +353,45 @@ export default function FrutaPage() {
           </section>
 
           {/* ─── CATEGORÍAS POPULARES ──────────────────────── */}
-          <section className="max-w-[1280px] mx-auto px-6 md:px-14 pb-16 md:pb-20">
-            <div className="flex items-baseline justify-between mb-5">
-              <h2
-                className="text-[10px] md:text-[11px] uppercase tracking-[0.22em]"
-                style={{
-                  color: T.inkFaint,
-                  fontWeight: 500,
-                  fontFeatureSettings: '"ss01"',
-                }}
-              >
-                Categorías populares
-              </h2>
-              {selectedCategoria !== 'todos' && (
-                <TextLink
-                  label="Ver todas"
-                  onClick={() => handleCategoriaClick('todos')}
-                />
-              )}
-            </div>
-
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
-              {CATEGORIAS_BASICAS.map((cat) => {
-                const isActive = selectedCategoria === cat.nombre;
-                const handleClick = cat.esMasCategorias
-                  ? () => navigateTo('/fruta')
-                  : () => handleCategoriaClick(cat.nombre);
-                return (
-                  <CategoryCard
-                    key={cat.nombre}
-                    cat={cat}
-                    isActive={isActive}
-                    onClick={handleClick}
+          {categorias.length > 0 && (
+            <section className="max-w-[1280px] mx-auto px-6 md:px-14 pb-16 md:pb-20">
+              <div className="flex items-baseline justify-between mb-5">
+                <h2
+                  className="text-[10px] md:text-[11px] uppercase tracking-[0.22em]"
+                  style={{
+                    color: T.inkFaint,
+                    fontWeight: 500,
+                    fontFeatureSettings: '"ss01"',
+                  }}
+                >
+                  Categorías populares
+                </h2>
+                {selectedCategoriaId && (
+                  <TextLink
+                    label="Ver todas"
+                    onClick={() => setSelectedCategoriaId('')}
                   />
-                );
-              })}
-            </div>
-          </section>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
+                {categoriasParaMostrar.map((cat) => {
+                  const isActive = cat.id === selectedCategoriaId;
+                  const handleClick = cat.esMasCategorias
+                    ? () => navigateTo('/fruta/categoria/todos')
+                    : () => handleCategoriaClick(cat.id);
+                  return (
+                    <CategoryCard
+                      key={cat.id}
+                      cat={cat}
+                      isActive={isActive}
+                      onClick={handleClick}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {/* ─── BUSCADOR ──────────────────────────────────── */}
           <section className="max-w-[1280px] mx-auto px-6 md:px-14 pb-10">
@@ -534,11 +454,14 @@ export default function FrutaPage() {
                   fontFeatureSettings: '"ss01"',
                 }}
               >
-                {selectedCategoria !== 'todos'
-                  ? `Fruta · ${selectedCategoria}`
+                {categoriaActiva
+                  ? `Fruta · ${categoriaActiva.nombre}`
                   : 'Frutas y verduras destacadas'}
               </h2>
-              <TextLink label="Ver todos" onClick={() => navigateTo('/fruta')} />
+              <TextLink
+                label="Ver todos"
+                onClick={() => navigateTo('/fruta/categoria/todos')}
+              />
             </div>
 
             {loading ? (
@@ -575,14 +498,14 @@ export default function FrutaPage() {
                   className="text-[13px] max-w-md"
                   style={{ color: T.inkSoft, fontWeight: 450 }}
                 >
-                  {selectedCategoria !== 'todos'
-                    ? `No hay productos en "${selectedCategoria}".`
+                  {categoriaActiva
+                    ? `No hay productos en "${categoriaActiva.nombre}".`
                     : 'Pronto agregaremos productos frescos.'}
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
-                {frutas.slice(0, 8).map((producto) => (
+                {frutas.map((producto) => (
                   <FrutaCard
                     key={producto.id}
                     producto={producto}

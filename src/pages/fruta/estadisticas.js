@@ -202,12 +202,13 @@ function TopFrutaRow({ fruta, index }) {
           {fruta.nombre}
         </p>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
-          {fruta.categoria && (
+          {/* ✅ categoriaNombre desde expand (en vez de categoria) */}
+          {fruta.expand?.categoriaId?.nombre && (
             <span
               className="text-[10px] uppercase tracking-[0.15em] truncate"
               style={{ color: T.inkFaint, fontWeight: 500 }}
             >
-              {fruta.categoria}
+              {fruta.expand.categoriaId.nombre}
             </span>
           )}
           {fruta.temporada && (
@@ -240,7 +241,7 @@ function TopFrutaRow({ fruta, index }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function EstadisticasFrutaPage() {
   const router = useRouter();
@@ -271,10 +272,11 @@ export default function EstadisticasFrutaPage() {
       setLoading(true);
       setError(null);
 
+      // ✅ expand con categoriaId
       const frutasUsuario = await pb.collection('frutas').getFullList({
         filter: `usuarioId = "${user.id}"`,
         sort: '-created',
-        expand: 'municipioId,localidadId',
+        expand: 'categoriaId,municipioId,localidadId',
       });
 
       if (frutasUsuario.length === 0) {
@@ -310,7 +312,7 @@ export default function EstadisticasFrutaPage() {
     cargarDatos();
   }, [authLoading, user, cargarDatos, openLogin]);
 
-  // ─── Calcular estadísticas · SIN CAMBIOS ──────────────
+  // ─── Calcular estadísticas ────────────────────────────
   const calcularEstadisticas = async (frutasUsuario, periodo) => {
     try {
       const ahora = new Date();
@@ -466,7 +468,7 @@ export default function EstadisticasFrutaPage() {
     }
   };
 
-  // ─── Actividad reciente · SIN CAMBIOS ─────────────────
+  // ─── Actividad reciente ───────────────────────────────
   const cargarActividadReciente = async (frutasUsuario, limit = 10) => {
     try {
       const actividades = [];
@@ -533,7 +535,7 @@ export default function EstadisticasFrutaPage() {
     );
   };
 
-  // ─── Exportaciones (placeholder) · SIN CAMBIOS ────────
+  // ─── Exportaciones (placeholder) ──────────────────────
   const handleExportarExcel = async () => {
     if (frutas.length === 0) return;
     setExportando(true);

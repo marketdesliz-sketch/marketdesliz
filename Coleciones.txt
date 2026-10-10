@@ -582,7 +582,8 @@ userId	Relation → users	❌ No	Max 1
 negocioId	Relation → negocios	❌ No	Max 1 (opcional)
 municipioId	Relation → municipios	❌ No	Max 1
 localidadId	Relation → localidades	❌ No	Max 1
-
+telefono  Text
+whatsapp  Text
 
 Valores del Select unidad
 text
@@ -874,7 +875,7 @@ DeleteRule: @request.auth.role = "admin"
 | mensaje     | text     | requerido                  |
 | leida       | boolean  | default: false             |
 | entidadId   | text     | nullable                   |
-| entidadTipo | select     |solicitud, orden, tanda, negocio, kyc, cobro, pago, tanda_pago, nivel, sistema|
+| entidadTipo | select     |solicitud, orden, tanda, negocio, kyc, cobro, pago, tanda_pago, nivel, sistema, empleo|
 | leidaEn     | date     | nullable                   |
 | datos       | json     | nullable                   
 

@@ -22,7 +22,7 @@ import Footer from '../../components/Footer';
 import BackButton from '../../components/BackButton';
 
 // ─────────────────────────────────────────────────────────────────────────
-// Helpers · SIN CAMBIOS
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────
 const formatPhone = (phone) => {
   if (!phone) return '';
@@ -170,7 +170,7 @@ function InfoLine({ icon: Icon, text, mono = false, color = null }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página principal · lógica SIN CAMBIOS
+// Página principal
 // ─────────────────────────────────────────────────────────────────────────
 export default function FrutaDetalle() {
   const router = useRouter();
@@ -242,8 +242,9 @@ export default function FrutaDetalle() {
 
       await registrarVisitaFruta(id);
 
-      if (frutaData.categoria) {
-        cargarRelacionados(frutaData.categoria, id);
+      // ✅ Cambio: usar categoriaId (relation) en vez de categoria (nombre)
+      if (frutaData.categoriaId) {
+        cargarRelacionados(frutaData.categoriaId, id);
       }
 
       cargarReviews(id);
@@ -255,10 +256,11 @@ export default function FrutaDetalle() {
     }
   };
 
-  const cargarRelacionados = async (categoria, frutaId) => {
+  // ✅ Cambio: recibe categoriaId
+  const cargarRelacionados = async (categoriaId, frutaId) => {
     try {
       setLoadingRelacionados(true);
-      const relacionados = await getFrutasRelacionadas(categoria, frutaId, 6);
+      const relacionados = await getFrutasRelacionadas(categoriaId, frutaId, 6);
       setFrutasRelacionadas(relacionados);
     } catch (err) {
       console.error('Error cargando relacionados:', err);
@@ -605,15 +607,16 @@ export default function FrutaDetalle() {
               <Link href="/" style={{ color: T.inkSoft }}>Inicio</Link>
               <span style={{ color: T.inkGhost }}>/</span>
               <Link href="/fruta" style={{ color: T.inkSoft }}>Fruta</Link>
-              {fruta.categoria && (
+              {/* ✅ Cambio: categoría por slug + nombre desde expand */}
+              {fruta.categoriaNombre && fruta.categoriaSlug && (
                 <>
                   <span style={{ color: T.inkGhost }}>/</span>
                   <Link
-                    href={`/fruta?categoria=${encodeURIComponent(fruta.categoria)}`}
+                    href={`/fruta/categoria/${fruta.categoriaSlug}`}
                     className="capitalize"
                     style={{ color: T.inkSoft }}
                   >
-                    {fruta.categoria}
+                    {fruta.categoriaNombre}
                   </Link>
                 </>
               )}
@@ -864,7 +867,8 @@ export default function FrutaDetalle() {
 
                 <div>
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {fruta.categoria && (
+                    {/* ✅ Cambio: categoría por nombre desde expand */}
+                    {fruta.categoriaNombre && (
                       <span
                         className="text-[10px] uppercase tracking-[0.18em] px-2 py-1"
                         style={{
@@ -874,7 +878,7 @@ export default function FrutaDetalle() {
                           fontWeight: 500,
                         }}
                       >
-                        {fruta.categoria}
+                        {fruta.categoriaNombre}
                       </span>
                     )}
                     {fruta.temporada && (
@@ -1420,12 +1424,13 @@ export default function FrutaDetalle() {
               <div className="flex items-end justify-between gap-4 mb-6">
                 <div>
                   <SectionLabel>Productos relacionados</SectionLabel>
+                  {/* ✅ Cambio: nombre + link por slug */}
                   <p className="text-[13px]" style={{ color: T.inkSoft, fontWeight: 450 }}>
-                    También en {fruta.categoria}
+                    También en {fruta.categoriaNombre}
                   </p>
                 </div>
                 <Link
-                  href={`/fruta?categoria=${encodeURIComponent(fruta.categoria)}`}
+                  href={`/fruta/categoria/${fruta.categoriaSlug}`}
                   className="text-[12px] uppercase tracking-[0.18em] flex items-center gap-1"
                   style={{ color: T.accent, fontWeight: 500 }}
                 >
@@ -1632,12 +1637,13 @@ function FrutaRelacionadaCard({ fruta }) {
           {fruta.nombre}
         </h3>
 
-        {fruta.categoria && (
+        {/* ✅ Cambio: categoriaNombre en vez de categoria */}
+        {fruta.categoriaNombre && (
           <p
             className="text-[10.5px] uppercase tracking-[0.15em] truncate"
             style={{ color: T.inkFaint, fontWeight: 500 }}
           >
-            {fruta.categoria}
+            {fruta.categoriaNombre}
           </p>
         )}
 
