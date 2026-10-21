@@ -17,7 +17,7 @@ import Footer from '../../components/Footer';
 import BackButton from '../../components/BackButton';
 
 // ─────────────────────────────────────────────────────────────────────────
-// SectionLabel
+// SectionLabel (sin cambios)
 // ─────────────────────────────────────────────────────────────────────────
 function SectionLabel({ children, accent = false }) {
   return (
@@ -35,7 +35,7 @@ function SectionLabel({ children, accent = false }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// MetricCard
+// MetricCard (sin cambios)
 // ─────────────────────────────────────────────────────────────────────────
 function MetricCard({ icon: Icon, label, value, valueColor = T.ink, sub = null, extras = null }) {
   return (
@@ -91,7 +91,7 @@ function MetricCard({ icon: Icon, label, value, valueColor = T.ink, sub = null, 
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// QuickAction
+// QuickAction (sin cambios)
 // ─────────────────────────────────────────────────────────────────────────
 function QuickAction({ href, icon: Icon, title, subtitle }) {
   const [hover, setHover] = useState(false);
@@ -139,7 +139,7 @@ function QuickAction({ href, icon: Icon, title, subtitle }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function EstadisticasServicioPage() {
   const router = useRouter();
@@ -162,55 +162,11 @@ export default function EstadisticasServicioPage() {
   const [mostrarExportar, setMostrarExportar] = useState(false);
   const [exportando, setExportando] = useState(false);
 
-  const cargarDatos = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-
-      const servicios = await pb.collection('servicios').getFullList({
-        filter: `usuarioId = "${user.id}"`,
-        sort: '-created',
-        limit: 1,
-      });
-
-      if (servicios.length === 0) {
-        setServicio(null);
-        setLoading(false);
-        return;
-      }
-
-      const servicioData = servicios[0];
-      setServicio(servicioData);
-
-      const stats = await calcularEstadisticas(servicioData.id, periodoSeleccionado);
-      const actividad = await cargarActividadReciente(servicioData.id, 10);
-
-      setEstadisticas(stats);
-      setActividadReciente(actividad);
-    } catch (err) {
-      console.error('Error cargando datos:', err);
-      setError('No se pudieron cargar las estadísticas. Intenta de nuevo.');
-    } finally {
-      setLoading(false);
-    }
-  }, [user, periodoSeleccionado]);
-
-  useEffect(() => {
-    if (authLoading) return;
-
-    if (!user) {
-      setLoading(false);
-      openLogin();
-      return;
-    }
-
-    cargarDatos();
-  }, [authLoading, user, cargarDatos, openLogin]);
-
-  // ─── Calcular estadísticas · SIN CAMBIOS ─────────────────
-  const calcularEstadisticas = async (servicioId, periodo) => {
+  // ✅ CAMBIO 1: calcularEstadisticas como useCallback, definida ANTES de cargarDatos
+  // ✅ CAMBIO 2: tendencias ahora usan 2 queries bulk en vez de 30 seriales
+  // ✅ CAMBIO 3: fallback de visitas arreglado (ahora sí se ejecuta)
+  // ✅ CAMBIO 4: se eliminó el fetch extra de `calificacion` (no se usaba)
+  const calcularEstadisticas = useCallback(async (servicioId, periodo) => {
     try {
       const ahora = new Date();
       const inicioHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
@@ -219,48 +175,52 @@ export default function EstadisticasServicioPage() {
       const inicioMes = new Date(ahora);
       inicioMes.setMonth(inicioMes.getMonth() - 1);
 
+      // ✅ CAMBIO: usar el `visitas` del servicio (ya lo tenemos cargado)
       const servicioRecord = await pb.collection('servicios').getOne(servicioId, {
-        fields: 'id,visitas,calificacion',
+        fields: 'id,visitas',
       });
       const visitasTotal = servicioRecord.visitas || 0;
 
+      // ─── Visitas granulares ───────────────────────────────
       let visitasHoy = 0;
       let visitasSemana = 0;
       let visitasMes = 0;
 
+      let visitasRecords = [];
       try {
-        const visitasRecords = await pb
-          .collection('visitas_servicios')
-          .getFullList({
-            filter: `servicioId = "${servicioId}"`,
-            fields: 'created',
-          })
-          .catch(() => []);
+        visitasRecords = await pb.collection('visitas_servicios').getFullList({
+          filter: `servicioId = "${servicioId}"`,
+          fields: 'created',
+        });
+      } catch (e) {
+        visitasRecords = [];
+      }
 
+      // ✅ CAMBIO: lógica clara — si hay datos reales, usarlos; si no, estimar
+      if (visitasRecords.length > 0) {
         visitasRecords.forEach((v) => {
           const fecha = new Date(v.created);
           if (fecha >= inicioHoy) visitasHoy++;
           if (fecha >= inicioSemana) visitasSemana++;
           if (fecha >= inicioMes) visitasMes++;
         });
-      } catch (e) {
+      } else if (visitasTotal > 0) {
+        // Estimación proporcional cuando no hay tracking granular
         visitasHoy = Math.round(visitasTotal * 0.05);
         visitasSemana = Math.round(visitasTotal * 0.3);
         visitasMes = visitasTotal;
       }
 
+      // ─── Contactos ────────────────────────────────────────
       let contactosTotal = 0;
       let contactosWhatsapp = 0;
       let contactosLlamadas = 0;
 
       try {
-        const contactosRecords = await pb
-          .collection('contactos_servicios')
-          .getFullList({
-            filter: `servicioId = "${servicioId}"`,
-            fields: 'created,tipo',
-          })
-          .catch(() => []);
+        const contactosRecords = await pb.collection('contactos_servicios').getFullList({
+          filter: `servicioId = "${servicioId}"`,
+          fields: 'created,tipo',
+        });
 
         contactosTotal = contactosRecords.length;
         contactosWhatsapp = contactosRecords.filter((c) => c.tipo === 'whatsapp').length;
@@ -269,6 +229,7 @@ export default function EstadisticasServicioPage() {
         contactosTotal = 0;
       }
 
+      // ─── Reseñas ──────────────────────────────────────────
       let comentariosData = [];
       try {
         comentariosData = await pb.collection('reviews_servicios').getFullList({
@@ -294,37 +255,55 @@ export default function EstadisticasServicioPage() {
             ) / 10
           : 0;
 
+      // ✅ CAMBIO: TENDENCIAS optimizadas — 2 queries bulk + agrupación en JS
       const dias = periodo === 'mes' ? 30 : 7;
+      const inicioRango = new Date();
+      inicioRango.setDate(inicioRango.getDate() - (dias - 1));
+      inicioRango.setHours(0, 0, 0, 0);
+
+      let visitasRango = [];
+      let contactosRango = [];
+
+      try {
+        [visitasRango, contactosRango] = await Promise.all([
+          pb.collection('visitas_servicios').getFullList({
+            filter: `servicioId = "${servicioId}" && created >= "${inicioRango.toISOString()}"`,
+            fields: 'created',
+          }).catch(() => []),
+          pb.collection('contactos_servicios').getFullList({
+            filter: `servicioId = "${servicioId}" && created >= "${inicioRango.toISOString()}"`,
+            fields: 'created',
+          }).catch(() => []),
+        ]);
+      } catch (e) {
+        visitasRango = [];
+        contactosRango = [];
+      }
+
+      // Agrupar por día (YYYY-MM-DD)
+      const visitasPorDia = {};
+      visitasRango.forEach((v) => {
+        const dia = (v.created || '').slice(0, 10);
+        if (dia) visitasPorDia[dia] = (visitasPorDia[dia] || 0) + 1;
+      });
+
+      const contactosPorDia = {};
+      contactosRango.forEach((c) => {
+        const dia = (c.created || '').slice(0, 10);
+        if (dia) contactosPorDia[dia] = (contactosPorDia[dia] || 0) + 1;
+      });
+
       const tendencias = [];
       for (let i = dias - 1; i >= 0; i--) {
         const fecha = new Date();
         fecha.setDate(fecha.getDate() - i);
-        const inicioDia = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
-        const finDia = new Date(inicioDia);
-        finDia.setDate(finDia.getDate() + 1);
-
-        const visitasDia = await pb
-          .collection('visitas_servicios')
-          .getList(1, 1, {
-            filter: `servicioId = "${servicioId}" && created >= "${inicioDia.toISOString()}" && created < "${finDia.toISOString()}"`,
-            fields: 'id',
-          })
-          .then((r) => r.totalItems)
-          .catch(() => 0);
-
-        const contactosDia = await pb
-          .collection('contactos_servicios')
-          .getList(1, 1, {
-            filter: `servicioId = "${servicioId}" && created >= "${inicioDia.toISOString()}" && created < "${finDia.toISOString()}"`,
-            fields: 'id',
-          })
-          .then((r) => r.totalItems)
-          .catch(() => 0);
+        fecha.setHours(0, 0, 0, 0);
+        const fechaStr = fecha.toISOString().slice(0, 10);
 
         tendencias.push({
           fecha: fecha.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }),
-          visitas: visitasDia,
-          contactos: contactosDia,
+          visitas: visitasPorDia[fechaStr] || 0,
+          contactos: contactosPorDia[fechaStr] || 0,
         });
       }
 
@@ -349,10 +328,11 @@ export default function EstadisticasServicioPage() {
         tendencias: [],
       };
     }
-  };
+  }, []);
 
-  // ─── Actividad reciente · SIN CAMBIOS ────────────────────
-  const cargarActividadReciente = async (servicioId, limit = 10) => {
+  // ✅ CAMBIO 5: cargarActividadReciente como useCallback, ANTES de cargarDatos
+  // ✅ CAMBIO 6: fix `userId.name` → `userId.nombre`
+  const cargarActividadReciente = useCallback(async (servicioId, limit = 10) => {
     try {
       const actividades = [];
 
@@ -370,12 +350,13 @@ export default function EstadisticasServicioPage() {
             id: `review_${r.id}`,
             tipo: 'comentario',
             titulo: 'Nueva opinión recibida',
-            mensaje: `${r.expand?.userId?.name || 'Un usuario'} calificó con ${r.calificacion} estrellas`,
+            // ✅ CAMBIO: userId.nombre (antes .name, que no existe en el schema)
+            mensaje: `${r.expand?.userId?.nombre || 'Un usuario'} calificó con ${r.calificacion} estrellas`,
             fecha: r.created,
             leida: false,
           });
         });
-      } catch (e) {}
+      } catch (e) { /* silencioso */ }
 
       try {
         const contactos = await pb.collection('contactos_servicios').getFullList({
@@ -395,7 +376,7 @@ export default function EstadisticasServicioPage() {
             leida: false,
           });
         });
-      } catch (e) {}
+      } catch (e) { /* silencioso */ }
 
       actividades.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       return actividades.slice(0, limit);
@@ -403,7 +384,55 @@ export default function EstadisticasServicioPage() {
       console.error('Error cargando actividad:', err);
       return [];
     }
-  };
+  }, []);
+
+  // ✅ CAMBIO 7: cargarDatos con deps completos + getList en vez de getFullList(limit:1)
+  const cargarDatos = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // ✅ CAMBIO: getList(1,1) en vez de getFullList con limit (que es no-op)
+      const result = await pb.collection('servicios').getList(1, 1, {
+        filter: `userId = "${user.id}"`,
+        sort: '-created',
+      });
+
+      if (result.items.length === 0) {
+        setServicio(null);
+        setLoading(false);
+        return;
+      }
+
+      const servicioData = result.items[0];
+      setServicio(servicioData);
+
+      const stats = await calcularEstadisticas(servicioData.id, periodoSeleccionado);
+      const actividad = await cargarActividadReciente(servicioData.id, 10);
+
+      setEstadisticas(stats);
+      setActividadReciente(actividad);
+    } catch (err) {
+      console.error('Error cargando datos:', err);
+      setError('No se pudieron cargar las estadísticas. Intenta de nuevo.');
+    } finally {
+      setLoading(false);
+    }
+  }, [user, periodoSeleccionado, calcularEstadisticas, cargarActividadReciente]);
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      setLoading(false);
+      openLogin();
+      return;
+    }
+
+    cargarDatos();
+  }, [authLoading, user, cargarDatos, openLogin]);
 
   const handlePeriodoChange = (nuevoPeriodo) => {
     setPeriodoSeleccionado(nuevoPeriodo);
@@ -414,7 +443,7 @@ export default function EstadisticasServicioPage() {
     );
   };
 
-  // ─── Exportaciones (placeholder) · SIN CAMBIOS ───────────
+  // ─── Exportaciones (placeholder) ─────────────────────────
   const handleExportarExcel = async () => {
     if (!servicio) return;
     setExportando(true);

@@ -311,7 +311,7 @@ function ProductoRelacionadoCard({ producto }) {
               className="text-[10px] uppercase tracking-[0.16em]"
               style={{ color: T.inkFaint, fontWeight: 500 }}
             >
-              Paga Semanalmente
+              Paga c/sem.
             </span>
             <span
               className="text-[13.5px] tabular-nums"
@@ -392,6 +392,8 @@ export default function ProductoDetalle() {
   const [error, setError] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageUrls, setImageUrls] = useState([]);
+  // ✅ NUEVO: para pausar autoplay al hover
+  const [pausarCarrusel, setPausarCarrusel] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [userPhone, setUserPhone] = useState('');
@@ -458,6 +460,19 @@ export default function ProductoDetalle() {
   useEffect(() => {
     if (user?.telefono) setUserPhone(user.telefono);
   }, [user]);
+
+  // ✅ NUEVO: Autoplay del carrusel cada 3 segundos
+  useEffect(() => {
+    // No hacer nada si hay 0 o 1 imagen, o si está pausado por hover
+    if (!imageUrls || imageUrls.length <= 1) return;
+    if (pausarCarrusel) return;
+
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % imageUrls.length);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [imageUrls.length, currentImageIndex, pausarCarrusel]);
 
   // ─── Cargar producto · SIN CAMBIOS ──────────────────────────
   useEffect(() => {
@@ -537,22 +552,31 @@ export default function ProductoDetalle() {
         actualizado: record.updated,
       };
 
-      if (
-        record.imagen &&
-        Array.isArray(record.imagen) &&
-        record.imagen.length > 0
-      ) {
-        const urls = record.imagen.map((img) => pb.files.getURL(record, img));
-        productoData.imagenes = urls;
-        productoData.imagen = urls[0];
-      } else if (record.imagen) {
-        const url = pb.files.getURL(record, record.imagen);
-        productoData.imagenes = [url];
-        productoData.imagen = url;
-      } else {
-        productoData.imagenes = ['/images/placeholder.png'];
-        productoData.imagen = '/images/placeholder.png';
+      // ✅ FIX: combinar imagen principal (singular) + imágenes adicionales (plural)
+      const imagenesList = [];
+
+      // 1. Imagen principal (string)
+      if (record.imagen) {
+        imagenesList.push(pb.files.getURL(record, record.imagen));
       }
+
+      // 2. Imágenes adicionales (array de strings)
+      if (record.imagenes) {
+        const extras = Array.isArray(record.imagenes)
+          ? record.imagenes
+          : [record.imagenes];
+        extras.forEach((img) => {
+          if (img) imagenesList.push(pb.files.getURL(record, img));
+        });
+      }
+
+      // 3. Fallback si no hay ninguna
+      if (imagenesList.length === 0) {
+        imagenesList.push('/images/placeholder.png');
+      }
+
+      productoData.imagenes = imagenesList;
+      productoData.imagen = imagenesList[0];
 
       productoData.precioContado = Math.round(productoData.precioTotal * 0.75);
 
@@ -586,7 +610,7 @@ export default function ProductoDetalle() {
           );
         }
       }
-
+      // ✅ FIX: incluir las imágenes en el cache
       sessionStorage.setItem(
         cacheKey,
         JSON.stringify({
@@ -1162,6 +1186,8 @@ export default function ProductoDetalle() {
             <div className="flex flex-col gap-3">
               <div
                 className="relative overflow-hidden group"
+                onMouseEnter={() => setPausarCarrusel(true)}
+                onMouseLeave={() => setPausarCarrusel(false)}
                 style={{
                   aspectRatio: '1 / 1',
                   background: 'rgba(15,15,15,0.03)',
@@ -1224,7 +1250,7 @@ export default function ProductoDetalle() {
                       <ChevronRight size={16} strokeWidth={1.75} style={{ color: T.ink }} />
                     </button>
                     <span
-                      className="absolute bottom-3 right-3 inline-flex items-center px-2 py-0.5 tabular-nums"
+                      className="absolute bottom-3 right-3 inline-flex items-center gap-2 px-2 py-0.5 tabular-nums"
                       style={{
                         background: 'rgba(15,15,15,0.6)',
                         color: '#FFFFFF',
@@ -1234,6 +1260,17 @@ export default function ProductoDetalle() {
                         fontFeatureSettings: '"tnum"',
                       }}
                     >
+                      {pausarCarrusel && (
+                        <span
+                          title="Carrusel pausado"
+                          style={{
+                            width: '6px',
+                            height: '6px',
+                            background: '#F5B400',
+                            borderRadius: '50%',
+                          }}
+                        />
+                      )}
                       {currentImageIndex + 1}/{imageUrls.length}
                     </span>
                   </>

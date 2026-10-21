@@ -197,12 +197,13 @@ function TopAnimalRow({ animal, index }) {
           {animal.nombre}
         </p>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
-          {animal.categoria && (
+          {/* ✅ CAMBIO: categoría desde expand (relation) */}
+          {animal.expand?.categoriaId?.nombre && (
             <span
               className="text-[10px] uppercase tracking-[0.15em] truncate"
               style={{ color: T.inkFaint, fontWeight: 500 }}
             >
-              {animal.categoria}
+              {animal.expand.categoriaId.nombre}
             </span>
           )}
           {animal.destacado && (
@@ -243,7 +244,7 @@ function TopAnimalRow({ animal, index }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function EstadisticasGanadoPage() {
   const router = useRouter();
@@ -273,10 +274,11 @@ export default function EstadisticasGanadoPage() {
       setLoading(true);
       setError(null);
 
+      // ✅ CAMBIO: añadir categoriaId al expand
       const ganadosUsuario = await pb.collection('ganado').getFullList({
-        filter: `usuarioId = "${user.id}"`,
+        filter: `userId = "${user.id}"`,
         sort: '-created',
-        expand: 'municipioId,localidadId',
+        expand: 'categoriaId,municipioId,localidadId',
       });
 
       if (ganadosUsuario.length === 0) {
@@ -312,7 +314,7 @@ export default function EstadisticasGanadoPage() {
     cargarDatos();
   }, [authLoading, user, cargarDatos, openLogin]);
 
-  // ─── Calcular estadísticas · SIN CAMBIOS ──────────────
+  // ─── Calcular estadísticas ─────────────────────────────
   const calcularEstadisticas = async (ganadosUsuario, periodo) => {
     try {
       const ahora = new Date();
@@ -459,7 +461,7 @@ export default function EstadisticasGanadoPage() {
     }
   };
 
-  // ─── Actividad reciente · SIN CAMBIOS ─────────────────
+  // ─── Actividad reciente ────────────────────────────────
   const cargarActividadReciente = async (ganadosUsuario, limit = 10) => {
     try {
       const actividades = [];

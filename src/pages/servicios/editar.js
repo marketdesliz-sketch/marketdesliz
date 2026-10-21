@@ -10,6 +10,7 @@ import {
   getMunicipios,
   getLocalidades,
   getSectores,
+  getServicioCategorias,
 } from '../../lib/serviciosService';
 import { useAuth } from '../../contexts/AuthContext';
 import { T } from '../../lib/tokens';
@@ -19,7 +20,7 @@ import Footer from '../../components/Footer';
 import BackButton from '../../components/BackButton';
 
 // ─────────────────────────────────────────────────────────────────────────
-// Sub-componentes de formulario (idénticos a negocios/editar.js)
+// Sub-componentes de formulario
 // ─────────────────────────────────────────────────────────────────────────
 function FieldLabel({ children, required = false }) {
   return (
@@ -220,7 +221,7 @@ function FileInput({ onChange, multiple = false, accept = 'image/*' }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function EditarServicioPage() {
   const router = useRouter();
@@ -236,7 +237,8 @@ export default function EditarServicioPage() {
 
   const [formData, setFormData] = useState({
     nombre: '',
-    categoria: '',
+    // ✅ CAMBIO: categoria → categoriaId (relation)
+    categoriaId: '',
     descripcion: '',
     direccion: '',
     telefono: '',
@@ -273,15 +275,23 @@ export default function EditarServicioPage() {
   const [municipiosList, setMunicipiosList] = useState([]);
   const [localidadesList, setLocalidadesList] = useState([]);
   const [sectoresList, setSectoresList] = useState([]);
+  // ✅ NUEVO: categorías dinámicas del vertical "servicios"
+  const [categoriasList, setCategoriasList] = useState([]);
 
-  const categorias = [
-    'Plomería', 'Electricidad', 'Albañilería', 'Pintura', 'Carpintería',
-    'Herrería', 'Jardinería', 'Limpieza', 'Aire acondicionado',
-    'Refrigeración', 'Cerrajería', 'Computación', 'Celulares',
-    'Belleza', 'Fotografía', 'Música', 'Eventos', 'Pastelería',
-    'Catering', 'Mudanzas', 'Mecánica', 'Veterinaria', 'Florería',
-    'Otro',
-  ];
+  // ✅ ELIMINADO: array hardcoded `categorias`
+
+  // ✅ NUEVO: cargar categorías al montar (independiente del id)
+  useEffect(() => {
+    const cargarCategorias = async () => {
+      try {
+        const cats = await getServicioCategorias();
+        setCategoriasList(cats);
+      } catch (err) {
+        console.error('Error cargando categorías de servicios:', err);
+      }
+    };
+    cargarCategorias();
+  }, []);
 
   // Carga inicial con id
   useEffect(() => {
@@ -337,7 +347,7 @@ export default function EditarServicioPage() {
   const verificarServicioUsuario = async () => {
     try {
       const servicios = await pb.collection('servicios').getFullList({
-        filter: `usuarioId = "${user.id}"`,
+        filter: `userId = "${user.id}"`,
       });
 
       if (servicios.length > 0) {
@@ -361,7 +371,8 @@ export default function EditarServicioPage() {
 
       setFormData({
         nombre: servicioData.nombre || '',
-        categoria: servicioData.categoria || '',
+        // ✅ CAMBIO: precarga categoriaId desde la relation
+        categoriaId: servicioData.categoriaId || '',
         descripcion: servicioData.descripcion || '',
         direccion: servicioData.direccion || '',
         telefono: servicioData.telefono || '',
@@ -443,7 +454,8 @@ export default function EditarServicioPage() {
   };
 
   const guardarCambios = async () => {
-    if (!formData.nombre || !formData.categoria || !formData.direccion) {
+    // ✅ CAMBIO: validación usa categoriaId
+    if (!formData.nombre || !formData.categoriaId || !formData.direccion) {
       setError('Completa los campos obligatorios');
       return;
     }
@@ -645,16 +657,31 @@ export default function EditarServicioPage() {
 
                 <div>
                   <FieldLabel required>Categoría</FieldLabel>
+                  {/* ✅ CAMBIO: select dinámico con categoriasList */}
                   <SelectField
-                    name="categoria"
-                    value={formData.categoria}
+                    name="categoriaId"
+                    value={formData.categoriaId}
                     onChange={handleInputChange}
                   >
                     <option value="">Selecciona una categoría</option>
-                    {categorias.map((cat) => (
-                      <option key={cat} value={cat}>{cat}</option>
+                    {categoriasList.map((cat) => (
+                      <option
+                        key={cat.id}
+                        value={cat.id}
+                        disabled={cat.esPadre && cat.tieneHijos}
+                      >
+                        {cat.esPadre ? cat.nombre : `└─ ${cat.nombre}`}
+                      </option>
                     ))}
                   </SelectField>
+                  {categoriasList.length === 0 && (
+                    <p
+                      className="text-[11px] mt-1.5"
+                      style={{ color: T.inkFaint, fontWeight: 450 }}
+                    >
+                      Cargando categorías…
+                    </p>
+                  )}
                 </div>
 
                 <div>

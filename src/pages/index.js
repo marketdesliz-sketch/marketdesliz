@@ -1,19 +1,23 @@
 // src/pages/index.js
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import TerminalBar from "../components/TerminalBar";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { T } from "../lib/tokens";
+import { getCarrusel } from "../lib/carruselService";
 
 // ═════════════════════════════════════════════════════════════════════════
-// IMÁGENES · LOCAL  (/public/images/)
+// CONFIG
 // ═════════════════════════════════════════════════════════════════════════
-const COMENZAR_IMAGE = '/images/comenzar.jpg';
+const AUTOPLAY_MS = 3000;
+const FADE_MS = 700;
+const DEFAULT_BUTTON_LINK = '/productos';
+const DEFAULT_BUTTON_LABEL = 'Comenzar';
 
 // ─────────────────────────────────────────────────────────────────────────
-// TextLink · link de lista con touch
+// TextLink
 // ─────────────────────────────────────────────────────────────────────────
 function TextLink({ label, onClick, size = 'md' }) {
   const [hover, setHover] = useState(false);
@@ -43,47 +47,199 @@ function TextLink({ label, onClick, size = 'md' }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// ComenzarButton · botón metálico (imita el de la imagen)
+// ComenzarButton
 // ─────────────────────────────────────────────────────────────────────────
-function ComenzarButton({ onClick }) {
+function ComenzarButton({ onClick, href, label = DEFAULT_BUTTON_LABEL }) {
   const [hover, setHover] = useState(false);
   const [press, setPress] = useState(false);
 
+  const style = {
+    padding: '14px 46px',
+    fontSize: '13px',
+    fontWeight: 500,
+    letterSpacing: '0.28em',
+    textTransform: 'uppercase',
+    color: '#1A1A1A',
+    borderRadius: '4px',
+    border: '1px solid #8E8E8E',
+    background: hover
+      ? 'linear-gradient(180deg, #F2F2F2 0%, #D6D6D6 45%, #B8B8B8 55%, #A0A0A0 100%)'
+      : 'linear-gradient(180deg, #EDEDED 0%, #CFCFCF 45%, #ADADAD 55%, #969696 100%)',
+    boxShadow: press
+      ? 'inset 0 2px 6px rgba(0,0,0,0.35), 0 0 0 rgba(0,0,0,0)'
+      : hover
+        ? 'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(0,0,0,0.15), 0 4px 10px rgba(0,0,0,0.18)'
+        : 'inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 0 rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.12)',
+    transform: press ? 'translateY(1px)' : 'translateY(0)',
+    transitionTimingFunction: T.ease,
+    WebkitTapHighlightColor: 'transparent',
+    cursor: 'pointer',
+    display: 'inline-block',
+    textDecoration: 'none',
+    userSelect: 'none',
+    whiteSpace: 'nowrap',
+  };
+
+  const handlers = {
+    onMouseEnter: () => setHover(true),
+    onMouseLeave: () => { setHover(false); setPress(false); },
+    onMouseDown: () => setPress(true),
+    onMouseUp: () => setPress(false),
+    onTouchStart: () => { setHover(true); setPress(true); },
+    onTouchEnd: () => { setHover(false); setPress(false); },
+  };
+
+  if (href) {
+    return (
+      <a href={href} style={style} {...handlers}>
+        {label}
+      </a>
+    );
+  }
   return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => { setHover(false); setPress(false); }}
-      onMouseDown={() => setPress(true)}
-      onMouseUp={() => setPress(false)}
-      onTouchStart={() => { setHover(true); setPress(true); }}
-      onTouchEnd={() => { setHover(false); setPress(false); }}
-      className="relative select-none transition-transform duration-150"
-      style={{
-        padding: '14px 46px',
-        fontSize: '13px',
-        fontWeight: 500,
-        letterSpacing: '0.28em',
-        textTransform: 'uppercase',
-        color: '#1A1A1A',
-        borderRadius: '4px',
-        border: '1px solid #8E8E8E',
-        background: hover
-          ? 'linear-gradient(180deg, #F2F2F2 0%, #D6D6D6 45%, #B8B8B8 55%, #A0A0A0 100%)'
-          : 'linear-gradient(180deg, #EDEDED 0%, #CFCFCF 45%, #ADADAD 55%, #969696 100%)',
-        boxShadow: press
-          ? 'inset 0 2px 6px rgba(0,0,0,0.35), 0 0 0 rgba(0,0,0,0)'
-          : hover
-            ? 'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(0,0,0,0.15), 0 4px 10px rgba(0,0,0,0.18)'
-            : 'inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 0 rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.12)',
-        transform: press ? 'translateY(1px)' : 'translateY(0)',
-        transitionTimingFunction: T.ease,
-        WebkitTapHighlightColor: 'transparent',
-        cursor: 'pointer',
-      }}
-    >
-      Comenzar
+    <button type="button" onClick={onClick} style={style} {...handlers}>
+      {label}
     </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// getButtonStyle — posición del botón según botonPosicion (JSON)
+// ─────────────────────────────────────────────────────────────────────────
+function getButtonStyle(pos) {
+  const base = {
+    position: 'absolute',
+    left: '50%',
+    bottom: '-7%',
+    transform: 'translateX(-50%)',
+    zIndex: 10,
+  };
+  if (!pos || typeof pos !== 'object') return base;
+
+  const { top, left, right, bottom, transform } = pos;
+  const style = { position: 'absolute', zIndex: 10 };
+  if (top !== undefined) style.top = top;
+  if (left !== undefined) style.left = left;
+  if (right !== undefined) style.right = right;
+  if (bottom !== undefined) style.bottom = bottom;
+
+  if (transform !== undefined) {
+    style.transform = transform;
+  } else if (left === '50%' && right === undefined) {
+    style.transform = 'translateX(-50%)';
+  }
+  return style;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// HeroCarrusel
+// - Imagen natural (sin aspect ratio forzado, sin recorte)
+// - UN solo botón fuera del stack, siempre visible
+// ─────────────────────────────────────────────────────────────────────────
+function HeroCarrusel({ slides, loading }) {
+  const [active, setActive] = useState(0);
+  const timerRef = useRef(null);
+  const total = slides.length;
+
+  // Autoplay
+  useEffect(() => {
+    if (total <= 1 || AUTOPLAY_MS <= 0) return;
+    timerRef.current = setInterval(() => {
+      setActive((i) => (i + 1) % total);
+    }, AUTOPLAY_MS);
+    return () => clearInterval(timerRef.current);
+  }, [total]);
+
+  // Reset si cambia el total
+  useEffect(() => {
+    if (total > 0 && active >= total) setActive(0);
+  }, [total, active]);
+
+  const goTo = (i) => {
+    setActive(((i % total) + total) % total);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      if (total > 1) {
+        timerRef.current = setInterval(() => {
+          setActive((x) => (x + 1) % total);
+        }, AUTOPLAY_MS);
+      }
+    }
+  };
+
+  // Cargando: no ocupa espacio (evita saltos porque aún no hay nada que mostrar)
+  if (loading) return null;
+  if (total === 0) return null;
+
+  const current = slides[active];
+  const buttonPos = getButtonStyle(current?.botonPosicion);
+  const buttonHref = current?.botonEnlace || DEFAULT_BUTTON_LINK;
+
+  return (
+    <div className="w-full flex flex-col items-center">
+      {/* Wrapper relativo: contiene el stack + el botón encima */}
+      <div className="relative w-full max-w-2xl md:max-w-3xl mx-auto">
+
+        {/* Stack de imágenes — grid apilado, altura = la imagen más alta */}
+        <div
+          style={{
+            display: 'grid',
+            alignItems: 'center',
+            width: '100%',
+          }}
+        >
+          {slides.map((slide, i) => (
+            <img
+              key={slide.id}
+              src={slide.imagen}
+              alt=""
+              draggable={false}
+              style={{
+                gridArea: '1 / 1',
+                width: '100%',
+                height: 'auto',
+                display: 'block',
+                opacity: i === active ? 1 : 0,
+                transition: `opacity ${FADE_MS}ms ${T.ease || 'ease'}`,
+                pointerEvents: i === active ? 'auto' : 'none',
+                userSelect: 'none',
+              }}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          ))}
+        </div>
+
+        {/* UN SOLO botón, encima del stack. Cambia de enlace según slide activo */}
+        <div style={buttonPos}>
+          <ComenzarButton href={buttonHref} />
+        </div>
+      </div>
+
+      {/* Indicadores */}
+      {total > 1 && (
+        <div className="mt-6 flex items-center gap-2">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => goTo(i)}
+              aria-label={`Ir al slide ${i + 1}`}
+              style={{
+                width: i === active ? 28 : 8,
+                height: 2,
+                background: i === active ? T.ink : T.inkSoft,
+                opacity: i === active ? 1 : 0.3,
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                borderRadius: 2,
+                transition: `all 400ms ${T.ease || 'ease'}`,
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -93,6 +249,29 @@ function ComenzarButton({ onClick }) {
 export default function WelcomePage() {
   const router = useRouter();
   const goTo = (path) => router.push(path);
+
+  const [slides, setSlides] = useState([]);
+  const [loadingSlides, setLoadingSlides] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const data = await getCarrusel();
+        if (!mounted) return;
+        const valid = Array.isArray(data)
+          ? data.filter((s) => s && s.imagen)
+          : [];
+        setSlides(valid);
+      } catch (err) {
+        console.error('Error cargando carrusel:', err);
+        if (mounted) setSlides([]);
+      } finally {
+        if (mounted) setLoadingSlides(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const notifications = [
     { id: 1, title: '¡Nueva colección Éshé Parallel!', description: 'Descubre la línea Otoño 2026', time: 'Hace 2 horas', read: false },
@@ -129,24 +308,15 @@ export default function WelcomePage() {
       </Head>
 
       <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
-        {/* ═══ BARRA TERMINAL ═══ */}
         <TerminalBar mode="rotating" />
-
-        {/* ═══ HEADER · compartido, SIN buscador ═══ */}
         <Header notifications={notifications} unreadCount={unreadCount} />
 
-        {/* ═══ MAIN ═══ */}
         <main className="flex-1">
           {/* Editorial header */}
           <section className="max-w-[1280px] mx-auto px-6 md:px-14 pt-4 md:pt-8 pb-12 md:pb-20">
-
             <h1
               className="text-[40px] md:text-[72px] leading-[0.98] tracking-[-0.035em] max-w-3xl"
-              style={{
-                color: T.ink,
-                fontWeight: 400,
-                fontFeatureSettings: '"ss01"',
-              }}
+              style={{ color: T.ink, fontWeight: 400, fontFeatureSettings: '"ss01"' }}
             >
               Hola,<br />
               <span className="font-serif italic" style={{ color: T.inkMid }}>
@@ -162,52 +332,29 @@ export default function WelcomePage() {
             </p>
           </section>
 
-          {/* Navegación · 2 columnas + 1 vacía */}
+          {/* Navegación */}
           <section className="max-w-[1280px] mx-auto px-6 md:px-14 pb-10 md:pb-14">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 md:gap-x-20 gap-y-8 md:gap-y-16">
               <div>
                 {columnaIzq.map((item) => (
-                  <TextLink
-                    key={item.path}
-                    label={item.title}
-                    onClick={() => goTo(item.path)}
-                  />
+                  <TextLink key={item.path} label={item.title} onClick={() => goTo(item.path)} />
                 ))}
               </div>
-
               <div>
                 {columnaDer.map((item) => (
-                  <TextLink
-                    key={item.path}
-                    label={item.title}
-                    onClick={() => goTo(item.path)}
-                  />
+                  <TextLink key={item.path} label={item.title} onClick={() => goTo(item.path)} />
                 ))}
               </div>
-
               <div className="hidden md:block" />
             </div>
           </section>
 
-          {/* ═══ Imagen editorial + CTA (botón montado encima) ═══ */}
+          {/* Carrusel */}
           <section className="max-w-[1280px] mx-auto px-6 md:px-14 pb-16 md:pb-24">
-            <div className="relative flex flex-col items-center">
-              <img
-                src={COMENZAR_IMAGE}
-                alt=""
-                draggable={false}
-                className="w-full max-w-2xl md:max-w-3xl h-auto select-none"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-              />
-
-              <div className="absolute left-1/2 -translate-x-1/2 bottom-[2%] md:bottom-[4%]">
-                <ComenzarButton onClick={() => goTo('/productos')} />
-              </div>
-            </div>
+            <HeroCarrusel slides={slides} loading={loadingSlides} />
           </section>
         </main>
 
-        {/* ═══ FOOTER público ═══ */}
         <Footer />
       </div>
 

@@ -27,7 +27,7 @@ import Footer from '../../components/Footer';
 import BackButton from '../../components/BackButton';
 
 // ─────────────────────────────────────────────────────────────────────────
-// Helpers · SIN CAMBIOS
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────
 const formatPhone = (phone) => {
   if (!phone) return '';
@@ -194,9 +194,6 @@ function InfoLine({ icon: Icon, text, href, external, mono = false, color = null
   return <div className="flex items-start gap-3 min-w-0">{content}</div>;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// CharacteristicBlock · bloque de característica del animal
-// ─────────────────────────────────────────────────────────────────────────
 function CharacteristicBlock({ icon: Icon, label, value, highlight = false }) {
   return (
     <div
@@ -245,7 +242,7 @@ function CharacteristicBlock({ icon: Icon, label, value, highlight = false }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function GanadoDetalle() {
   const router = useRouter();
@@ -314,8 +311,9 @@ export default function GanadoDetalle() {
 
       await registrarVisitaGanado(id);
 
-      if (animalData.categoria) {
-        cargarRelacionados(animalData.categoria, id);
+      // ✅ Cambio: usar categoriaId (relation) en vez de categoria (nombre)
+      if (animalData.categoriaId) {
+        cargarRelacionados(animalData.categoriaId, id);
       }
 
       cargarReviews(id);
@@ -327,10 +325,11 @@ export default function GanadoDetalle() {
     }
   };
 
-  const cargarRelacionados = async (categoria, ganadoId) => {
+  // ✅ Cambio: recibe categoriaId
+  const cargarRelacionados = async (categoriaId, ganadoId) => {
     try {
       setLoadingRelacionados(true);
-      const data = await getGanadoRelacionado(categoria, ganadoId, 6);
+      const data = await getGanadoRelacionado(categoriaId, ganadoId, 6);
       setRelacionados(data);
     } catch (err) {
       console.error('Error cargando relacionados:', err);
@@ -646,15 +645,16 @@ export default function GanadoDetalle() {
               <Link href="/" style={{ color: T.inkSoft }}>Inicio</Link>
               <span style={{ color: T.inkGhost }}>/</span>
               <Link href="/ganado" style={{ color: T.inkSoft }}>Ganado</Link>
-              {animal.categoria && (
+              {/* ✅ Cambio: categoría por slug + nombre desde expand */}
+              {animal.categoriaNombre && animal.categoriaSlug && (
                 <>
                   <span style={{ color: T.inkGhost }}>/</span>
                   <Link
-                    href={`/ganado?categoria=${encodeURIComponent(animal.categoria)}`}
+                    href={`/ganado/categoria/${animal.categoriaSlug}`}
                     className="capitalize"
                     style={{ color: T.inkSoft }}
                   >
-                    {animal.categoria}
+                    {animal.categoriaNombre}
                   </Link>
                 </>
               )}
@@ -861,7 +861,6 @@ export default function GanadoDetalle() {
                     </>
                   )}
 
-                  {/* Badges */}
                   <div className="absolute top-3 right-3 flex gap-1.5 flex-wrap justify-end">
                     {animal.nuevo && <Badge variant="new" label="Nuevo" />}
                     {animal.destacado && (
@@ -873,7 +872,6 @@ export default function GanadoDetalle() {
                   </div>
                 </div>
 
-                {/* Thumbnails */}
                 {imageUrls.length > 1 && (
                   <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                     {imageUrls.map((url, index) => (
@@ -910,8 +908,9 @@ export default function GanadoDetalle() {
 
                 <div>
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {animal.categoria && (
-                      <Badge variant="category" label={animal.categoria} />
+                    {/* ✅ Cambio: categoriaNombre desde expand */}
+                    {animal.categoriaNombre && (
+                      <Badge variant="category" label={animal.categoriaNombre} />
                     )}
                     {animal.raza && <Badge variant="sex" label={animal.raza} />}
                     {animal.sexo && <Badge variant="sex" label={animal.sexo} />}
@@ -1416,7 +1415,8 @@ export default function GanadoDetalle() {
             <section className="max-w-[1280px] mx-auto px-6 md:px-14 pb-16 md:pb-24">
               <div className="flex items-end justify-between gap-4 mb-6">
                 <div>
-                  <SectionLabel>Más ganado en {animal.categoria}</SectionLabel>
+                  {/* ✅ Cambio: categoriaNombre + link por slug */}
+                  <SectionLabel>Más ganado en {animal.categoriaNombre}</SectionLabel>
                   <p
                     className="text-[13px]"
                     style={{ color: T.inkSoft, fontWeight: 450 }}
@@ -1425,7 +1425,7 @@ export default function GanadoDetalle() {
                   </p>
                 </div>
                 <Link
-                  href={`/ganado?categoria=${encodeURIComponent(animal.categoria)}`}
+                  href={`/ganado/categoria/${animal.categoriaSlug}`}
                   className="text-[12px] uppercase tracking-[0.18em] flex items-center gap-1"
                   style={{ color: T.accent, fontWeight: 500 }}
                 >
@@ -1641,12 +1641,13 @@ function GanadoRelacionadoCard({ animal }) {
           {animal.nombre}
         </h3>
 
-        {animal.categoria && (
+        {/* ✅ Cambio: categoriaNombre en vez de categoria */}
+        {animal.categoriaNombre && (
           <p
             className="text-[10.5px] uppercase tracking-[0.15em] truncate"
             style={{ color: T.inkFaint, fontWeight: 500 }}
           >
-            {animal.categoria}
+            {animal.categoriaNombre}
           </p>
         )}
 

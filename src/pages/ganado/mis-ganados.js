@@ -217,7 +217,8 @@ function GanadoAdminCard({ animal }) {
             </div>
 
             <div className="flex items-center gap-2 text-[11.5px] flex-wrap">
-              {animal.categoria && (
+              {/* ✅ CAMBIO: categoriaNombre desde expand */}
+              {animal.categoriaNombre && (
                 <span
                   className="px-2 py-0.5"
                   style={{
@@ -230,7 +231,7 @@ function GanadoAdminCard({ animal }) {
                     fontSize: '9.5px',
                   }}
                 >
-                  {animal.categoria}
+                  {animal.categoriaNombre}
                 </span>
               )}
               {animal.raza && (
@@ -530,7 +531,7 @@ function CharacteristicPill({ icon: Icon, label, highlight = false }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function MisGanadosPage() {
   const router = useRouter();
@@ -540,7 +541,8 @@ export default function MisGanadosPage() {
   const [ganados, setGanados] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filtroCategoria, setFiltroCategoria] = useState('todas');
+  // ✅ CAMBIO: filtroCategoria → filtroCategoriaId
+  const [filtroCategoriaId, setFiltroCategoriaId] = useState('todas');
   const [filtroEstado, setFiltroEstado] = useState('todas');
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
@@ -553,10 +555,11 @@ export default function MisGanadosPage() {
       setLoading(true);
       setError(null);
 
+      // ✅ CAMBIO: añadir categoriaId al expand
       const records = await pb.collection('ganado').getFullList({
-        filter: `usuarioId = "${user.id}"`,
+        filter: `userId  = "${user.id}"`,
         sort: '-created',
-        expand: 'municipioId,localidadId',
+        expand: 'categoriaId,municipioId,localidadId',
       });
 
       const ganadosData = records.map((g) => {
@@ -574,7 +577,10 @@ export default function MisGanadosPage() {
           id: g.id,
           nombre: g.nombre || '',
           descripcion: g.descripcion || '',
-          categoria: g.categoria || '',
+          // ✅ CAMBIO: mapping de categoría por relation
+          categoriaId: g.categoriaId || null,
+          categoriaNombre: g.expand?.categoriaId?.nombre || '',
+          categoriaSlug: g.expand?.categoriaId?.slug || '',
           raza: g.raza || '',
           sexo: g.sexo || '',
           edadMeses: g.edadMeses || 0,
@@ -628,16 +634,28 @@ export default function MisGanadosPage() {
     return { total, activos, destacados, visitasTotales };
   }, [ganados]);
 
+  // ✅ CAMBIO: ahora devuelve [{id, nombre}] usando Map (sin 'todas')
   const categoriasDisponibles = useMemo(() => {
-    const set = new Set(ganados.map((g) => g.categoria).filter(Boolean));
-    return ['todas', ...Array.from(set).sort()];
+    const map = new Map();
+    ganados.forEach((g) => {
+      if (g.categoriaId) {
+        map.set(g.categoriaId, {
+          id: g.categoriaId,
+          nombre: g.categoriaNombre || 'Sin categoría',
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) =>
+      a.nombre.localeCompare(b.nombre)
+    );
   }, [ganados]);
 
   const ganadosFiltrados = useMemo(() => {
     let result = ganados;
 
-    if (filtroCategoria !== 'todas') {
-      result = result.filter((g) => g.categoria === filtroCategoria);
+    // ✅ CAMBIO: filtro por categoriaId
+    if (filtroCategoriaId !== 'todas') {
+      result = result.filter((g) => g.categoriaId === filtroCategoriaId);
     }
 
     if (filtroEstado === 'activos') {
@@ -652,16 +670,17 @@ export default function MisGanadosPage() {
 
     if (searchTerm.trim()) {
       const s = searchTerm.toLowerCase();
+      // ✅ CAMBIO: buscar por categoriaNombre
       result = result.filter(
         (g) =>
           g.nombre.toLowerCase().includes(s) ||
-          g.categoria.toLowerCase().includes(s) ||
+          g.categoriaNombre.toLowerCase().includes(s) ||
           g.raza.toLowerCase().includes(s)
       );
     }
 
     return result;
-  }, [ganados, filtroCategoria, filtroEstado, searchTerm]);
+  }, [ganados, filtroCategoriaId, filtroEstado, searchTerm]);
 
   const totalPages = Math.ceil(ganadosFiltrados.length / itemsPerPage);
   const paginatedGanados = useMemo(() => {
@@ -669,9 +688,10 @@ export default function MisGanadosPage() {
     return ganadosFiltrados.slice(start, start + itemsPerPage);
   }, [ganadosFiltrados, currentPage]);
 
+  // ✅ CAMBIO: deps con filtroCategoriaId
   useEffect(() => {
     setCurrentPage(1);
-  }, [filtroCategoria, filtroEstado, searchTerm]);
+  }, [filtroCategoriaId, filtroEstado, searchTerm]);
 
   const notifications = [
     { id: 1, title: '¡Nuevo ganado disponible!', description: 'Descubre lo nuevo esta semana', time: 'Hace 2 horas', read: false },
@@ -993,15 +1013,21 @@ export default function MisGanadosPage() {
           </section>
 
           {/* ─── Filtros categoría ────────────────────────── */}
-          {categoriasDisponibles.length > 1 && (
+          {/* ✅ CAMBIO: pills con {id, nombre} + pill "Todas" separada */}
+          {categoriasDisponibles.length > 0 && (
             <section className="mb-8">
               <div className="flex flex-wrap gap-2">
+                <CategoryPill
+                  label="Todas las categorías"
+                  active={filtroCategoriaId === 'todas'}
+                  onClick={() => setFiltroCategoriaId('todas')}
+                />
                 {categoriasDisponibles.map((cat) => (
                   <CategoryPill
-                    key={cat}
-                    label={cat === 'todas' ? 'Todas las categorías' : cat}
-                    active={filtroCategoria === cat}
-                    onClick={() => setFiltroCategoria(cat)}
+                    key={cat.id}
+                    label={cat.nombre}
+                    active={filtroCategoriaId === cat.id}
+                    onClick={() => setFiltroCategoriaId(cat.id)}
                   />
                 ))}
               </div>
@@ -1027,8 +1053,9 @@ export default function MisGanadosPage() {
                 className="text-[15px] mb-1"
                 style={{ color: T.ink, fontWeight: 500 }}
               >
+                {/* ✅ CAMBIO: filtroCategoriaId */}
                 {searchTerm ||
-                filtroCategoria !== 'todas' ||
+                filtroCategoriaId !== 'todas' ||
                 filtroEstado !== 'todas'
                   ? 'No se encontró ganado'
                   : 'No tienes ganado publicado'}
@@ -1037,8 +1064,9 @@ export default function MisGanadosPage() {
                 className="text-[13px] max-w-md mb-6"
                 style={{ color: T.inkSoft, fontWeight: 450 }}
               >
+                {/* ✅ CAMBIO: filtroCategoriaId */}
                 {searchTerm ||
-                filtroCategoria !== 'todas' ||
+                filtroCategoriaId !== 'todas' ||
                 filtroEstado !== 'todas'
                   ? 'Cambia los filtros para ver otros animales.'
                   : 'Publica tu primer animal y empieza a vender al contado.'}

@@ -79,6 +79,10 @@ export default function AdminProductosPage() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [creatingCategory, setCreatingCategory] = useState(false);
 
+  // ✅ NUEVOS: imágenes existentes (filenames) y por eliminar
+  const [imagenesExistentes, setImagenesExistentes] = useState([]);
+  const [imagenesAEliminar, setImagenesAEliminar] = useState([]);
+
   // ✅ Cálculo automático de enganche y semanas
   const [autoCalcular, setAutoCalcular] = useState(true);
   const [enganchePorcentaje, setEnganchePorcentaje] = useState(25);
@@ -207,14 +211,19 @@ export default function AdminProductosPage() {
 
     if (name === 'imagenes') {
       const fileList = Array.from(files);
-      setFormData({ ...formData, imagenes: fileList });
-      const previews = [];
-      fileList.forEach(file => {
+
+      // ✅ CAMBIO: acumular con las nuevas existentes en formData
+      const acumuladas = [...(formData.imagenes || []), ...fileList];
+      setFormData({ ...formData, imagenes: acumuladas });
+
+      // ✅ CAMBIO: agregar previews al final (no reemplazar)
+      const nuevasPreviews = [];
+      fileList.forEach((file) => {
         const reader = new FileReader();
         reader.onloadend = () => {
-          previews.push(reader.result);
-          if (previews.length === fileList.length) {
-            setImagePreviews(previews);
+          nuevasPreviews.push(reader.result);
+          if (nuevasPreviews.length === fileList.length) {
+            setImagePreviews((prev) => [...prev, ...nuevasPreviews]);
           }
         };
         reader.readAsDataURL(file);
@@ -309,6 +318,9 @@ export default function AdminProductosPage() {
     setImagePreviews([]);
     setShowNewCategory(false);
     setNewCategoryName('');
+    // ✅ NUEVO
+    setImagenesExistentes([]);
+    setImagenesAEliminar([]);
   };
 
   const handleEdit = (producto) => {
@@ -332,12 +344,13 @@ export default function AdminProductosPage() {
     });
     setImagePreview(producto.imagen || null);
 
-    if (producto.imagenes && Array.isArray(producto.imagenes) && producto.imagenes.length > 0) {
-      const urls = producto.imagenes.map(img => pb.files.getURL(producto, img));
-      setImagePreviews(urls);
-    } else {
-      setImagePreviews([]);
-    }
+    // ✅ CAMBIO: usar imagenesUrls (URLs) y producto.imagenes (filenames)
+    const urls = Array.isArray(producto.imagenesUrls) ? producto.imagenesUrls : [];
+    const nombres = Array.isArray(producto.imagenes) ? producto.imagenes : [];
+
+    setImagePreviews(urls);
+    setImagenesExistentes(nombres);
+    setImagenesAEliminar([]);
 
     setShowModal(true);
   };
@@ -387,7 +400,10 @@ export default function AdminProductosPage() {
         activo: formData.activo,
         nuevo: formData.nuevo,
         imagen: formData.imagen,
-        imagenes: formData.imagenes
+        // ✅ NUEVOS: existentes + nuevas + a eliminar
+        imagenes: formData.imagenes || [],
+        imagenesExistentes: imagenesExistentes,
+        imagenesAEliminar: imagenesAEliminar,
       };
 
       if (editingProduct) {
@@ -1172,11 +1188,66 @@ export default function AdminProductosPage() {
                         <p className="text-xs text-gray-400">Máximo 5 archivos, 5MB c/u</p>
                       </label>
                     </div>
+
+                    {/* ✅ CAMBIO: previews con botón X para eliminar */}
                     {imagePreviews.length > 0 && (
                       <div className="mt-3 flex gap-2 flex-wrap">
-                        {imagePreviews.map((preview, idx) => (
-                          <img key={idx} src={preview} alt={`Adicional ${idx + 1}`} className="w-16 h-16 object-cover rounded-lg border border-gray-200" />
-                        ))}
+                        {imagePreviews.map((preview, idx) => {
+                          const esExistente = idx < imagenesExistentes.length;
+                          const filenameExistente = esExistente ? imagenesExistentes[idx] : null;
+
+                          return (
+                            <div key={idx} className="relative">
+                              <img
+                                src={preview}
+                                alt={`Adicional ${idx + 1}`}
+                                className="w-16 h-16 object-cover rounded-lg border border-gray-200"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (esExistente) {
+                                    setImagenesAEliminar((prev) => [...prev, filenameExistente]);
+                                    setImagenesExistentes((prev) =>
+                                      prev.filter((f) => f !== filenameExistente)
+                                    );
+                                  } else {
+                                    const idxNuevo = idx - imagenesExistentes.length;
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      imagenes: (prev.imagenes || []).filter(
+                                        (_, i) => i !== idxNuevo
+                                      ),
+                                    }));
+                                  }
+                                  setImagePreviews((prev) =>
+                                    prev.filter((_, i) => i !== idx)
+                                  );
+                                }}
+                                className="absolute flex items-center justify-center"
+                                style={{
+                                  top: '-6px',
+                                  right: '-6px',
+                                  width: '22px',
+                                  height: '22px',
+                                  background: '#DC2626',
+                                  borderRadius: '50%',
+                                  color: '#FFFFFF',
+                                  border: '2px solid #FAFAF9',
+                                  cursor: 'pointer',
+                                }}
+                                aria-label="Eliminar imagen"
+                                title={
+                                  esExistente
+                                    ? 'Eliminar del servidor al guardar'
+                                    : 'Quitar de los nuevos'
+                                }
+                              >
+                                <X size={10} strokeWidth={2.5} />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

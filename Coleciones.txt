@@ -367,15 +367,33 @@ API Rules
 
 ```
 
+13. contactos_servicios
+┌──────────────────────────────────────────────────────┐
+│ contactos_servicios                                   │
+├──────────────────────────────────────────────────────┤
+│ servicioId   Relation → servicios     Required, max:1 │
+│ userId       Relation → users         Optional, max:1 │
+│ tipo         Select                   Required        │
+│              └─ whatsapp, telefono, email             │
+│ created      Autodate (auto)                          │
+└──────────────────────────────────────────────────────┘
+
+List:   @request.auth.role = "admin" || servicioId.userId = @request.auth.id
+View:   @request.auth.role = "admin" || servicioId.userId = @request.auth.id
+Create: @request.auth.id = "" || @request.auth.id != ""    // Público
+Update: @request.auth.role = "admin"
+Delete: @request.auth.role = "admin"
+
 ---
 13. empleos
 
 Campo	Tipo	Descripción
 userId	relation(users)	requerido
-tipo	select	ofrezco_trabajo, busco_trabajo
+tipo	select	ofrezco_empleo, busco_empleo
 titulo	text	requerido
 descripcion	text	requerido
-categoria	select: ventas, atencion_cliente, administracion, tecnologia, oficios, construccion, limpieza, cocina, chofer, repartidor, informal, otro  
+categoriaId     relation categorias
+administracion, tecnologia, oficios, construccion, limpieza, cocina, chofer, repartidor, informal, otro  
 salario	text	-
 horario	text	-
 ubicacion	text	-
@@ -557,6 +575,23 @@ UpdateRule: userId = @request.auth.id
 DeleteRule: userId = @request.auth.id
 ---
 
+📦 ### 19.  favoritos_servicios (NUEVA)
+┌──────────────────────────────────────────────────────┐
+│ favoritos_servicios                                   │
+├──────────────────────────────────────────────────────┤
+│ userId      Relation → users          Required, max:1 │
+│ servicioId  Relation → servicios      Required, max:1 │
+│ created     Autodate (auto)                           │
+│ updated     Autodate (auto)                           │
+└──────────────────────────────────────────────────────┘
+
+List:   userId = @request.auth.id || @request.auth.role = "admin"
+View:   userId = @request.auth.id || @request.auth.role = "admin"
+Create: @request.auth.id != ""
+Update: userId = @request.auth.id
+Delete: userId = @request.auth.id || @request.auth.role = "admin"
+
+
 ```
 📦 ### 20. frutas (NUEVA)
 Nombre	Tipo	Requerido	Opciones
@@ -640,13 +675,11 @@ userId	Relation → users	❌ No	Max 1
 
 
 Valores del Select sexo
-text
 Macho
 Hembra
 Mixto
 
 Valores del Select unidad
-text
 cabeza
 lote
 kg
@@ -655,7 +688,7 @@ docena
 Reglas de API
 Regla	Valor
 List	activo = true
-View	``
+View	activo = true
 Create	@request.auth.id != ""
 Update	@request.auth.id = userId || @request.auth.role = "admin"
 Delete	@request.auth.id = userId || @request.auth.role = "admin"
@@ -955,8 +988,8 @@ DeleteRule: @request.auth.role = "admin"
 ```
 ### 32 prestadores (NUEVA)
 Sirve para los 3 servicios propios con prestadores (moto, food, encargos).
-
 Campo	Tipo	Notas
+
 userId	relation → users	required
 tipo	select: moto, food, encargos	required
 nombre	text	required
@@ -1102,6 +1135,27 @@ UpdateRule: userId = @request.auth.id
 DeleteRule: @request.auth.role = "admin" || userId = @request.auth.id
 ```
 
+### 39. `reviews_servicios`
+
+┌──────────────────────────────────────────────────────┐
+│ reviews_servicios                                     │
+├──────────────────────────────────────────────────────┤
+│ servicioId   Relation → servicios     Required, max:1 │
+│ userId       Relation → users         Required, max:1 │
+│ calificacion Number                   1-5, required   │
+│ comentario   Text (multiline)         Optional        │
+│ activo       Bool                     Default: true   │
+│ created      Autodate (auto)                          │
+│ updated      Autodate (auto)                          │
+└──────────────────────────────────────────────────────┘
+
+List:   activo = true
+View:   activo = true
+Create: @request.auth.id != ""
+Update: userId = @request.auth.id
+Delete: @request.auth.role = "admin" || userId = @request.auth.id
+
+
 ---
 ### 39.sectores
 {
@@ -1145,7 +1199,7 @@ municipioId	Relation → municipios	❌ No	Max 1
 localidadId	Relation → localidades	❌ No	Max 1
 sectorId	Relation → sectores	❌ No	Max 1
 codigoPostal	Text	❌ No	—
-latitud	Number	❌ No	—
+latitud	        Number	❌ No	—
 longitud	Number	❌ No	—
 servicios	Text	❌ No	Otros servicios separados por coma
 precioBase	Number	❌ No	Para servicios MD
@@ -1163,7 +1217,6 @@ calificacion	Number	❌ No	Default: 0
 totalComentarios	Number	❌ No	Default: 0
 
 Valores del Select estadoActivacion
-text
 activo
 pendiente_activacion
 inactivo
@@ -1588,6 +1641,21 @@ UpdateRule: @request.auth.role = "admin"
 DeleteRule: @request.auth.role = "admin"
 ```
 
+#51 visitas_servicios   
+
+┌──────────────────────────────────────────────────────┐
+│ visitas_servicios                                     │
+├──────────────────────────────────────────────────────┤
+│ servicioId   Relation → servicios     Required, max:1 │
+│ userId       Relation → users         Optional, max:1 │
+│ created      Autodate (auto)                          │
+└──────────────────────────────────────────────────────┘
+
+List:   @request.auth.role = "admin" || servicioId.userId = @request.auth.id
+View:   @request.auth.role = "admin" || servicioId.userId = @request.auth.id
+Create: @request.auth.id = "" || @request.auth.id != ""    // Público
+Update: @request.auth.role = "admin"
+Delete: @request.auth.role = "admin"
 ---
 
 ## 📊 RESUMEN FINAL: 

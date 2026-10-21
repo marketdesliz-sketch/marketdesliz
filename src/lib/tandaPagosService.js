@@ -88,7 +88,7 @@ export async function registrarPrimeraParte(tandaMemberId, monto = null, cobrado
 
     // Crear notificación de confirmación
     await pb.collection(COLLECTIONS.NOTIFICACIONES).create({
-      usuarioId: member.userId,
+      userId : member.userId,
       tipoUsuario: 'cliente',
       tipo: 'sistema',
       titulo: '💰 Primera parte de tanda registrada',
@@ -104,7 +104,7 @@ export async function registrarPrimeraParte(tandaMemberId, monto = null, cobrado
 
     await pb.collection(COLLECTIONS.RECORDATORIOS_PAGOS).create({
       tandaMemberId: tandaMemberId,
-      usuarioId: member.userId,
+      userId: member.userId,
       tipo: 'segunda_parte',
       fechaRecordatorio: fechaRecordatorio.toISOString(),
       enviado: false,
@@ -186,7 +186,7 @@ export async function registrarSegundaParte(tandaMemberId, monto = null, cobrado
 
     // Crear notificación de finalización
     await pb.collection(COLLECTIONS.NOTIFICACIONES).create({
-      usuarioId: member.userId,
+      userId : member.userId,
       tipoUsuario: 'cliente',
       tipo: 'sistema',
       titulo: '🎉 Pago de tanda completado',
@@ -240,7 +240,7 @@ export async function crearRecordatorioSegundaParte(tandaMemberId, fechaRecordat
 
     const recordatorio = await pb.collection(COLLECTIONS.RECORDATORIOS_PAGOS).create({
       tandaMemberId: tandaMemberId,
-      usuarioId: member.userId,
+      userId: member.userId,
       tipo: 'segunda_parte',
       fechaRecordatorio: fecha.toISOString(),
       enviado: false,
@@ -284,7 +284,7 @@ export async function enviarRecordatorioManual(tandaMemberId) {
 
     // Crear notificación
     const notificacion = await pb.collection(COLLECTIONS.NOTIFICACIONES).create({
-      usuarioId: member.userId,
+      userId: member.userId,
       tipoUsuario: 'cliente',
       tipo: 'recordatorio',
       titulo: '📢 Recordatorio de pago',
@@ -297,7 +297,7 @@ export async function enviarRecordatorioManual(tandaMemberId) {
     // Marcar recordatorio como enviado
     await pb.collection(COLLECTIONS.RECORDATORIOS_PAGOS).create({
       tandaMemberId: tandaMemberId,
-      usuarioId: member.userId,
+      userId: member.userId,
       tipo: 'segunda_parte',
       fechaRecordatorio: new Date().toISOString(),
       enviado: true,
@@ -428,7 +428,7 @@ export async function getPagosByTanda(tandaId) {
       todosLosPagos.push(...pagos.map(p => ({
         ...p,
         posicion: miembro.posicion,
-        usuarioId: miembro.userId
+        userId: miembro.userId
       })));
     }
 

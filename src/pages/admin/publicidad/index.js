@@ -17,13 +17,14 @@ import { formatMoney } from '../../../lib/utils';
 const ITEMS_PER_PAGE = 12;
 
 // ─── Estados posibles ────────────────────────────────────────────────────
+// ✅ CAMBIO: valores alineados con el schema (femeninos)
 const ESTADOS = [
   { value: 'pendiente',   label: 'Pendiente',   color: 'bg-yellow-100 text-yellow-700', icon: Clock },
-  { value: 'contactado',  label: 'Contactado',  color: 'bg-blue-100 text-blue-700',     icon: Send },
-  { value: 'aprobado',    label: 'Aprobado',    color: 'bg-indigo-100 text-indigo-700', icon: CheckCircle },
+  { value: 'contactada',  label: 'Contactada',  color: 'bg-blue-100 text-blue-700',     icon: Send },
+  { value: 'aprobada',    label: 'Aprobada',    color: 'bg-indigo-100 text-indigo-700', icon: CheckCircle },
   { value: 'activo',      label: 'Activo',      color: 'bg-green-100 text-green-700',   icon: Zap },
-  { value: 'completado',  label: 'Completado',  color: 'bg-emerald-100 text-emerald-700', icon: Award },
-  { value: 'cancelado',   label: 'Cancelado',   color: 'bg-red-100 text-red-700',       icon: XCircle },
+  { value: 'completada',  label: 'Completada',  color: 'bg-emerald-100 text-emerald-700', icon: Award },
+  { value: 'cancelada',   label: 'Cancelada',   color: 'bg-red-100 text-red-700',       icon: XCircle },
 ];
 
 // ─── Planes posibles (con colores) ───────────────────────────────────────
@@ -67,32 +68,27 @@ const formatDate = (date) => {
 export default function AdminPublicidadPage() {
   const router = useRouter();
 
-  // ─── Estados ─────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [solicitudes, setSolicitudes] = useState([]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState('');
 
-  // Filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [filtroPlan, setFiltroPlan] = useState('todos');
   const [filtroPendientes, setFiltroPendientes] = useState(false);
   const [ordenar, setOrdenar] = useState('-created');
 
-  // Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  // Modales
   const [showVerModal, setShowVerModal] = useState(false);
   const [showEditarModal, setShowEditarModal] = useState(false);
   const [showEliminarModal, setShowEliminarModal] = useState(false);
   const [selectedSolicitud, setSelectedSolicitud] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Form de edición
   const [editForm, setEditForm] = useState({
     estado: 'pendiente',
     notasAdmin: '',
@@ -143,7 +139,6 @@ export default function AdminPublicidadPage() {
     }
   }, [searchTerm, filtroEstado, filtroPlan, filtroPendientes, ordenar, currentPage]);
 
-  // Verificar admin + cargar
   useEffect(() => {
     const verificarAdmin = () => {
       if (!pb.authStore.isValid || pb.authStore.model?.role !== 'admin') {
@@ -157,12 +152,10 @@ export default function AdminPublicidadPage() {
     }
   }, [cargarSolicitudes, router]);
 
-  // Reset página al cambiar filtros
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filtroEstado, filtroPlan, filtroPendientes, ordenar]);
 
-  // Auto-clear mensajes
   useEffect(() => {
     if (success) {
       const t = setTimeout(() => setSuccess(''), 4000);
@@ -181,9 +174,11 @@ export default function AdminPublicidadPage() {
   const stats = useMemo(() => {
     const total = totalItems;
     const pendientes = solicitudes.filter((s) => s.estado === 'pendiente').length;
-    const activos = solicitudes.filter((s) => s.estado === 'activo' || s.estado === 'aprobado').length;
+    // ✅ CAMBIO: 'aprobado' → 'aprobada'
+    const activos = solicitudes.filter((s) => s.estado === 'activo' || s.estado === 'aprobada').length;
+    // ✅ CAMBIO: 'completado' → 'completada'
     const ingresos = solicitudes
-      .filter((s) => ['activo', 'completado'].includes(s.estado))
+      .filter((s) => ['activo', 'completada'].includes(s.estado))
       .reduce((sum, s) => sum + (Number(s.precio) || 0), 0);
     return { total, pendientes, activos, ingresos };
   }, [solicitudes, totalItems]);
@@ -331,10 +326,8 @@ export default function AdminPublicidadPage() {
     window.open(`https://wa.me/${num}?text=${msg}`, '_blank');
   };
 
-  // ─── Paginación ─────────────────────────────────────────────────────
   const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
 
-  // ─── Loading ────────────────────────────────────────────────────────
   if (loading) {
     return (
       <AdminLayoutMinimal>
@@ -355,9 +348,7 @@ export default function AdminPublicidadPage() {
       <AdminLayoutMinimal>
         <div className="max-w-[1400px] mx-auto w-full">
 
-          {/* ═══════════════════════════════════════════════════════ */}
-          {/* HEADER                                                   */}
-          {/* ═══════════════════════════════════════════════════════ */}
+          {/* ═══ HEADER ═══ */}
           <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 bg-pink-500/10 rounded-2xl flex items-center justify-center">
@@ -403,9 +394,7 @@ export default function AdminPublicidadPage() {
             </div>
           </div>
 
-          {/* ═══════════════════════════════════════════════════════ */}
-          {/* ALERTAS                                                  */}
-          {/* ═══════════════════════════════════════════════════════ */}
+          {/* ═══ ALERTAS ═══ */}
           {success && (
             <div className="mb-6 p-4 bg-green-50 rounded-xl border border-green-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -429,9 +418,7 @@ export default function AdminPublicidadPage() {
             </div>
           )}
 
-          {/* ═══════════════════════════════════════════════════════ */}
-          {/* STATS                                                    */}
-          {/* ═══════════════════════════════════════════════════════ */}
+          {/* ═══ STATS ═══ */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
               <div className="flex items-center justify-between mb-3">
@@ -480,9 +467,7 @@ export default function AdminPublicidadPage() {
             </div>
           </div>
 
-          {/* ═══════════════════════════════════════════════════════ */}
-          {/* FILTROS                                                  */}
-          {/* ═══════════════════════════════════════════════════════ */}
+          {/* ═══ FILTROS ═══ */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm mb-6">
             <div className="flex flex-col md:flex-row gap-3 flex-wrap">
               <div className="flex-1 min-w-[200px]">
@@ -554,9 +539,7 @@ export default function AdminPublicidadPage() {
             </div>
           </div>
 
-          {/* ═══════════════════════════════════════════════════════ */}
-          {/* GRID                                                     */}
-          {/* ═══════════════════════════════════════════════════════ */}
+          {/* ═══ GRID ═══ */}
           {solicitudes.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center shadow-sm">
               <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -590,7 +573,6 @@ export default function AdminPublicidadPage() {
                         !activo ? 'opacity-60' : ''
                       }`}
                     >
-                      {/* Header card con plan gradient */}
                       <div className={`relative p-5 bg-gradient-to-br ${planInfo.color.replace('text-', 'from-').replace('700', '50')} to-white`}>
                         <div className="flex items-start justify-between mb-3">
                           <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${planInfo.color}`}>
@@ -598,7 +580,6 @@ export default function AdminPublicidadPage() {
                           </div>
 
                           <div className="flex gap-1.5">
-                            {/* Toggle activo */}
                             <button
                               onClick={() => handleToggleActivo(sol)}
                               className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md transition ${
@@ -613,13 +594,11 @@ export default function AdminPublicidadPage() {
                           </div>
                         </div>
 
-                        {/* Estado badge */}
                         <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm ${estadoInfo.color}`}>
                           <EstadoIcon size={10} />
                           {estadoInfo.label}
                         </span>
 
-                        {/* Plan + precio */}
                         <div className="mt-4 flex items-baseline justify-between">
                           <span className="text-2xl font-black text-gray-900 leading-none">
                             {formatMoney(sol.precio)}
@@ -630,9 +609,7 @@ export default function AdminPublicidadPage() {
                         </div>
                       </div>
 
-                      {/* Body */}
                       <div className="p-4 space-y-3">
-                        {/* Negocio */}
                         <div>
                           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">
                             <Building2 size={10} />
@@ -643,7 +620,6 @@ export default function AdminPublicidadPage() {
                           </p>
                         </div>
 
-                        {/* Cliente */}
                         <div>
                           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">
                             <User size={10} />
@@ -652,7 +628,6 @@ export default function AdminPublicidadPage() {
                           <p className="text-xs text-gray-700 line-clamp-1">{sol.nombre}</p>
                         </div>
 
-                        {/* Objetivo */}
                         {sol.objetivo && (
                           <div>
                             <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">
@@ -665,7 +640,6 @@ export default function AdminPublicidadPage() {
                           </div>
                         )}
 
-                        {/* Duración */}
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Calendar size={11} />
                           <span>{sol.duracion || '—'}</span>
@@ -673,7 +647,6 @@ export default function AdminPublicidadPage() {
                           <span>{formatDate(sol.created)}</span>
                         </div>
 
-                        {/* Acciones */}
                         <div className="flex gap-2 pt-3 border-t border-gray-100">
                           <button
                             onClick={() => abrirVer(sol)}
@@ -703,9 +676,6 @@ export default function AdminPublicidadPage() {
                 })}
               </div>
 
-              {/* ═══════════════════════════════════════════════════ */}
-              {/* PAGINACIÓN                                         */}
-              {/* ═══════════════════════════════════════════════════ */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-center gap-2 mt-8">
                   <button
@@ -732,9 +702,7 @@ export default function AdminPublicidadPage() {
         </div>
       </AdminLayoutMinimal>
 
-      {/* ═══════════════════════════════════════════════════════ */}
-      {/* MODAL VER                                                */}
-      {/* ═══════════════════════════════════════════════════════ */}
+      {/* ═══ MODAL VER ═══ */}
       {showVerModal && selectedSolicitud && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
@@ -744,7 +712,6 @@ export default function AdminPublicidadPage() {
             className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header gradient por plan */}
             <div className={`relative p-6 bg-gradient-to-br ${
               (PLANES.find((p) => p.value === selectedSolicitud.plan) || PLANES[0]).color.replace('text-', 'from-').replace('700', '50')
             } to-white`}>
@@ -776,7 +743,6 @@ export default function AdminPublicidadPage() {
             </div>
 
             <div className="p-6">
-              {/* Negocio */}
               <h2 className="text-xl font-bold text-gray-900 mb-1">
                 {selectedSolicitud.negocio}
               </h2>
@@ -784,7 +750,6 @@ export default function AdminPublicidadPage() {
                 Solicitado {formatDate(selectedSolicitud.created)}
               </p>
 
-              {/* Estado */}
               <div className="mb-5">
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${
                   (ESTADOS.find((e) => e.value === selectedSolicitud.estado) || ESTADOS[0]).color
@@ -797,7 +762,6 @@ export default function AdminPublicidadPage() {
                 </span>
               </div>
 
-              {/* Info list */}
               <div className="space-y-3 pt-3 border-t border-gray-100">
                 <div className="flex items-center gap-3 text-sm">
                   <User size={16} className="text-pink-500 shrink-0" />
@@ -827,7 +791,6 @@ export default function AdminPublicidadPage() {
                 </div>
               </div>
 
-              {/* Detalles */}
               {selectedSolicitud.detalles && (
                 <div className="mt-4 p-4 bg-gray-50 rounded-2xl">
                   <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2">
@@ -839,7 +802,6 @@ export default function AdminPublicidadPage() {
                 </div>
               )}
 
-              {/* Notas admin */}
               {selectedSolicitud.notasAdmin && (
                 <div className="mt-4 p-4 bg-pink-50 border border-pink-500/20 rounded-2xl">
                   <p className="text-[10px] uppercase tracking-wider font-bold text-pink-600 mb-2">
@@ -851,7 +813,6 @@ export default function AdminPublicidadPage() {
                 </div>
               )}
 
-              {/* Fechas */}
               {(selectedSolicitud.fechaInicio || selectedSolicitud.fechaFin) && (
                 <div className="mt-4 grid grid-cols-2 gap-3">
                   {selectedSolicitud.fechaInicio && (
@@ -877,7 +838,6 @@ export default function AdminPublicidadPage() {
                 </div>
               )}
 
-              {/* Acciones */}
               <div className="mt-6 flex flex-wrap gap-2">
                 {selectedSolicitud.telefono && (
                   <button
@@ -908,9 +868,7 @@ export default function AdminPublicidadPage() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════ */}
-      {/* MODAL EDITAR                                             */}
-      {/* ═══════════════════════════════════════════════════════ */}
+      {/* ═══ MODAL EDITAR ═══ */}
       {showEditarModal && selectedSolicitud && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
@@ -920,7 +878,6 @@ export default function AdminPublicidadPage() {
             className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header modal */}
             <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center z-10">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-pink-500/10 rounded-lg flex items-center justify-center">
@@ -936,9 +893,7 @@ export default function AdminPublicidadPage() {
               </button>
             </div>
 
-            {/* Formulario */}
             <div className="p-6 space-y-4">
-              {/* Info del cliente (solo lectura) */}
               <div className="p-4 bg-gray-50 rounded-2xl space-y-1">
                 <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2">
                   Cliente
@@ -950,7 +905,6 @@ export default function AdminPublicidadPage() {
                 )}
               </div>
 
-              {/* Estado */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                   Estado
@@ -966,7 +920,6 @@ export default function AdminPublicidadPage() {
                 </select>
               </div>
 
-              {/* Precio */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                   Precio final (MXN)
@@ -983,7 +936,6 @@ export default function AdminPublicidadPage() {
                 </div>
               </div>
 
-              {/* Fechas */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
@@ -1021,7 +973,6 @@ export default function AdminPublicidadPage() {
                 />
               </div>
 
-              {/* Notas admin */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                   Notas internas
@@ -1035,7 +986,6 @@ export default function AdminPublicidadPage() {
                 />
               </div>
 
-              {/* Toggle activo */}
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                 <div>
                   <p className="text-sm font-bold text-gray-900">Solicitud activa</p>
@@ -1060,7 +1010,6 @@ export default function AdminPublicidadPage() {
                 </button>
               </div>
 
-              {/* Botones */}
               <div className="flex gap-3 pt-4 border-t border-gray-100">
                 <button
                   onClick={handleGuardar}
@@ -1087,9 +1036,7 @@ export default function AdminPublicidadPage() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════ */}
-      {/* MODAL ELIMINAR                                           */}
-      {/* ═══════════════════════════════════════════════════════ */}
+      {/* ═══ MODAL ELIMINAR ═══ */}
       {showEliminarModal && selectedSolicitud && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"

@@ -1,5 +1,5 @@
 // src/pages/servicios/index.js
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -19,6 +19,7 @@ import {
   getMunicipios,
   getLocalidades,
   getEstados,
+  getServicioCategorias,
 } from '../../lib/serviciosService';
 import { useAuth } from '../../contexts/AuthContext';
 import { T } from '../../lib/tokens';
@@ -29,12 +30,14 @@ import BackButton from '../../components/BackButton';
 
 // ═════════════════════════════════════════════════════════════════════════
 // IMAGEN EDITORIAL DEL HERO · LOCAL
-// Guárdala en: /public/images/servicios-hero.jpg
 // ═════════════════════════════════════════════════════════════════════════
 const HERO_IMAGE = '/images/servicios-hero.jpg';
 
+// Máximo de categorías padre visibles en la home
+const MAX_CATEGORIAS_VISIBLES = 11;
+
 // ─────────────────────────────────────────────────────────────────────────
-// SERVICIOS OFICIALES MARKETDESLIZ · SIN CAMBIOS (datos)
+// SERVICIOS OFICIALES MARKETDESLIZ · SIN CAMBIOS
 // ─────────────────────────────────────────────────────────────────────────
 const SERVICIOS_MARKETDESLIZ = [
   {
@@ -42,40 +45,35 @@ const SERVICIOS_MARKETDESLIZ = [
     nombre: 'Deslizmoto Express',
     descripcion: 'Entregas rápidas en moto',
     icon: Bike,
-    categoria: 'Entrega en moto',
   },
   {
     key: 'deslizfood',
     nombre: 'DeslizFood',
     descripcion: 'Comida a domicilio',
     icon: Utensils,
-    categoria: 'Catering',
   },
   {
     key: 'encargos-vip',
     nombre: 'Encargos VIP',
     descripcion: 'Mandados y encargos personalizados',
     icon: Crown,
-    categoria: 'Mandados',
   },
   {
     key: 'publicidad',
     nombre: 'Publicidad',
     descripcion: 'Promociona tu negocio',
     icon: Megaphone,
-    categoria: 'Publicidad',
   },
   {
     key: 'invitaciones',
     nombre: 'Invitaciones Digitales',
     descripcion: 'Tarjetas e invitaciones personalizadas',
     icon: Sparkles,
-    categoria: 'Invitaciones',
   },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────
-// Mapa de íconos por categoría · SIN CAMBIOS
+// Mapa de íconos por nombre/slug de categoría · SIN CAMBIOS
 // ─────────────────────────────────────────────────────────────────────────
 const iconMap = {
   'todos': Wrench,
@@ -127,32 +125,20 @@ const iconMap = {
   'más categorías': Grid2X2,
 };
 
-const getIcon = (nombre) => {
-  const lower = nombre?.toLowerCase().trim() || '';
-  if (iconMap[lower]) return iconMap[lower];
+const getIcon = (nombre, slug) => {
+  const key1 = (slug || '').toLowerCase().trim();
+  const key2 = (nombre || '').toLowerCase().trim();
+
+  if (iconMap[key1]) return iconMap[key1];
+  if (iconMap[key2]) return iconMap[key2];
+
   for (const [key, icon] of Object.entries(iconMap)) {
-    if (lower.includes(key) || key.includes(lower)) return icon;
+    if (key1.includes(key) || key.includes(key1)) return icon;
+    if (key2.includes(key) || key.includes(key2)) return icon;
   }
+
   return Tag;
 };
-
-// ─────────────────────────────────────────────────────────────────────────
-// Categorías básicas · SIN CAMBIOS
-// ─────────────────────────────────────────────────────────────────────────
-const CATEGORIAS_BASICAS = [
-  { nombre: 'Plomería', icon: Droplet },
-  { nombre: 'Electricidad', icon: Zap },
-  { nombre: 'Albañilería', icon: Hammer },
-  { nombre: 'Pintura', icon: Paintbrush },
-  { nombre: 'Carpintería', icon: Sofa },
-  { nombre: 'Limpieza', icon: Sparkles },
-  { nombre: 'Jardinería', icon: TreePine },
-  { nombre: 'Cerrajería', icon: Key },
-  { nombre: 'Aire acondicionado', icon: Wind },
-  { nombre: 'Computación', icon: Laptop },
-  { nombre: 'Belleza', icon: Scissors },
-  { nombre: 'Más categorías', icon: Grid2X2, esMasCategorias: true },
-];
 
 // ─────────────────────────────────────────────────────────────────────────
 // TextLink
@@ -176,6 +162,9 @@ function TextLink({ label, onClick }) {
         textTransform: 'uppercase',
         WebkitTapHighlightColor: 'transparent',
         transitionTimingFunction: T.ease,
+        background: 'transparent',
+        border: 'none',
+        cursor: 'pointer',
       }}
     >
       {label} →
@@ -205,6 +194,7 @@ function CategoryCard({ cat, isActive, onClick }) {
         borderRadius: '8px',
         transitionTimingFunction: T.ease,
         WebkitTapHighlightColor: 'transparent',
+        cursor: 'pointer',
       }}
     >
       <div
@@ -302,7 +292,6 @@ function ServiciosMDDropdown({ onSelect, onVerTodos }) {
               '0 1px 2px rgba(15,15,15,0.04), 0 12px 40px rgba(15,15,15,0.10)',
           }}
         >
-          {/* Header */}
           <div
             className="px-4 py-3"
             style={{ borderBottom: `1px solid ${T.line}` }}
@@ -321,7 +310,6 @@ function ServiciosMDDropdown({ onSelect, onVerTodos }) {
             </p>
           </div>
 
-          {/* Lista */}
           <div>
             {SERVICIOS_MARKETDESLIZ.map((servicio, idx) => {
               const Icon = servicio.icon;
@@ -340,7 +328,6 @@ function ServiciosMDDropdown({ onSelect, onVerTodos }) {
             })}
           </div>
 
-          {/* Footer */}
           <button
             onClick={() => {
               setOpen(false);
@@ -431,7 +418,7 @@ function ServiceDropdownItem({ servicio, Icon, isFirst, onClick }) {
 // ─────────────────────────────────────────────────────────────────────────
 function ServicioMDCard({ servicio, onClick }) {
   const [hover, setHover] = useState(false);
-  const IconComponent = getIcon(servicio.categoria || servicio.nombre);
+  const IconComponent = getIcon(servicio.categoriaNombre || servicio.nombre, servicio.categoriaSlug);
 
   return (
     <div
@@ -551,7 +538,7 @@ function ServicioMDCard({ servicio, onClick }) {
 // ─────────────────────────────────────────────────────────────────────────
 function ServicioCard({ servicio, isFavorite, onToggleFavorite, onClick }) {
   const [hover, setHover] = useState(false);
-  const IconComponent = getIcon(servicio.categoria || servicio.nombre);
+  const IconComponent = getIcon(servicio.categoriaNombre || servicio.nombre, servicio.categoriaSlug);
 
   return (
     <div
@@ -655,12 +642,12 @@ function ServicioCard({ servicio, isFavorite, onToggleFavorite, onClick }) {
           {servicio.nombre}
         </h3>
 
-        {servicio.categoria && (
+        {servicio.categoriaNombre && (
           <p
             className="text-[11px] uppercase tracking-[0.15em] truncate"
             style={{ color: T.inkFaint, fontWeight: 500 }}
           >
-            {servicio.categoria}
+            {servicio.categoriaNombre}
           </p>
         )}
 
@@ -720,17 +707,19 @@ export default function ServiciosPage() {
 
   const {
     search = '',
-    categoria = 'todos',
+    categoriaId = 'todos',
     municipio = '',
     localidad = '',
   } = router.query;
 
   const [servicios, setServicios] = useState([]);
   const [serviciosMD, setServiciosMD] = useState([]);
+  const [categoriasList, setCategoriasList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState([]);
   const [searchTerm, setSearchTerm] = useState(search || '');
-  const [selectedCategoria, setSelectedCategoria] = useState(categoria || 'todos');
+  // ✅ CAMBIO: selectedCategoria (nombre) → selectedCategoriaId (ID)
+  const [selectedCategoriaId, setSelectedCategoriaId] = useState(categoriaId || 'todos');
   const [selectedMunicipio, setSelectedMunicipio] = useState(municipio || '');
   const [selectedLocalidad, setSelectedLocalidad] = useState(localidad || '');
   const [showFilters, setShowFilters] = useState(false);
@@ -741,6 +730,19 @@ export default function ServiciosPage() {
   useEffect(() => {
     const saved = localStorage.getItem('servicios_favorites');
     if (saved) setFavorites(JSON.parse(saved));
+  }, []);
+
+  // ✅ NUEVO: Cargar categorías dinámicas del vertical "servicios"
+  useEffect(() => {
+    const cargarCategorias = async () => {
+      try {
+        const cats = await getServicioCategorias();
+        setCategoriasList(cats);
+      } catch (err) {
+        console.error('Error cargando categorías:', err);
+      }
+    };
+    cargarCategorias();
   }, []);
 
   // Municipios
@@ -781,7 +783,8 @@ export default function ServiciosPage() {
           page: 1,
           perPage: 100,
           search: searchTerm,
-          categoria: selectedCategoria,
+          // ✅ CAMBIO: categoriaId (ID) en vez de categoria (nombre)
+          categoriaId: selectedCategoriaId,
           municipioId: selectedMunicipio,
           localidadId: selectedLocalidad,
           sort: 'orden, nombre',
@@ -797,7 +800,7 @@ export default function ServiciosPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, selectedCategoria, selectedMunicipio, selectedLocalidad]);
+  }, [searchTerm, selectedCategoriaId, selectedMunicipio, selectedLocalidad]);
 
   useEffect(() => {
     cargarDatos();
@@ -806,7 +809,7 @@ export default function ServiciosPage() {
   const actualizarURL = (overrides = {}) => {
     const next = {
       search: searchTerm,
-      categoria: selectedCategoria !== 'todos' ? selectedCategoria : undefined,
+      categoriaId: selectedCategoriaId !== 'todos' ? selectedCategoriaId : undefined,
       municipio: selectedMunicipio || undefined,
       localidad: selectedLocalidad || undefined,
       ...overrides,
@@ -822,10 +825,11 @@ export default function ServiciosPage() {
 
   const handleSearchChange = (e) => setSearchTerm(e.target.value);
 
-  const handleCategoriaClick = (cat) => {
-    const nueva = cat === selectedCategoria ? 'todos' : cat;
-    setSelectedCategoria(nueva);
-    actualizarURL({ categoria: nueva !== 'todos' ? nueva : undefined });
+  // ✅ CAMBIO: ahora recibe categoriaId
+  const handleCategoriaClick = (catId) => {
+    const nueva = catId === selectedCategoriaId ? 'todos' : catId;
+    setSelectedCategoriaId(nueva);
+    actualizarURL({ categoriaId: nueva !== 'todos' ? nueva : undefined });
   };
 
   const handleMunicipioChange = (e) => {
@@ -856,13 +860,9 @@ export default function ServiciosPage() {
       return;
     }
 
-    setSelectedCategoria(servicioMD.categoria);
-    actualizarURL({ categoria: servicioMD.categoria });
-    setTimeout(() => {
-      document
-        .getElementById('servicios-grid')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
+    // Fallback: no hay ruta específica para este servicio MD
+    // (todas las keys actuales tienen ruta, este path es por seguridad)
+    console.warn('Sin ruta específica para servicio MD:', servicioMD.key);
   };
 
   const toggleFavorite = (id) => {
@@ -874,6 +874,38 @@ export default function ServiciosPage() {
   };
 
   const navigateTo = (path) => router.push(path);
+
+  // ✅ CAMBIO: solo padres visibles
+  const categoriasParaMostrar = useMemo(() => {
+    const padres = categoriasList.filter((c) => c.depth === 0);
+    const tieneMas = padres.length > MAX_CATEGORIAS_VISIBLES;
+    const visibles = tieneMas ? padres.slice(0, MAX_CATEGORIAS_VISIBLES) : padres;
+
+    const conIcono = visibles.map((cat) => ({
+      id: cat.id,
+      nombre: cat.nombre,
+      slug: cat.slug,
+      icon: getIcon(cat.nombre, cat.slug),
+    }));
+
+    if (tieneMas) {
+      conIcono.push({
+        id: '__mas__',
+        nombre: 'Más categorías',
+        slug: 'mas-categorias',
+        icon: Grid2X2,
+        esMasCategorias: true,
+      });
+    }
+
+    return conIcono;
+  }, [categoriasList]);
+
+  // ✅ CAMBIO: nombre de categoría activa para títulos
+  const categoriaActivaNombre = useMemo(() => {
+    if (selectedCategoriaId === 'todos') return null;
+    return categoriasList.find((c) => c.id === selectedCategoriaId)?.nombre || null;
+  }, [categoriasList, selectedCategoriaId]);
 
   const notifications = [
     { id: 1, title: '¡Nuevos servicios!', description: 'Descubre lo nuevo esta semana', time: 'Hace 2 horas', read: false },
@@ -957,7 +989,6 @@ export default function ServiciosPage() {
               Encuentra profesionales verificados para tu hogar o negocio.
             </p>
 
-            {/* Dropdown Servicios MarketDesliz */}
             <div className="mt-8">
               <ServiciosMDDropdown
                 onSelect={handleServicioMDClick}
@@ -1001,43 +1032,45 @@ export default function ServiciosPage() {
           )}
 
           {/* ─── CATEGORÍAS POPULARES ──────────────────────── */}
-          <section className="max-w-[1280px] mx-auto px-6 md:px-14 pb-16 md:pb-20">
-            <div className="flex items-baseline justify-between mb-5">
-              <h2
-                className="text-[10px] md:text-[11px] uppercase tracking-[0.22em]"
-                style={{
-                  color: T.inkFaint,
-                  fontWeight: 500,
-                  fontFeatureSettings: '"ss01"',
-                }}
-              >
-                Categorías populares
-              </h2>
-              {selectedCategoria !== 'todos' && (
-                <TextLink
-                  label="Ver todas"
-                  onClick={() => handleCategoriaClick('todos')}
-                />
-              )}
-            </div>
-
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
-              {CATEGORIAS_BASICAS.map((cat) => {
-                const isActive = selectedCategoria === cat.nombre;
-                const handleClick = cat.esMasCategorias
-                  ? () => navigateTo('/servicios')
-                  : () => handleCategoriaClick(cat.nombre);
-                return (
-                  <CategoryCard
-                    key={cat.nombre}
-                    cat={cat}
-                    isActive={isActive}
-                    onClick={handleClick}
+          {categoriasParaMostrar.length > 0 && (
+            <section className="max-w-[1280px] mx-auto px-6 md:px-14 pb-16 md:pb-20">
+              <div className="flex items-baseline justify-between mb-5">
+                <h2
+                  className="text-[10px] md:text-[11px] uppercase tracking-[0.22em]"
+                  style={{
+                    color: T.inkFaint,
+                    fontWeight: 500,
+                    fontFeatureSettings: '"ss01"',
+                  }}
+                >
+                  Categorías populares
+                </h2>
+                {selectedCategoriaId !== 'todos' && (
+                  <TextLink
+                    label="Ver todas"
+                    onClick={() => handleCategoriaClick('todos')}
                   />
-                );
-              })}
-            </div>
-          </section>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
+                {categoriasParaMostrar.map((cat) => {
+                  const isActive = cat.id === selectedCategoriaId;
+                  const handleClick = cat.esMasCategorias
+                    ? () => navigateTo('/servicios')
+                    : () => handleCategoriaClick(cat.id);
+                  return (
+                    <CategoryCard
+                      key={cat.id}
+                      cat={cat}
+                      isActive={isActive}
+                      onClick={handleClick}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {/* ─── FILTROS ───────────────────────────────────── */}
           <section className="max-w-[1280px] mx-auto px-6 md:px-14 pb-10">
@@ -1256,8 +1289,8 @@ export default function ServiciosPage() {
                   fontFeatureSettings: '"ss01"',
                 }}
               >
-                {selectedCategoria !== 'todos'
-                  ? `Servicios · ${selectedCategoria}`
+                {categoriaActivaNombre
+                  ? `Servicios · ${categoriaActivaNombre}`
                   : 'Servicios destacados'}
               </h2>
               <TextLink label="Ver todos" onClick={() => navigateTo('/servicios')} />

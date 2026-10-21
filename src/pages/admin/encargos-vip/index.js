@@ -28,7 +28,6 @@ const CONFIG = {
   placeholderBusqueda: 'Buscar por nombre, vehículo, placa o zona...',
   rutaNuevo: '/admin/encargos-vip/nuevo',
   archivoExport: 'encargos-vip',
-  // Clases Tailwind completas (JIT-safe)
   accentBg: 'bg-purple-500',
   accentBgHover: 'hover:bg-purple-600',
   accentBgSoft: 'bg-purple-50',
@@ -60,42 +59,38 @@ const formatPhone = (phone) => {
 export default function AdminEncargosVipPage() {
   const router = useRouter();
 
-  // ─── Estados ─────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [encargados, setEncargados] = useState([]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState('');
 
-  // Filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [filtroDestacados, setFiltroDestacados] = useState(false);
   const [ordenar, setOrdenar] = useState('-rating');
 
-  // Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
-  // Modales
   const [showVerModal, setShowVerModal] = useState(false);
   const [showEditarModal, setShowEditarModal] = useState(false);
   const [showEliminarModal, setShowEliminarModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Form de edición
+  // ✅ CAMBIO: nombres de campo alineados con la colección `prestadores`
   const [editForm, setEditForm] = useState({
     nombre: '',
     vehiculo: '',
     placa: '',
     rating: 5,
-    servicios: 0,
+    serviciosRealizados: 0,
     experiencia: '',
     satisfaccion: 100,
     estado: 'disponible',
     zona: '',
-    comision: 5,
+    comisionPorcentaje: 5,
     activo: true,
   });
 
@@ -119,7 +114,8 @@ export default function AdminEncargosVipPage() {
       }
       const filter = filters.join(' && ');
 
-      const result = await pb.collection('deslizmoto').getList(currentPage, ITEMS_PER_PAGE, {
+      // ✅ CAMBIO: colección deslizmoto → prestadores
+      const result = await pb.collection('prestadores').getList(currentPage, ITEMS_PER_PAGE, {
         filter,
         sort: ordenar,
         expand: 'userId',
@@ -136,7 +132,6 @@ export default function AdminEncargosVipPage() {
     }
   }, [searchTerm, filtroEstado, filtroDestacados, ordenar, currentPage]);
 
-  // Cargar al montar y cuando cambian filtros
   useEffect(() => {
     const verificarAdmin = () => {
       if (!pb.authStore.isValid || pb.authStore.model?.role !== 'admin') {
@@ -151,12 +146,10 @@ export default function AdminEncargosVipPage() {
     }
   }, [cargarEncargados, router]);
 
-  // Reset página al cambiar filtros
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filtroEstado, filtroDestacados, ordenar]);
 
-  // Auto-clear mensajes
   useEffect(() => {
     if (success) {
       const t = setTimeout(() => setSuccess(''), 4000);
@@ -191,17 +184,18 @@ export default function AdminEncargosVipPage() {
 
   const abrirEditar = (item) => {
     setSelectedItem(item);
+    // ✅ CAMBIO: item.servicios → item.serviciosRealizados, item.comision → item.comisionPorcentaje
     setEditForm({
       nombre: item.nombre || '',
       vehiculo: item.vehiculo || '',
       placa: item.placa || '',
       rating: Number(item.rating) || 5,
-      servicios: Number(item.servicios) || 0,
+      serviciosRealizados: Number(item.serviciosRealizados) || 0,
       experiencia: item.experiencia || '',
       satisfaccion: Number(item.satisfaccion) || 100,
       estado: item.estado || 'disponible',
       zona: item.zona || '',
-      comision: Number(item.comision) ?? 5,
+      comisionPorcentaje: Number(item.comisionPorcentaje) ?? 5,
       activo: item.activo !== false,
     });
     setShowEditarModal(true);
@@ -232,17 +226,18 @@ export default function AdminEncargosVipPage() {
     setError(null);
 
     try {
-      await pb.collection('deslizmoto').update(selectedItem.id, {
+      // ✅ CAMBIO: colección + campos nuevos
+      await pb.collection('prestadores').update(selectedItem.id, {
         nombre: editForm.nombre.trim(),
         vehiculo: editForm.vehiculo.trim(),
         placa: editForm.placa.trim(),
         rating: Number(editForm.rating),
-        servicios: Number(editForm.servicios),
+        serviciosRealizados: Number(editForm.serviciosRealizados),
         experiencia: editForm.experiencia.trim(),
         satisfaccion: Number(editForm.satisfaccion),
         estado: editForm.estado,
         zona: editForm.zona.trim(),
-        comision: Number(editForm.comision),
+        comisionPorcentaje: Number(editForm.comisionPorcentaje),
         activo: editForm.activo,
       });
 
@@ -261,7 +256,8 @@ export default function AdminEncargosVipPage() {
   const handleToggleActivo = async (item) => {
     try {
       const nuevo = !(item.activo !== false);
-      await pb.collection('deslizmoto').update(item.id, { activo: nuevo });
+      // ✅ CAMBIO: colección
+      await pb.collection('prestadores').update(item.id, { activo: nuevo });
       setSuccess(`${CONFIG.labelItem.charAt(0).toUpperCase() + CONFIG.labelItem.slice(1)} ${nuevo ? 'activado' : 'desactivado'}`);
       await cargarEncargados(true);
     } catch (err) {
@@ -275,7 +271,8 @@ export default function AdminEncargosVipPage() {
     if (!selectedItem) return;
     setSaving(true);
     try {
-      await pb.collection('deslizmoto').delete(selectedItem.id);
+      // ✅ CAMBIO: colección
+      await pb.collection('prestadores').delete(selectedItem.id);
       setSuccess(`✅ ${CONFIG.labelItem.charAt(0).toUpperCase() + CONFIG.labelItem.slice(1)} "${selectedItem.nombre}" eliminado`);
       setShowEliminarModal(false);
       await cargarEncargados(true);
@@ -289,17 +286,18 @@ export default function AdminEncargosVipPage() {
 
   // ─── Exportar a Excel (CSV) ─────────────────────────────────────────
   const handleExportar = () => {
-    const headers = ['Nombre', 'Vehículo', 'Placa', 'Zona', 'Rating', 'Encargos', 'Satisfacción', 'Estado', 'Comisión', 'Activo'];
+    // ✅ CAMBIO: headers + campos nuevos
+    const headers = ['Nombre', 'Vehículo', 'Placa', 'Zona', 'Rating', 'Encargos realizados', 'Satisfacción', 'Estado', 'Comisión %', 'Activo'];
     const rows = encargados.map((d) => [
       d.nombre || '',
       d.vehiculo || '',
       d.placa || '',
       d.zona || '',
       d.rating || '',
-      d.servicios || '',
+      d.serviciosRealizados || '',
       `${d.satisfaccion || 0}%`,
       d.estado || '',
-      `${d.comision || 0}%`,
+      `${d.comisionPorcentaje || 0}%`,
       d.activo !== false ? 'Sí' : 'No',
     ]);
 
@@ -340,9 +338,7 @@ export default function AdminEncargosVipPage() {
       <AdminLayoutMinimal>
         <div className="max-w-[1400px] mx-auto w-full">
 
-          {/* ═══════════════════════════════════════════════════════════
-              HEADER
-          ═══════════════════════════════════════════════════════════ */}
+          {/* ═══ HEADER ═══ */}
           <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
             <div className="flex items-center gap-3">
               <div className={`w-11 h-11 ${CONFIG.accentBgSoft} rounded-2xl flex items-center justify-center`}>
@@ -388,9 +384,7 @@ export default function AdminEncargosVipPage() {
             </div>
           </div>
 
-          {/* ═══════════════════════════════════════════════════════════
-              ALERTAS
-          ═══════════════════════════════════════════════════════════ */}
+          {/* ═══ ALERTAS ═══ */}
           {success && (
             <div className="mb-6 p-4 bg-green-50 rounded-xl border border-green-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -414,9 +408,7 @@ export default function AdminEncargosVipPage() {
             </div>
           )}
 
-          {/* ═══════════════════════════════════════════════════════════
-              STATS
-          ═══════════════════════════════════════════════════════════ */}
+          {/* ═══ STATS ═══ */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
               <div className="flex items-center justify-between mb-3">
@@ -463,9 +455,7 @@ export default function AdminEncargosVipPage() {
             </div>
           </div>
 
-          {/* ═══════════════════════════════════════════════════════════
-              FILTROS
-          ═══════════════════════════════════════════════════════════ */}
+          {/* ═══ FILTROS ═══ */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm mb-6">
             <div className="flex flex-col md:flex-row gap-3 flex-wrap">
               <div className="flex-1 min-w-[200px]">
@@ -498,7 +488,8 @@ export default function AdminEncargosVipPage() {
                 className={`px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:ring-2 ${CONFIG.accentRing} focus:border-transparent`}
               >
                 <option value="-rating">Mejor rating</option>
-                <option value="-servicios">Más encargos</option>
+                {/* ✅ CAMBIO: -servicios → -serviciosRealizados */}
+                <option value="-serviciosRealizados">Más encargos</option>
                 <option value="-created">Más recientes</option>
                 <option value="nombre">Nombre (A-Z)</option>
               </select>
@@ -524,9 +515,7 @@ export default function AdminEncargosVipPage() {
             </div>
           </div>
 
-          {/* ═══════════════════════════════════════════════════════════
-              GRID DE ENCARGADOS
-          ═══════════════════════════════════════════════════════════ */}
+          {/* ═══ GRID ═══ */}
           {encargados.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-14 text-center shadow-sm">
               <div className={`w-16 h-16 ${CONFIG.accentBgSoft} rounded-2xl flex items-center justify-center mx-auto mb-4`}>
@@ -569,7 +558,6 @@ export default function AdminEncargosVipPage() {
                         !activo ? 'opacity-60' : ''
                       }`}
                     >
-                      {/* Imagen */}
                       <div className={`relative aspect-square ${CONFIG.accentBgSoft} overflow-hidden`}>
                         {avatarUrl ? (
                           <img
@@ -584,7 +572,6 @@ export default function AdminEncargosVipPage() {
                           </div>
                         )}
 
-                        {/* Badges superiores */}
                         <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap">
                           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm ${estadoInfo.color}`}>
                             <EstadoIcon size={10} />
@@ -592,7 +579,6 @@ export default function AdminEncargosVipPage() {
                           </span>
                         </div>
 
-                        {/* Toggle activo */}
                         <div className="absolute top-3 right-3">
                           <button
                             onClick={() => handleToggleActivo(item)}
@@ -607,7 +593,6 @@ export default function AdminEncargosVipPage() {
                           </button>
                         </div>
 
-                        {/* Badge destacado */}
                         {item.destacado && (
                           <div className="absolute bottom-3 left-3 bg-yellow-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm">
                             <Award size={10} /> Destacado
@@ -615,7 +600,6 @@ export default function AdminEncargosVipPage() {
                         )}
                       </div>
 
-                      {/* Info */}
                       <div className="p-4">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <h3 className="font-bold text-gray-900 text-sm line-clamp-1">
@@ -632,11 +616,11 @@ export default function AdminEncargosVipPage() {
                           {item.placa && ` · ${item.placa}`}
                         </p>
 
-                        {/* Mini stats */}
                         <div className="grid grid-cols-3 gap-2 mb-3">
                           <div className="text-center">
                             <p className="text-[9px] text-muted-foreground uppercase font-bold">{CONFIG.labelServicios}</p>
-                            <p className="text-sm font-bold text-gray-900">{item.servicios || 0}</p>
+                            {/* ✅ CAMBIO: item.servicios → item.serviciosRealizados */}
+                            <p className="text-sm font-bold text-gray-900">{item.serviciosRealizados || 0}</p>
                           </div>
                           <div className="text-center border-l border-r border-gray-100">
                             <p className="text-[9px] text-muted-foreground uppercase font-bold">Registro</p>
@@ -655,7 +639,6 @@ export default function AdminEncargosVipPage() {
                           </div>
                         )}
 
-                        {/* Acciones */}
                         <div className="flex gap-2">
                           <button
                             onClick={() => abrirVer(item)}
@@ -685,9 +668,6 @@ export default function AdminEncargosVipPage() {
                 })}
               </div>
 
-              {/* ═══════════════════════════════════════════════════════
-                  PAGINACIÓN
-              ═══════════════════════════════════════════════════════ */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-center gap-2 mt-8">
                   <button
@@ -714,9 +694,7 @@ export default function AdminEncargosVipPage() {
         </div>
       </AdminLayoutMinimal>
 
-      {/* ═══════════════════════════════════════════════════════════
-          MODAL VER
-      ═══════════════════════════════════════════════════════════ */}
+      {/* ═══ MODAL VER ═══ */}
       {showVerModal && selectedItem && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
@@ -726,7 +704,6 @@ export default function AdminEncargosVipPage() {
             className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div className={`relative h-48 ${CONFIG.accentBgSoft}`}>
               {selectedItem.fotoPerfil ? (
                 <img
@@ -761,11 +738,11 @@ export default function AdminEncargosVipPage() {
                 </div>
               </div>
 
-              {/* Stats grid */}
               <div className="grid grid-cols-3 gap-3 mb-5">
                 <div className="bg-gray-50 rounded-xl p-3 text-center">
                   <ShieldCheck size={16} className={`${CONFIG.accentText} mx-auto mb-1`} />
-                  <p className="text-lg font-bold text-gray-900">{selectedItem.servicios || 0}</p>
+                  {/* ✅ CAMBIO: selectedItem.servicios → selectedItem.serviciosRealizados */}
+                  <p className="text-lg font-bold text-gray-900">{selectedItem.serviciosRealizados || 0}</p>
                   <p className="text-[9px] text-gray-400 uppercase font-bold">{CONFIG.labelServicios}</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3 text-center">
@@ -780,7 +757,6 @@ export default function AdminEncargosVipPage() {
                 </div>
               </div>
 
-              {/* Info list */}
               <div className="space-y-3 pt-3 border-t border-gray-100">
                 {selectedItem.zona && (
                   <div className="flex items-center gap-3 text-sm">
@@ -802,7 +778,8 @@ export default function AdminEncargosVipPage() {
                 )}
                 <div className="flex items-center gap-3 text-sm">
                   <Percent size={16} className={`${CONFIG.accentText} shrink-0`} />
-                  <span className="text-gray-700">Comisión: {selectedItem.comision ?? 5}%</span>
+                  {/* ✅ CAMBIO: selectedItem.comision → selectedItem.comisionPorcentaje */}
+                  <span className="text-gray-700">Comisión: {selectedItem.comisionPorcentaje ?? 5}%</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                   <BadgeCheck size={16} className={`${CONFIG.accentText} shrink-0`} />
@@ -834,9 +811,7 @@ export default function AdminEncargosVipPage() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════
-          MODAL EDITAR
-      ═══════════════════════════════════════════════════════════ */}
+      {/* ═══ MODAL EDITAR ═══ */}
       {showEditarModal && selectedItem && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
@@ -846,7 +821,6 @@ export default function AdminEncargosVipPage() {
             className="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header modal */}
             <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <div className={`w-8 h-8 ${CONFIG.accentBgSoft} rounded-lg flex items-center justify-center`}>
@@ -864,7 +838,6 @@ export default function AdminEncargosVipPage() {
               </button>
             </div>
 
-            {/* Formulario */}
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -935,11 +908,12 @@ export default function AdminEncargosVipPage() {
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
                     {CONFIG.labelServicios}
                   </label>
+                  {/* ✅ CAMBIO: editForm.servicios → editForm.serviciosRealizados */}
                   <input
                     type="number"
                     min="0"
-                    value={editForm.servicios}
-                    onChange={(e) => setEditForm({ ...editForm, servicios: e.target.value })}
+                    value={editForm.serviciosRealizados}
+                    onChange={(e) => setEditForm({ ...editForm, serviciosRealizados: e.target.value })}
                     className={`w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 ${CONFIG.accentRing} focus:border-transparent`}
                   />
                 </div>
@@ -992,18 +966,18 @@ export default function AdminEncargosVipPage() {
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
                     Comisión (%)
                   </label>
+                  {/* ✅ CAMBIO: editForm.comision → editForm.comisionPorcentaje */}
                   <input
                     type="number"
                     min="0"
                     max="100"
-                    value={editForm.comision}
-                    onChange={(e) => setEditForm({ ...editForm, comision: e.target.value })}
+                    value={editForm.comisionPorcentaje}
+                    onChange={(e) => setEditForm({ ...editForm, comisionPorcentaje: e.target.value })}
                     className={`w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 ${CONFIG.accentRing} focus:border-transparent`}
                   />
                 </div>
               </div>
 
-              {/* Toggle activo */}
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
                 <div>
                   <p className="text-sm font-bold text-gray-900">
@@ -1030,7 +1004,6 @@ export default function AdminEncargosVipPage() {
                 </button>
               </div>
 
-              {/* Botones */}
               <div className="flex gap-3 pt-4 border-t border-gray-100">
                 <button
                   onClick={handleGuardar}
@@ -1057,9 +1030,7 @@ export default function AdminEncargosVipPage() {
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════
-          MODAL ELIMINAR
-      ═══════════════════════════════════════════════════════════ */}
+      {/* ═══ MODAL ELIMINAR ═══ */}
       {showEliminarModal && selectedItem && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"

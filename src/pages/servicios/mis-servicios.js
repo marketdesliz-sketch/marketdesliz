@@ -17,7 +17,7 @@ import Footer from '../../components/Footer';
 import BackButton from '../../components/BackButton';
 
 // ─────────────────────────────────────────────────────────────────────────
-// Helpers · SIN CAMBIOS
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────
 const formatPhone = (phone) => {
   if (!phone) return '';
@@ -198,7 +198,8 @@ function ServicioAdminCard({ servicio }) {
             </div>
 
             <div className="flex items-center gap-2 text-[11.5px] flex-wrap">
-              {servicio.categoria && (
+              {/* ✅ CAMBIO: categoriaNombre desde expand */}
+              {servicio.categoriaNombre && (
                 <span
                   className="px-2 py-0.5"
                   style={{
@@ -211,7 +212,7 @@ function ServicioAdminCard({ servicio }) {
                     fontSize: '9.5px',
                   }}
                 >
-                  {servicio.categoria}
+                  {servicio.categoriaNombre}
                 </span>
               )}
               {servicio.direccion && (
@@ -377,7 +378,7 @@ function ServicioAdminCard({ servicio }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function MisServiciosPage() {
   const router = useRouter();
@@ -397,11 +398,10 @@ export default function MisServiciosPage() {
     try {
       setLoading(true);
       setError(null);
-
       const records = await pb.collection('servicios').getFullList({
-        filter: `usuarioId = "${user.id}"`,
+        filter: `userId = "${user.id}"`,
         sort: '-created',
-        expand: 'municipioId,localidadId',
+        expand: 'categoriaId,municipioId,localidadId',
       });
 
       const serviciosData = records.map((s) => {
@@ -419,7 +419,10 @@ export default function MisServiciosPage() {
           id: s.id,
           nombre: s.nombre || '',
           descripcion: s.descripcion || '',
-          categoria: s.categoria || '',
+          // ✅ CAMBIO: mapping de categoría por relation
+          categoriaId: s.categoriaId || null,
+          categoriaNombre: s.expand?.categoriaId?.nombre || '',
+          categoriaSlug: s.expand?.categoriaId?.slug || '',
           direccion: s.direccion || '',
           telefono: s.telefono || '',
           whatsapp: s.whatsapp || '',

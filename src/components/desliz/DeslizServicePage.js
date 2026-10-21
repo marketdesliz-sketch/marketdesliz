@@ -40,7 +40,7 @@ const COLOR_STYLES = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────
-// CONFIGURACIÓN POR TIPO · SIN CAMBIOS (solo imágenes locales)
+// CONFIGURACIÓN POR TIPO
 // ─────────────────────────────────────────────────────────────────────────
 const CONFIG = {
   moto: {
@@ -375,7 +375,7 @@ function PrestadorCard({ prestador, config, colors, onSelect }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página principal · lógica SIN CAMBIOS
+// Página principal
 // ─────────────────────────────────────────────────────────────────────────
 export default function DeslizServicePage({ tipo = 'moto' }) {
   const router = useRouter();
@@ -397,11 +397,12 @@ export default function DeslizServicePage({ tipo = 'moto' }) {
       setLoading(true);
       setError(null);
 
+      // ✅ CAMBIO: colección deslizmoto → prestadores + sort por serviciosRealizados
       const records = await pb
-        .collection('deslizmoto')
+        .collection('prestadores')
         .getFullList({
           filter: `tipo = "${config.categoria}" && activo = true`,
-          sort: '-rating,-servicios',
+          sort: '-rating,-serviciosRealizados',
           expand: 'userId',
         })
         .catch(() => []);
@@ -420,13 +421,15 @@ export default function DeslizServicePage({ tipo = 'moto' }) {
           vehiculo: r.vehiculo || '—',
           placa: r.placa || '',
           rating: Number(r.rating) || 5,
-          servicios: Number(r.servicios) || 0,
+          // ✅ CAMBIO: serviciosRealizados en DB → servicios local
+          servicios: Number(r.serviciosRealizados) || 0,
           experiencia: r.experiencia || 'Nuevo',
           satisfaccion: Number(r.satisfaccion) || 100,
           estado: r.estado || 'desconectado',
           zona: r.zona || '',
           avatar: avatarUrl,
-          comision: Number(r.comision) ?? 5,
+          // ✅ CAMBIO: comisionPorcentaje en DB → comision local
+          comision: Number(r.comisionPorcentaje) ?? 5,
         };
       });
 

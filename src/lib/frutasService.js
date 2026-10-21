@@ -39,7 +39,7 @@ function formatFruta(record) {
     visitas: record.visitas || 0,
     calificacion: record.calificacion || 0,
     totalComentarios: record.totalComentarios || 0,
-    usuarioId: record.usuarioId || null,
+    userId: record.userId || null,
     negocioId: record.negocioId || null,
     municipioId: record.municipioId || null,
     localidadId: record.localidadId || null,
@@ -90,7 +90,7 @@ export async function getFrutas({
     const result = await pb.collection('frutas').getList(page, perPage, {
       filter,
       sort,
-      expand: 'categoriaId,municipioId,localidadId,usuarioId',
+      expand: 'categoriaId,municipioId,localidadId,userId',
     });
 
     return {
@@ -115,7 +115,7 @@ export async function getFrutas({
 export async function getFrutaById(id) {
   try {
     const record = await pb.collection('frutas').getOne(id, {
-      expand: 'categoriaId,municipioId,localidadId,usuarioId',
+      expand: 'categoriaId,municipioId,localidadId,userId',
     });
     return formatFruta(record);
   } catch (error) {
@@ -142,7 +142,7 @@ export async function getFrutasTemporada(limit = 8) {
 export async function getFrutasByUsuario(userId) {
   try {
     const records = await pb.collection('frutas').getFullList({
-      filter: `usuarioId = "${userId}"`,
+      filter: `userId = "${userId}"`,
       sort: '-created',
       expand: 'categoriaId',
     });

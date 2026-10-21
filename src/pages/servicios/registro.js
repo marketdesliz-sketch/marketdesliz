@@ -13,6 +13,7 @@ import {
   getMunicipios,
   getLocalidades,
   getSectores,
+  getServicioCategorias,
 } from '../../lib/serviciosService';
 import { useAuth } from '../../contexts/AuthContext';
 import { T } from '../../lib/tokens';
@@ -22,7 +23,7 @@ import Footer from '../../components/Footer';
 import BackButton from '../../components/BackButton';
 
 // ─────────────────────────────────────────────────────────────────────────
-// Sub-componentes de formulario (idénticos a negocios/registro.js)
+// Sub-componentes de formulario
 // ─────────────────────────────────────────────────────────────────────────
 function FieldLabel({ children, required = false }) {
   return (
@@ -223,7 +224,7 @@ function FileInput({ onChange, multiple = false, accept = 'image/*' }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function RegistroServicioPage() {
   const router = useRouter();
@@ -235,7 +236,7 @@ export default function RegistroServicioPage() {
   const [error, setError] = useState('');
   const [servicioData, setServicioData] = useState({
     nombre: '',
-    categoria: '',
+    categoriaId: '',
     descripcion: '',
     direccion: '',
     telefono: '',
@@ -270,13 +271,37 @@ export default function RegistroServicioPage() {
   const [municipiosList, setMunicipiosList] = useState([]);
   const [localidadesList, setLocalidadesList] = useState([]);
   const [sectoresList, setSectoresList] = useState([]);
+  const [categoriasList, setCategoriasList] = useState([]);
 
+  // ─── Auth guard + bloqueo de admin ────────────────────
   useEffect(() => {
     if (authLoading) return;
+
+    // ✅ FIX SEGURIDAD: El admin NO puede usar este flujo público.
+    // Este formulario es exclusivo para proveedores externos (rol cliente/vendedor).
+    // Los admins crean servicios oficiales desde /admin/servicios.
+    if (user && user.role === 'admin') {
+      router.replace('/admin/servicios');
+      return;
+    }
+
     if (!user && step !== 'completado') {
       openLogin();
     }
-  }, [authLoading, user, step, openLogin]);
+  }, [authLoading, user, step, openLogin, router]);
+
+  // Cargar categorías del vertical "servicios"
+  useEffect(() => {
+    const cargarCategorias = async () => {
+      try {
+        const cats = await getServicioCategorias();
+        setCategoriasList(cats);
+      } catch (err) {
+        console.error('Error cargando categorías de servicios:', err);
+      }
+    };
+    cargarCategorias();
+  }, []);
 
   useEffect(() => {
     getEstados().then(setEstadosList).catch(() => {});
@@ -305,15 +330,6 @@ export default function RegistroServicioPage() {
       setSectoresList([]);
     }
   }, [servicioData.localidadId]);
-
-  const categorias = [
-    'Plomería', 'Electricidad', 'Albañilería', 'Pintura', 'Carpintería',
-    'Herrería', 'Jardinería', 'Limpieza', 'Aire acondicionado',
-    'Refrigeración', 'Cerrajería', 'Computación', 'Celulares',
-    'Belleza', 'Fotografía', 'Música', 'Eventos', 'Pastelería',
-    'Catering', 'Mudanzas', 'Mecánica', 'Veterinaria', 'Florería',
-    'Otro',
-  ];
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -352,7 +368,14 @@ export default function RegistroServicioPage() {
       openLogin();
       return;
     }
-    if (!servicioData.nombre || !servicioData.categoria || !servicioData.direccion) {
+
+    // ✅ Defensa adicional (por si el useEffect no alcanzó a redirigir)
+    if (user.role === 'admin') {
+      setError('Los administradores no pueden registrarse como proveedores. Usa el panel de admin.');
+      return;
+    }
+
+    if (!servicioData.nombre || !servicioData.categoriaId || !servicioData.direccion) {
       setError('Completa los campos obligatorios');
       return;
     }
@@ -379,7 +402,7 @@ export default function RegistroServicioPage() {
       formData.append('visitas', 0);
       formData.append('esMarketDesliz', false);
       formData.append('estadoActivacion', 'pendiente_activacion');
-      formData.append('usuarioId', user.id);
+      formData.append('userId', user.id);
 
       if (logoFile) formData.append('logo', logoFile);
       imagenesFiles.forEach((file) => formData.append('imagenes', file));
@@ -422,6 +445,35 @@ export default function RegistroServicioPage() {
                 style={{ color: T.inkFaint, fontWeight: 500 }}
               >
                 Verificando sesión
+              </p>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ✅ FIX SEGURIDAD: Admin no puede usar este flujo.
+  // Mientras redirige, mostramos una pantalla neutra en vez del formulario.
+  if (user && user.role === 'admin') {
+    return (
+      <>
+        <Head><title>Redirigiendo al panel | MarketDesliz</title></Head>
+        <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+          <TerminalBar mode="rotating" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <span
+                className="font-serif text-[32px] block mb-5 select-none"
+                style={{ color: T.inkGhost }}
+              >
+                ʃƪʃƪ
+              </span>
+              <p
+                className="text-[11px] uppercase tracking-[0.28em]"
+                style={{ color: T.inkFaint, fontWeight: 500 }}
+              >
+                Redirigiendo al panel
               </p>
             </div>
           </div>
@@ -516,7 +568,6 @@ export default function RegistroServicioPage() {
           {/* ─── PASO 1: Datos ───────────────────────────── */}
           {step === 'datos' && (
             <section className="max-w-[720px] mx-auto px-6 md:px-14 pt-16 md:pt-24 pb-24 w-full">
-              {/* Header */}
               <div className="mb-12">
                 <p
                   className="text-[10px] uppercase tracking-[0.28em] mb-6"
@@ -580,15 +631,29 @@ export default function RegistroServicioPage() {
                   <div>
                     <FieldLabel required>Categoría</FieldLabel>
                     <SelectField
-                      name="categoria"
-                      value={servicioData.categoria}
+                      name="categoriaId"
+                      value={servicioData.categoriaId}
                       onChange={handleInputChange}
                     >
                       <option value="">Selecciona una categoría</option>
-                      {categorias.map((cat) => (
-                        <option key={cat} value={cat}>{cat}</option>
+                      {categoriasList.map((cat) => (
+                        <option
+                          key={cat.id}
+                          value={cat.id}
+                          disabled={cat.esPadre && cat.tieneHijos}
+                        >
+                          {cat.esPadre ? cat.nombre : `└─ ${cat.nombre}`}
+                        </option>
                       ))}
                     </SelectField>
+                    {categoriasList.length === 0 && (
+                      <p
+                        className="text-[11px] mt-1.5"
+                        style={{ color: T.inkFaint, fontWeight: 450 }}
+                      >
+                        Cargando categorías…
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -985,7 +1050,6 @@ export default function RegistroServicioPage() {
                 </p>
               </div>
 
-              {/* Card informativa */}
               <div
                 className="p-6 md:p-8 mb-8"
                 style={{
@@ -1011,7 +1075,8 @@ export default function RegistroServicioPage() {
                       className="text-[15px] mt-1"
                       style={{ color: T.accent, fontWeight: 500 }}
                     >
-                      {servicioData.categoria}
+                      {categoriasList.find((c) => c.id === servicioData.categoriaId)?.nombre ||
+                        'tu categoría'}
                     </p>
                     <p
                       className="text-[12px] mt-2"
@@ -1056,7 +1121,6 @@ export default function RegistroServicioPage() {
                 </div>
               </div>
 
-              {/* CTAs */}
               <div className="flex flex-col gap-3">
                 <Link
                   href="/servicios"

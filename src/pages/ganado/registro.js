@@ -9,6 +9,7 @@ import {
   CreditCard, Lock,
 } from 'lucide-react';
 import pb from '../../lib/pocketbase';
+import { getGanadoCategorias } from '../../lib/ganadoService';
 import { useAuth } from '../../contexts/AuthContext';
 import { T } from '../../lib/tokens';
 import TerminalBar from '../../components/TerminalBar';
@@ -230,7 +231,7 @@ function FileInput({ onChange, multiple = false, accept = 'image/*' }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function RegistroGanadoPage() {
   const router = useRouter();
@@ -241,7 +242,8 @@ export default function RegistroGanadoPage() {
   const [error, setError] = useState('');
   const [ganadoData, setGanadoData] = useState({
     nombre: '',
-    categoria: '',
+    // ✅ CAMBIO: categoria → categoriaId (relation)
+    categoriaId: '',
     descripcion: '',
     raza: '',
     sexo: '',
@@ -269,6 +271,8 @@ export default function RegistroGanadoPage() {
 
   const [municipiosList, setMunicipiosList] = useState([]);
   const [localidadesList, setLocalidadesList] = useState([]);
+  // ✅ NUEVO: categorías dinámicas del vertical "ganado"
+  const [categoriasList, setCategoriasList] = useState([]);
 
   // Auth guard
   useEffect(() => {
@@ -277,6 +281,19 @@ export default function RegistroGanadoPage() {
       openLogin();
     }
   }, [authLoading, user, step, openLogin]);
+
+  // ✅ NUEVO: Cargar categorías del vertical "ganado"
+  useEffect(() => {
+    const cargarCategorias = async () => {
+      try {
+        const cats = await getGanadoCategorias();
+        setCategoriasList(cats);
+      } catch (err) {
+        console.error('Error cargando categorías de ganado:', err);
+      }
+    };
+    cargarCategorias();
+  }, []);
 
   // Cargar municipios de Veracruz
   useEffect(() => {
@@ -315,16 +332,7 @@ export default function RegistroGanadoPage() {
     }
   }, [ganadoData.municipioId]);
 
-  const categorias = [
-    'Bovinos',
-    'Porcinos',
-    'Ovinos',
-    'Caprinos',
-    'Aves',
-    'Equinos',
-    'Conejos',
-    'Otro',
-  ];
+  // ✅ ELIMINADO: array hardcoded de categorías
 
   const sexos = ['Macho', 'Hembra', 'Mixto'];
 
@@ -367,7 +375,8 @@ export default function RegistroGanadoPage() {
       openLogin();
       return;
     }
-    if (!ganadoData.nombre || !ganadoData.categoria || !ganadoData.precio || !ganadoData.unidad) {
+    // ✅ CAMBIO: validación usa categoriaId
+    if (!ganadoData.nombre || !ganadoData.categoriaId || !ganadoData.precio || !ganadoData.unidad) {
       setError('Completa los campos obligatorios (nombre, categoría, precio, unidad)');
       return;
     }
@@ -392,7 +401,7 @@ export default function RegistroGanadoPage() {
       formData.append('activo', true);
       formData.append('orden', 0);
       formData.append('visitas', 0);
-      formData.append('usuarioId', user.id);
+      formData.append('userId', user.id);
 
       if (imagenFile) formData.append('imagen', imagenFile);
       imagenesFiles.forEach((file) => formData.append('imagenes', file));
@@ -590,16 +599,35 @@ export default function RegistroGanadoPage() {
 
                   <div>
                     <FieldLabel required>Categoría</FieldLabel>
+                    {/* ✅ CAMBIO: select dinámico con categoriasList + indentación + disabled para agrupadores */}
                     <SelectField
-                      name="categoria"
-                      value={ganadoData.categoria}
+                      name="categoriaId"
+                      value={ganadoData.categoriaId}
                       onChange={handleInputChange}
                     >
                       <option value="">Selecciona una categoría</option>
-                      {categorias.map((cat) => (
-                        <option key={cat} value={cat}>{cat}</option>
+                      {categoriasList.map((cat) => (
+                        <option
+                          key={cat.id}
+                          value={cat.id}
+                          disabled={cat.esPadre && cat.tieneHijos}
+                        >
+                          {cat.esPadre && cat.tieneHijos
+                            ? cat.nombre
+                            : cat.esPadre
+                            ? cat.nombre
+                            : `└─ ${cat.nombre}`}
+                        </option>
                       ))}
                     </SelectField>
+                    {categoriasList.length === 0 && (
+                      <p
+                        className="text-[11px] mt-1.5"
+                        style={{ color: T.inkFaint, fontWeight: 450 }}
+                      >
+                        Cargando categorías…
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -1030,11 +1058,13 @@ export default function RegistroGanadoPage() {
                     >
                       Tu animal aparecerá en la categoría
                     </p>
+                    {/* ✅ CAMBIO: lookup del nombre por ID */}
                     <p
                       className="text-[15px] mt-1"
                       style={{ color: T.accent, fontWeight: 500 }}
                     >
-                      {ganadoData.categoria}
+                      {categoriasList.find((c) => c.id === ganadoData.categoriaId)?.nombre ||
+                        'tu categoría'}
                     </p>
                     <p
                       className="text-[12px] mt-2"

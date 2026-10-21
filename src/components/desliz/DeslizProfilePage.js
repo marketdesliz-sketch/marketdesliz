@@ -41,7 +41,7 @@ const COLOR_STYLES = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────
-// CONFIGURACIÓN POR TIPO · SIN CAMBIOS
+// CONFIGURACIÓN POR TIPO
 // ─────────────────────────────────────────────────────────────────────────
 const CONFIG = {
   moto: {
@@ -59,7 +59,8 @@ const CONFIG = {
     mensajeWhatsApp:
       'Hola, vi tu perfil en Deslizmoto Express y me gustaría solicitar un servicio',
     rutaLista: '/servicios/deslizmoto',
-    coleccion: 'deslizmoto',
+    // ✅ CAMBIO: deslizmoto → prestadores
+    coleccion: 'prestadores',
     categoria: 'moto',
   },
   food: {
@@ -77,7 +78,8 @@ const CONFIG = {
     mensajeWhatsApp:
       'Hola, vi tu perfil en DeslizFood y me gustaría hacer un pedido',
     rutaLista: '/servicios/deslizfood',
-    coleccion: 'deslizmoto',
+    // ✅ CAMBIO: deslizmoto → prestadores
+    coleccion: 'prestadores',
     categoria: 'food',
   },
   encargos: {
@@ -95,13 +97,14 @@ const CONFIG = {
     mensajeWhatsApp:
       'Hola, vi tu perfil en Encargos VIP y me gustaría solicitar un mandado',
     rutaLista: '/servicios/encargos-vip',
-    coleccion: 'deslizmoto',
+    // ✅ CAMBIO: deslizmoto → prestadores
+    coleccion: 'prestadores',
     categoria: 'encargos',
   },
 };
 
 // ─────────────────────────────────────────────────────────────────────────
-// Helpers · SIN CAMBIOS
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────
 const formatPhone = (phone) => {
   if (!phone) return '';
@@ -220,7 +223,7 @@ function ActionPill({ icon: Icon, label, onClick, variant = 'neutral', colors, d
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function DeslizProfilePage({ tipo = 'moto' }) {
   const router = useRouter();
@@ -270,7 +273,8 @@ export default function DeslizProfilePage({ tipo = 'moto' }) {
         vehiculo: record.vehiculo || '—',
         placa: record.placa || '',
         rating: Number(record.rating) || 5,
-        servicios: Number(record.servicios) || 0,
+        // ✅ CAMBIO: serviciosRealizados en DB → servicios local
+        servicios: Number(record.serviciosRealizados) || 0,
         experiencia: record.experiencia || 'Nuevo',
         satisfaccion: Number(record.satisfaccion) || 100,
         estado: record.estado || 'desconectado',
@@ -279,7 +283,8 @@ export default function DeslizProfilePage({ tipo = 'moto' }) {
         whatsapp: record.whatsapp || record.expand?.userId?.telefono || '',
         telefono: record.telefono || record.expand?.userId?.telefono || '',
         avatar: avatarUrl,
-        comision: Number(record.comision) ?? 5,
+        // ✅ CAMBIO: comisionPorcentaje en DB → comision local
+        comision: Number(record.comisionPorcentaje) ?? 5,
       };
 
       setPrestador(data);
@@ -309,7 +314,8 @@ export default function DeslizProfilePage({ tipo = 'moto' }) {
         nombre: r.nombre || 'Prestador',
         vehiculo: r.vehiculo || '—',
         rating: Number(r.rating) || 5,
-        servicios: Number(r.servicios) || 0,
+        // ✅ CAMBIO: serviciosRealizados en DB → servicios local
+        servicios: Number(r.serviciosRealizados) || 0,
         zona: r.zona || '',
         estado: r.estado || 'desconectado',
         avatar: r.fotoPerfil
@@ -330,20 +336,21 @@ export default function DeslizProfilePage({ tipo = 'moto' }) {
   }, [cargarPrestador]);
 
   // ─── Contacto ─────────────────────────────────────────
-  const handleWhatsApp = () => {
-    if (!prestador?.whatsapp && !prestador?.telefono) return;
-    const num = formatWhatsApp(prestador.whatsapp || prestador.telefono);
-    const msg = encodeURIComponent(
-      motivo.trim()
-        ? `${config.mensajeWhatsApp}.\n\n${motivo.trim()}`
-        : config.mensajeWhatsApp
+    const handleWhatsApp = () => {
+    if (!servicio?.whatsapp) return;
+    // Registrar contacto (no bloquea la apertura del chat)
+    registrarContacto(servicio.id, 'whatsapp', user?.id || null).catch(() => {});
+    const num = formatWhatsApp(servicio.whatsapp);
+    window.open(
+      `https://wa.me/${num}?text=Hola,%20vi%20tu%20servicio%20en%20MarketDesliz,%20me%20interesa`,
+      '_blank'
     );
-    window.open(`https://wa.me/${num}?text=${msg}`, '_blank');
   };
 
-  const handleCall = () => {
-    if (!prestador?.telefono) return;
-    window.location.href = `tel:${prestador.telefono.replace(/\D/g, '')}`;
+    const handleCall = () => {
+    if (!servicio?.telefono) return;
+    registrarContacto(servicio.id, 'telefono', user?.id || null).catch(() => {});
+    window.location.href = `tel:${servicio.telefono.replace(/\D/g, '')}`;
   };
 
   const handleSolicitar = () => {

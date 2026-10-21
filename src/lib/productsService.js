@@ -30,7 +30,16 @@ function formatProduct(record) {
     return null;
   };
 
-  const imageUrl = getImageUrl(record.imagen) || getImageUrl(record.imagenes);
+  // ✅ NUEVO: arrays de filenames y URLs para imágenes adicionales
+  const imagenesNombres = Array.isArray(record.imagenes)
+    ? record.imagenes.filter(Boolean)
+    : record.imagenes
+      ? [record.imagenes]
+      : [];
+
+  const imagenesUrls = imagenesNombres.map((img) => pb.files.getURL(record, img));
+
+  const imageUrl = getImageUrl(record.imagen) || imagenesUrls[0] || null;
 
   return {
     id: record.id,
@@ -45,6 +54,11 @@ function formatProduct(record) {
     categoria: record.expand?.categoriaId?.nombre || '',
     categoriaId: record.categoriaId || null,
     imagen: imageUrl,
+
+    // ✅ NUEVOS campos
+    imagenes: imagenesNombres,
+    imagenesUrls: imagenesUrls,
+
     activo: record.activo === true,
     stock: record.stock || 0,
     agotado: record.stock === 0,
@@ -338,8 +352,19 @@ export async function updateProduct(id, data) {
       formData.append('imagen', data.imagen);
     }
 
-    if (data.imagenes && Array.isArray(data.imagenes) && data.imagenes.length > 0) {
-      data.imagenes.forEach(file => formData.append('imagenes', file));
+    // ✅ CAMBIO CRÍTICO: combinar existentes + nuevas para NO borrar las previas
+    const nuevas = Array.isArray(data.imagenes) ? data.imagenes : [];
+    const existentes = Array.isArray(data.imagenesExistentes) ? data.imagenesExistentes : [];
+
+    if (nuevas.length > 0) {
+      // Enviar existentes primero (strings), luego las nuevas (Files)
+      existentes.forEach((filename) => formData.append('imagenes', filename));
+      nuevas.forEach((file) => formData.append('imagenes', file));
+    }
+
+    // ✅ NUEVO: eliminar imágenes específicas con sintaxis `imagenes-`
+    if (Array.isArray(data.imagenesAEliminar) && data.imagenesAEliminar.length > 0) {
+      data.imagenesAEliminar.forEach((filename) => formData.append('imagenes-', filename));
     }
 
     const record = await pb.collection('products').update(id, formData);

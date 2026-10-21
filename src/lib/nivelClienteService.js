@@ -301,7 +301,7 @@ export async function puedeUnirseATanda(clienteId, montoTanda) {
 async function crearNotificacionNivel(clienteId, nuevoNivel, nivelNombre, tandaDisponible) {
   try {
     await pb.collection(COLLECTIONS.NOTIFICACIONES).create({
-      usuarioId: clienteId,
+      userId : clienteId,
       tipoUsuario: 'cliente',
       tipo: 'nivel_up',
       titulo: `🎉 ¡Subiste a Nivel ${nuevoNivel} - ${nivelNombre}!`,

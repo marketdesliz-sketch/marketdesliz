@@ -8,6 +8,7 @@ import {
   CreditCard, X,
 } from 'lucide-react';
 import pb from '../../lib/pocketbase';
+import { getGanadoCategorias } from '../../lib/ganadoService';
 import { useAuth } from '../../contexts/AuthContext';
 import { T } from '../../lib/tokens';
 import TerminalBar from '../../components/TerminalBar';
@@ -229,7 +230,7 @@ function FileInput({ onChange, multiple = false, accept = 'image/*' }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Página · lógica SIN CAMBIOS
+// Página
 // ─────────────────────────────────────────────────────────────────────────
 export default function EditarGanadoPage() {
   const router = useRouter();
@@ -245,7 +246,8 @@ export default function EditarGanadoPage() {
 
   const [formData, setFormData] = useState({
     nombre: '',
-    categoria: '',
+    // ✅ CAMBIO: categoria → categoriaId (relation)
+    categoriaId: '',
     descripcion: '',
     raza: '',
     sexo: '',
@@ -275,15 +277,27 @@ export default function EditarGanadoPage() {
 
   const [municipiosList, setMunicipiosList] = useState([]);
   const [localidadesList, setLocalidadesList] = useState([]);
+  // ✅ NUEVO: categorías dinámicas del vertical "ganado"
+  const [categoriasList, setCategoriasList] = useState([]);
 
-  const categorias = [
-    'Bovinos', 'Porcinos', 'Ovinos', 'Caprinos', 'Aves',
-    'Equinos', 'Conejos', 'Otro',
-  ];
+  // ✅ ELIMINADO: array hardcoded de categorías
 
   const sexos = ['Macho', 'Hembra', 'Mixto'];
 
   const unidades = ['cabeza', 'lote', 'kg', 'docena'];
+
+  // ✅ NUEVO: Cargar categorías del vertical "ganado"
+  useEffect(() => {
+    const cargarCategorias = async () => {
+      try {
+        const cats = await getGanadoCategorias();
+        setCategoriasList(cats);
+      } catch (err) {
+        console.error('Error cargando categorías de ganado:', err);
+      }
+    };
+    cargarCategorias();
+  }, []);
 
   // Carga inicial con id
   useEffect(() => {
@@ -338,7 +352,7 @@ export default function EditarGanadoPage() {
   const verificarGanadoUsuario = async () => {
     try {
       const ganados = await pb.collection('ganado').getFullList({
-        filter: `usuarioId = "${user.id}"`,
+        filter: `userId = "${user.id}"`,
       });
 
       if (ganados.length > 0) {
@@ -364,7 +378,8 @@ export default function EditarGanadoPage() {
 
       setFormData({
         nombre: animalData.nombre || '',
-        categoria: animalData.categoria || '',
+        // ✅ CAMBIO: precarga categoriaId desde la relation
+        categoriaId: animalData.categoriaId || '',
         descripcion: animalData.descripcion || '',
         raza: animalData.raza || '',
         sexo: animalData.sexo || '',
@@ -441,7 +456,8 @@ export default function EditarGanadoPage() {
   };
 
   const guardarCambios = async () => {
-    if (!formData.nombre || !formData.categoria || !formData.precio || !formData.unidad) {
+    // ✅ CAMBIO: validación usa categoriaId
+    if (!formData.nombre || !formData.categoriaId || !formData.precio || !formData.unidad) {
       setError('Completa los campos obligatorios (nombre, categoría, precio, unidad)');
       return;
     }
@@ -644,16 +660,31 @@ export default function EditarGanadoPage() {
 
                 <div>
                   <FieldLabel required>Categoría</FieldLabel>
+                  {/* ✅ CAMBIO: select dinámico con categoriasList + indentación + disabled para agrupadores */}
                   <SelectField
-                    name="categoria"
-                    value={formData.categoria}
+                    name="categoriaId"
+                    value={formData.categoriaId}
                     onChange={handleInputChange}
                   >
                     <option value="">Selecciona una categoría</option>
-                    {categorias.map((cat) => (
-                      <option key={cat} value={cat}>{cat}</option>
+                    {categoriasList.map((cat) => (
+                      <option
+                        key={cat.id}
+                        value={cat.id}
+                        disabled={cat.esPadre && cat.tieneHijos}
+                      >
+                        {cat.esPadre ? cat.nombre : `└─ ${cat.nombre}`}
+                      </option>
                     ))}
                   </SelectField>
+                  {categoriasList.length === 0 && (
+                    <p
+                      className="text-[11px] mt-1.5"
+                      style={{ color: T.inkFaint, fontWeight: 450 }}
+                    >
+                      Cargando categorías…
+                    </p>
+                  )}
                 </div>
 
                 <div>

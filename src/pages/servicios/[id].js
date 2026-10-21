@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import pb from '../../lib/pocketbase';
 import ToastNotification from '../../components/ToastNotification';
-import { getServicioById, registrarVisita, getServiciosRelacionados } from '../../lib/serviciosService';
+import { getServicioById, registrarVisita, registrarContacto, getServiciosRelacionados } from '../../lib/serviciosService';
 import { useAuth } from '../../contexts/AuthContext';
 import { T } from '../../lib/tokens';
 import TerminalBar from '../../components/TerminalBar';
@@ -20,7 +20,7 @@ import Footer from '../../components/Footer';
 import BackButton from '../../components/BackButton';
 
 // ─────────────────────────────────────────────────────────────────────────
-// Helpers · SIN CAMBIOS
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────
 const formatPhone = (phone) => {
   if (!phone) return '';
@@ -39,7 +39,7 @@ const formatWhatsApp = (phone) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────
-// Sub-componentes UI (idénticos a negocios/[id].js)
+// Sub-componentes UI
 // ─────────────────────────────────────────────────────────────────────────
 function SectionLabel({ children, accent = false }) {
   return (
@@ -228,7 +228,7 @@ function ShareButton({ label, color, onClick }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// COMPONENTE PRINCIPAL · lógica SIN CAMBIOS
+// COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────
 export default function ServicioDetalle() {
   const router = useRouter();
@@ -292,10 +292,11 @@ export default function ServicioDetalle() {
         : ['/images/placeholder.png'];
       setImageUrls(imgs);
 
-      await registrarVisita(id);
+      await registrarVisita(id, user?.id || null);
 
-      if (servicioData.categoria) {
-        cargarRelacionados(servicioData.categoria, id);
+      // ✅ CAMBIO: usar categoriaId (relation) en vez de categoria (nombre)
+      if (servicioData.categoriaId) {
+        cargarRelacionados(servicioData.categoriaId, id);
       }
 
       cargarReviews(id);
@@ -307,10 +308,11 @@ export default function ServicioDetalle() {
     }
   };
 
-  const cargarRelacionados = async (categoria, servicioId) => {
+  // ✅ CAMBIO: recibe categoriaId
+  const cargarRelacionados = async (categoriaId, servicioId) => {
     try {
       setLoadingRelacionados(true);
-      const relacionados = await getServiciosRelacionados(categoria, servicioId, 6);
+      const relacionados = await getServiciosRelacionados(categoriaId, servicioId, 6);
       setServiciosRelacionados(relacionados);
     } catch (err) {
       console.error('Error cargando relacionados:', err);
@@ -414,20 +416,24 @@ export default function ServicioDetalle() {
         setShowToast(true);
         setTimeout(() => setShowToast(false), 3000);
       }
-    } catch {}
+    } catch { }
   };
 
-  const handleWhatsApp = () => {
+  const handleWhatsApp = async () => {
     if (!servicio?.whatsapp) return;
+
+    // Registrar contacto (no bloquea el flujo)
+    registrarContacto(servicio.id, 'whatsapp', user?.id).catch(() => { });
+
     const num = formatWhatsApp(servicio.whatsapp);
-    window.open(
-      `https://wa.me/${num}?text=Hola,%20vi%20tu%20servicio%20en%20MarketDesliz,%20me%20interesa`,
-      '_blank'
-    );
+    window.open(`https://wa.me/${num}?...`, '_blank');
   };
 
-  const handleCall = () => {
+  const handleCall = async () => {
     if (!servicio?.telefono) return;
+
+    registrarContacto(servicio.id, 'telefono', user?.id).catch(() => { });
+
     window.location.href = `tel:${servicio.telefono.replace(/\D/g, '')}`;
   };
 
@@ -470,6 +476,12 @@ export default function ServicioDetalle() {
       setTimeout(() => setShowToast(false), 3000);
       setNewRating(0);
       setNewComment('');
+
+      // Refrescar el servicio (el hook de PB ya actualizó calificacion + totalComentarios)
+      const actualizado = await getServicioById(servicio.id);
+      if (actualizado) setServicio(actualizado);
+
+      // Refrescar la lista de reviews
       await cargarReviews(servicio.id);
     } catch {
       setToastMessage('Error al publicar la reseña.');
@@ -490,7 +502,7 @@ export default function ServicioDetalle() {
       <button
         key={i}
         onClick={() => interactive && setNewRating(i)}
-        type={interactive ? 'button' : 'button'}
+        type="button"
         className="transition"
         style={{
           background: 'transparent',
@@ -608,15 +620,16 @@ export default function ServicioDetalle() {
               <Link href="/" style={{ color: T.inkSoft }}>Inicio</Link>
               <span style={{ color: T.inkGhost }}>/</span>
               <Link href="/servicios" style={{ color: T.inkSoft }}>Servicios</Link>
-              {servicio.categoria && (
+              {/* ✅ CAMBIO: categoría por ID + nombre desde expand */}
+              {servicio.categoriaNombre && servicio.categoriaId && (
                 <>
                   <span style={{ color: T.inkGhost }}>/</span>
                   <Link
-                    href={`/servicios?categoria=${encodeURIComponent(servicio.categoria)}`}
+                    href={`/servicios?categoriaId=${servicio.categoriaId}`}
                     className="capitalize"
                     style={{ color: T.inkSoft }}
                   >
-                    {servicio.categoria}
+                    {servicio.categoriaNombre}
                   </Link>
                 </>
               )}
@@ -741,7 +754,6 @@ export default function ServicioDetalle() {
                     loading="lazy"
                   />
 
-                  {/* Nav flechas */}
                   {imageUrls.length > 1 && (
                     <>
                       <button
@@ -799,7 +811,6 @@ export default function ServicioDetalle() {
                     </>
                   )}
 
-                  {/* Badges */}
                   <div className="absolute top-3 right-3 flex gap-1.5 flex-wrap justify-end">
                     {servicio.esMarketDesliz ? (
                       <Badge variant="official" icon={BadgeCheck} label="Oficial" />
@@ -812,7 +823,6 @@ export default function ServicioDetalle() {
                   </div>
                 </div>
 
-                {/* Thumbnails */}
                 {imageUrls.length > 1 && (
                   <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                     {imageUrls.map((url, index) => (
@@ -849,7 +859,8 @@ export default function ServicioDetalle() {
 
                 <div>
                   <div className="flex flex-wrap gap-2 mb-3">
-                    {servicio.categoria && (
+                    {/* ✅ CAMBIO: categoriaNombre desde expand */}
+                    {servicio.categoriaNombre && (
                       <span
                         className="text-[10px] uppercase tracking-[0.18em] px-2 py-1"
                         style={{
@@ -859,7 +870,7 @@ export default function ServicioDetalle() {
                           fontWeight: 500,
                         }}
                       >
-                        {servicio.categoria}
+                        {servicio.categoriaNombre}
                       </span>
                     )}
                     {servicio.esMarketDesliz && (
@@ -1057,7 +1068,6 @@ export default function ServicioDetalle() {
                   )}
                 </div>
 
-                {/* Badges de servicios */}
                 <div className="flex flex-wrap gap-2">
                   {servicio.atencionWhatsapp && <ServiceBadge icon={MessageCircle} label="WhatsApp" />}
                   {servicio.citasPrevias && <ServiceBadge icon={Calendar} label="Cita previa" />}
@@ -1065,7 +1075,6 @@ export default function ServicioDetalle() {
                   {servicio.servicios && <ServiceBadge icon={Award} label={servicio.servicios} />}
                 </div>
 
-                {/* Botones acción */}
                 <div className="grid grid-cols-2 gap-3">
                   <ActionPill
                     icon={MessageCircle}
@@ -1350,16 +1359,17 @@ export default function ServicioDetalle() {
             <section className="max-w-[1280px] mx-auto px-6 md:px-14 pb-16 md:pb-24">
               <div className="flex items-end justify-between gap-4 mb-6">
                 <div>
+                  {/* ✅ CAMBIO: categoriaNombre + link por ID */}
                   <SectionLabel>Servicios relacionados</SectionLabel>
                   <p
                     className="text-[13px]"
                     style={{ color: T.inkSoft, fontWeight: 450 }}
                   >
-                    También en {servicio.categoria}
+                    También en {servicio.categoriaNombre}
                   </p>
                 </div>
                 <Link
-                  href={`/servicios?categoria=${encodeURIComponent(servicio.categoria)}`}
+                  href={`/servicios?categoriaId=${servicio.categoriaId}`}
                   className="text-[12px] uppercase tracking-[0.18em] flex items-center gap-1"
                   style={{ color: T.accent, fontWeight: 500 }}
                 >
@@ -1566,12 +1576,13 @@ function ServicioRelacionadoCard({ servicio }) {
           {servicio.nombre}
         </h3>
 
-        {servicio.categoria && (
+        {/* ✅ CAMBIO: categoriaNombre */}
+        {servicio.categoriaNombre && (
           <p
             className="text-[10.5px] uppercase tracking-[0.15em] truncate"
             style={{ color: T.inkFaint, fontWeight: 500 }}
           >
-            {servicio.categoria}
+            {servicio.categoriaNombre}
           </p>
         )}
 
