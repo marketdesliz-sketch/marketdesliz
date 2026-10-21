@@ -156,40 +156,32 @@ export default function LoginDropdown({ onClose, onSuccess }) {
 
     try {
       const cleanPhone = phone.replace(/\D/g, '');
-      const tempPassword = generarPasswordTemporal();
 
-      // 1. Verificar OTP en el servidor
+      // 1. Llamamos a nuestro nuevo endpoint que usa Impersonate
       const res = await fetch('/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           telefono: cleanPhone,
           code,
-          newPassword: tempPassword,
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        const errorMap = {
-          no_code: 'No hay código activo. Solicita uno nuevo.',
-          expired: 'El código expiró. Solicita uno nuevo.',
-          max_attempts: 'Demasiados intentos. Solicita uno nuevo.',
-          invalid: 'Código incorrecto.',
-        };
-        setError(errorMap[data.error] || data.error || 'Error al verificar');
+        setError(data.error || 'Error al verificar');
         setStep('code');
         return;
       }
 
-      // 2. Autenticar con la contraseña temporal
-      await pb.collection('users').authWithPassword(data.email, tempPassword);
+      // 2. Guardamos el token generado por el backend en PocketBase
+      pb.authStore.save(data.token, data.record);
 
-      // 3. Si es usuario nuevo, marcar primer ingreso
+      // 3. Si es usuario nuevo, marcamos para completar datos
       if (data.isNewUser) {
         localStorage.setItem('primerIngreso', 'true');
-        localStorage.setItem('userIdCompletarDatos', data.userId);
+        localStorage.setItem('userIdCompletarDatos', data.record.id);
       }
 
       setStep('success');

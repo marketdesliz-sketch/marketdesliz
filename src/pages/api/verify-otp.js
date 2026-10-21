@@ -7,10 +7,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { telefono, code, newPassword } = req.body || {};
+  const { telefono, code } = req.body || {};
 
-  if (!telefono || !code || !newPassword) {
-    return res.status(400).json({ error: 'Faltan datos requeridos' });
+  if (!telefono || !code) {
+    return res.status(400).json({ error: 'Faltan datos requeridos (teléfono o código)' });
   }
 
   if (!/^\d{10}$/.test(telefono)) {
@@ -18,127 +18,106 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Verificar OTP contra PocketBase
+    // 1. Verificar el código OTP
     const result = await verificarOTP(telefono, code);
 
     if (!result.success) {
-      return res.status(400).json(result);
+      const errorMap = {
+        no_code: 'No hay un código activo. Solicita uno nuevo.',
+        expired: 'El código expiró. Solicita uno nuevo.',
+        max_attempts: 'Demasiados intentos. Solicita uno nuevo.',
+        invalid: 'Código incorrecto. Verifica e intenta de nuevo.',
+      };
+      return res.status(400).json({ error: errorMap[result.error] || 'Error al verificar el código' });
     }
 
-    // 2. Encontrar o crear usuario
+    // 2. Conectar como Administrador para gestionar usuarios
     const pb = await getAdminClient();
-    const userResult = await findOrCreateUser(pb, telefono, newPassword);
 
+    // 3. Buscar si el usuario ya existe por teléfono
+    let existingUser = null;
+    try {
+      existingUser = await pb.collection('users').getFirstListItem(`telefono = "${telefono}"`);
+    } catch (e) {
+      // El usuario no existe, se creará abajo
+    }
+
+    let userId = null;
+    let isNewUser = false;
+    let userRecord = null;
+
+    // 4. Lógica de Negocio: Crear o recuperar la cuenta unificada
+    if (existingUser) {
+      // Usuario existente: Solo necesitamos su ID
+      userId = existingUser.id;
+      userRecord = existingUser;
+    } else {
+      // Usuario NUEVO: Creamos su cuenta maestra
+      const tempEmail = `user_${telefono}@marketdesliz.com`;
+      const tempPassword = Math.random().toString(36).slice(-10) + 'A1!'; 
+      
+      userRecord = await pb.collection('users').create({
+        email: tempEmail,
+        password: tempPassword,
+        passwordConfirm: tempPassword,
+        nombre: `Usuario ${telefono.slice(-4)}`,
+        telefono: telefono,
+        role: 'cliente',
+        activo: true,
+        verified: false,
+      });
+      
+      userId = userRecord.id;
+      isNewUser = true;
+
+      // 4.1 Crear el registro en 'clients' (con términos y condiciones aceptados)
+      try {
+        await pb.collection('clients').create({
+          userId: userId,
+          telefono: telefono,
+          nombre: userRecord.nombre,
+          nivel: 0,
+          estadoKyc: 'pendiente',
+          aceptaTerminos: true, 
+          fechaAceptaTerminos: new Date().toISOString()
+        });
+      } catch (e) {
+        console.error('Error creando client:', e.message);
+      }
+
+      // 4.2 Crear el provider de tipo 'phone'
+      try {
+        await pb.collection('user_providers').create({
+          userId: userId,
+          provider: 'phone',
+          telefono: telefono,
+          isActive: true
+        });
+      } catch (e) {
+        console.error('Error creando provider:', e.message);
+      }
+    }
+
+    // 5. LA MAGIA (Impersonate): Generar token de sesión sin tocar la contraseña
+    // PocketBase permite a un admin generar una sesión para cualquier usuario.
+    // Esto es exactamente lo que hacen Google o Meta con los Magic Links / OTPs.
+    const impersonateAuth = await pb.collection('users').impersonate(userId, 3600); 
+    // 3600 = duración del token en segundos (1 hora)
+
+    if (!impersonateAuth || !impersonateAuth.token) {
+      throw new Error('No se pudo generar el token de acceso');
+    }
+
+    // 6. Devolver el token al frontend
     return res.status(200).json({
       success: true,
-      email: userResult.email,
-      userId: userResult.id,
-      isNewUser: userResult.isNew,
+      token: impersonateAuth.token,
+      record: impersonateAuth.record,
+      isNewUser,
     });
+
   } catch (error) {
     console.error('❌ Error en verify-otp:', error);
-    return res.status(500).json({ error: error.message || 'Error interno' });
+    return res.status(500).json({ error: error.message || 'Error interno al procesar tu cuenta' });
   }
-}
-
-// ─────────────────────────────────────────────────────────
-// Encontrar o crear usuario · asegura email + password válidos
-// ─────────────────────────────────────────────────────────
-async function findOrCreateUser(pb, telefono, newPassword) {
-  const tempEmail = `user_${telefono}@marketdesliz.com`;
-
-  // Buscar existente
-  let existing = null;
-  try {
-    existing = await pb
-      .collection('users')
-      .getFirstListItem(`telefono = "${telefono}"`);
-  } catch (e) {
-    // No existe
-  }
-
-  if (existing) {
-    // Asegurar que tenga email (necesario para authWithPassword)
-    const email = existing.email || tempEmail;
-
-    await pb.collection('users').update(existing.id, {
-      email,
-      password: newPassword,
-      passwordConfirm: newPassword,
-    });
-
-    return { ...existing, email, isNew: false };
-  }
-
-  // Crear nuevo usuario
-  const tokenKey =
-    'pk_' +
-    Math.random().toString(36).substring(2, 15) +
-    Math.random().toString(36).substring(2, 15);
-
-  let newUser;
-  try {
-    newUser = await pb.collection('users').create({
-      email: tempEmail,
-      password: newPassword,
-      passwordConfirm: newPassword,
-      emailVisibility: false,
-      verified: false,
-      role: 'cliente',
-      nombre: `Usuario ${telefono.slice(-4)}`,
-      activo: true,
-      telefono,
-      tokenKey,
-    });
-  } catch (err) {
-    // Race condition: alguien lo creó entre el find y el create
-    if (err.message?.includes('validation_not_unique')) {
-      const existing = await pb
-        .collection('users')
-        .getFirstListItem(`telefono = "${telefono}"`);
-      await pb.collection('users').update(existing.id, {
-        password: newPassword,
-        passwordConfirm: newPassword,
-      });
-      return { ...existing, isNew: false };
-    }
-    throw err;
-  }
-
-  // Crear client
-  try {
-    await pb.collection('clients').create({
-      userId: newUser.id,
-      telefono,
-      nombre: newUser.nombre,
-      nivel: 0,
-      productosComprados: 0,
-      productosPagados: 0,
-      productosEnCurso: 0,
-      deudaActual: 0,
-      limiteDeuda: 5000,
-      estadoKyc: 'pendiente',
-      trustScore: 0,
-      datosCompletos: false,
-      totalGastado: 0,
-      diaPago: 'lunes',
-      telefonoAlternativo: '',
-    });
-  } catch (e) {
-    console.error('⚠️ Error creando client:', e.message);
-  }
-
-  // Crear provider phone
-  try {
-    await pb.collection('user_providers').create({
-      userId: newUser.id,
-      provider: 'phone',
-      telefono,
-      isActive: true,
-    });
-  } catch (e) {
-    console.error('⚠️ Error creando provider:', e.message);
-  }
-
-  return { ...newUser, email: tempEmail, isNew: true };
 }
