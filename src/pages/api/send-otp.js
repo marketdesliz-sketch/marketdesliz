@@ -1,26 +1,46 @@
-const style = {
-  padding: '10px 30px',
-  fontSize: '11.5px',
-  fontWeight: 500,
-  letterSpacing: '0.2em',
-  textTransform: 'uppercase',
-  color: '#1A1A1A',
-  borderRadius: '4px',
-  border: '1px solid #8E8E8E',
-  background: hover
-    ? 'linear-gradient(180deg, #F2F2F2 0%, #D6D6D6 45%, #B8B8B8 55%, #A0A0A0 100%)'
-    : 'linear-gradient(180deg, #EDEDED 0%, #CFCFCF 45%, #ADADAD 55%, #969696 100%)',
-  boxShadow: press
-    ? 'inset 0 2px 6px rgba(0,0,0,0.35), 0 0 0 rgba(0,0,0,0)'
-    : hover
-      ? 'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(0,0,0,0.15), 0 4px 10px rgba(0,0,0,0.18)'
-      : 'inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -1px 0 rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.12)',
-  transform: press ? 'translateY(1px)' : 'translateY(0)',
-  transitionTimingFunction: T.ease,
-  WebkitTapHighlightColor: 'transparent',
-  cursor: 'pointer',
-  display: 'inline-block',
-  textDecoration: 'none',
-  userSelect: 'none',
-  whiteSpace: 'nowrap',
-};
+// src/pages/api/auth/send-otp.js
+import { crearOTP } from '../../../lib/otpService';
+import { getAdminClient } from '../../../lib/pbAdmin';
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { telefono } = req.body || {};
+  if (!telefono || !/^\d{10}$/.test(telefono)) return res.status(400).json({ error: 'Teléfono inválido' });
+
+  try {
+    const pb = await getAdminClient();
+
+    // 1. Buscar el chatId del usuario en Telegram
+    let telegramLink = null;
+    try {
+      telegramLink = await pb.collection('telegram_links').getFirstListItem(`telefono = "${telefono}"`);
+    } catch (e) {
+      return res.status(400).json({
+        error: 'TELEGRAM_NOT_LINKED',
+        message: 'Para recibir tu código, primero debes vincular tu Telegram.'
+      });
+    }
+
+    // 2. Generar y guardar OTP
+    const { code, expiresInSeconds } = await crearOTP(telefono);
+
+    // 3. Enviar OTP al Telegram
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const msg = `🔐 *Tu código de acceso a MarketDesliz*\n\nTu código es: \`${code}\`\n\nExpira en 5 minutos. No compartas este código.`;
+
+    const tgRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: telegramLink.chatId, text: msg, parse_mode: 'Markdown' })
+    });
+
+    if (!tgRes.ok) throw new Error('Error al enviar por Telegram');
+
+    return res.status(200).json({ success: true, expiresIn: expiresSeconds });
+  } catch (error) {
+    if (error.code === 'rate_limit') return res.status(429).json({ error: 'Demasiados intentos. Espera 10 minutos.' });
+    console.error('❌ Error en send-otp:', error);
+    return res.status(500).json({ error: 'Error al enviar el código' });
+  }
+}

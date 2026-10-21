@@ -171,7 +171,7 @@ export default function LoginDropdown({ onClose, onSuccess }) {
           Para enviarte tu código de acceso seguro, primero vincula tu cuenta de Telegram.
         </p>
         <a
-          href={`https://t.me/MarketDeslizBot?start=${phone.replace(/\D/g, '')}`}
+          href={`https://t.me/DeslizBot?start=${phone.replace(/\D/g, '')}`}
           target="_blank"
           rel="noopener noreferrer"
           className="block w-full bg-[#2AABEE] text-white font-bold py-3 rounded-xl text-sm hover:bg-[#229ED9] transition-colors mb-3"
