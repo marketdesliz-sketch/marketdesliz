@@ -63,7 +63,7 @@ async function sendTelegramMessage(chatId, text) {
         return;
     }
 
-    await fetch(`https://api.telegram.org/bot$8937371339:AAEfeIo67TOTAP6jhhtHZzzd2SrIoi_aQRI/sendMessage`, {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' })
