@@ -57,7 +57,7 @@ export default async function handler(req, res) {
 // Helper para enviar mensajes
 async function sendTelegramMessage(chatId, text) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+  await fetch(`https://api.telegram.org/bot$8741552680:AAGV3PoYhonM0elH-NZpVvj7N8BT5LBlHhE/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown' })
