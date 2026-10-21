@@ -54,10 +54,10 @@ function ComenzarButton({ onClick, href, label = DEFAULT_BUTTON_LABEL }) {
   const [press, setPress] = useState(false);
 
   const style = {
-    padding: '14px 46px',
-    fontSize: '13px',
+    padding: '10px 30px',
+    fontSize: '11.5px',
     fontWeight: 500,
-    letterSpacing: '0.28em',
+    letterSpacing: '0.2em',
     textTransform: 'uppercase',
     color: '#1A1A1A',
     borderRadius: '4px',
