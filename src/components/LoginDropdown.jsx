@@ -81,6 +81,8 @@ export default function LoginDropdown({ onClose, onSuccess }) {
 
     try {
       const cleanPhone = phone.replace(/\D/g, '');
+
+      // 1. Llamamos al endpoint que usa Impersonate
       const res = await fetch('/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -88,26 +90,35 @@ export default function LoginDropdown({ onClose, onSuccess }) {
       });
 
       const data = await res.json();
+
       if (!res.ok || !data.success) {
         setError(data.error || 'Código inválido');
         setStep('code');
         return;
       }
 
-      // ✅ SE GUARDA EL TOKEN DE IMPERSONATE
+      // 2. Guardamos el token en el authStore de PocketBase
       pb.authStore.save(data.token, data.record);
-      await refreshUser();
 
+      // 3. Si es nuevo, guardamos la bandera para que salga el modal de completar datos
       if (data.isNewUser) {
         localStorage.setItem('primerIngreso', 'true');
         localStorage.setItem('userIdCompletarDatos', data.record.id);
       }
 
+      // 4. Mostramos el check verde de éxito
       setStep('success');
       if (onSuccess) onSuccess();
-      setTimeout(onClose, 1500);
+
+      // 5. ✅ EL TRUCO FINAL: Recargamos la página para que toda la app lea el nuevo token
+      setTimeout(() => {
+        onClose();
+        window.location.href = '/perfil'; // Redirección dura al perfil
+      }, 1000);
+
     } catch (err) {
-      setError('Error al verificar el código');
+      console.error('Error en verificación:', err);
+      setError('Error de red al intentar verificar el código');
       setStep('code');
     }
   };
