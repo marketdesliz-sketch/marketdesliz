@@ -1506,6 +1506,35 @@ DeleteRule: @request.auth.role = "admin"
 ```
 
 ---
+
+telegram_links en PB
+Si el webhook llega pero no puede crear el link, falla silenciosamente.
+
+Abre https://api.povself.com/_/
+
+Ve a Collections → busca telegram_links
+
+Debe existir con estos campos:
+
+telefono (text, unique)
+
+chatId (text)
+
+userId (relation → users, opcional)
+
+API Rules deben permitir al admin:
+
+text
+List:   @request.auth.role = "admin"
+View:   @request.auth.role = "admin"
+Create: @request.auth.role = "admin"
+Update: @request.auth.role = "admin"
+Delete: @request.auth.role = "admin"
+Si la colección no existe, créala ahora.
+
+```
+
+---
 48. 📁 COLLECTION: user_providers
 
 {
