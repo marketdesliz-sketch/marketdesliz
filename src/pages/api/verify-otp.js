@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: errorMap[result.error] || 'Error al verificar el código' });
     }
 
-    // 2. Conectar como Administrador para gestionar usuarios
+    // 2. Conectar como Administrador (Superuser)
     const pb = await getAdminClient();
 
     // 3. Buscar si el usuario ya existe por teléfono
@@ -48,11 +48,9 @@ export default async function handler(req, res) {
 
     // 4. Lógica de Negocio: Crear o recuperar la cuenta unificada
     if (existingUser) {
-      // Usuario existente: Solo necesitamos su ID
       userId = existingUser.id;
       userRecord = existingUser;
     } else {
-      // Usuario NUEVO: Creamos su cuenta maestra
       const tempEmail = `user_${telefono}@marketdesliz.com`;
       const tempPassword = Math.random().toString(36).slice(-10) + 'A1!'; 
       
@@ -70,7 +68,7 @@ export default async function handler(req, res) {
       userId = userRecord.id;
       isNewUser = true;
 
-      // 4.1 Crear el registro en 'clients' (con términos y condiciones aceptados)
+      // Crear client y provider
       try {
         await pb.collection('clients').create({
           userId: userId,
@@ -81,12 +79,6 @@ export default async function handler(req, res) {
           aceptaTerminos: true, 
           fechaAceptaTerminos: new Date().toISOString()
         });
-      } catch (e) {
-        console.error('Error creando client:', e.message);
-      }
-
-      // 4.2 Crear el provider de tipo 'phone'
-      try {
         await pb.collection('user_providers').create({
           userId: userId,
           provider: 'phone',
@@ -94,25 +86,23 @@ export default async function handler(req, res) {
           isActive: true
         });
       } catch (e) {
-        console.error('Error creando provider:', e.message);
+        console.error('Error creando registros relacionados:', e.message);
       }
     }
 
-    // 5. LA MAGIA (Impersonate): Generar token de sesión sin tocar la contraseña
-    // PocketBase permite a un admin generar una sesión para cualquier usuario.
-    // Esto es exactamente lo que hacen Google o Meta con los Magic Links / OTPs.
-    const impersonateAuth = await pb.collection('users').impersonate(userId, 3600); 
-    // 3600 = duración del token en segundos (1 hora)
+    // 5. ✅ CORREGIDO: La magia de Impersonate (Sintaxis SDK v0.26+)
+    // Devuelve un NUEVO cliente con la sesión del usuario ya cargada
+    const impersonateClient = await pb.collection('users').impersonate(userId, 3600);
 
-    if (!impersonateAuth || !impersonateAuth.token) {
+    if (!impersonateClient || !impersonateClient.authStore.token) {
       throw new Error('No se pudo generar el token de acceso');
     }
 
-    // 6. Devolver el token al frontend
+    // 6. Devolver el token y los datos al frontend
     return res.status(200).json({
       success: true,
-      token: impersonateAuth.token,
-      record: impersonateAuth.record,
+      token: impersonateClient.authStore.token,
+      record: impersonateClient.authStore.model, // El modelo del usuario
       isNewUser,
     });
 
