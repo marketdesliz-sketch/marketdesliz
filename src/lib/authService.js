@@ -41,73 +41,33 @@ async function findUserByPhone(telefono, excludeUserId = null) {
   }
 }
 
+
 // ============================
-// AGREGAR PROVIDER A USUARIO (VERSIÓN CORREGIDA - SIN DUPLICADOS)
+// AGREGAR PROVIDER A USUARIO (VÍA API ROUTE SEGURO)
 // ============================
 export async function addProviderToUser(userId, providerData) {
   try {
-    // Para Google, verificar si ya existe un provider con el mismo providerId
-    if (providerData.provider === 'google' && providerData.providerId) {
-      let existingByProviderId = null;
-      try {
-        existingByProviderId = await pb.collection('user_providers').getFirstListItem(
-          `provider = "google" && providerId = "${providerData.providerId}"`
-        );
-      } catch (e) {
-        // No existe, lo dejamos null
-      }
-
-      if (existingByProviderId) {
-        // Verificar que el registro exista realmente antes de actualizar
-        let existe = true;
-        try {
-          await pb.collection('user_providers').getOne(existingByProviderId.id);
-        } catch (e) {
-          existe = false;
-          console.warn('⚠️ El provider encontrado no existe en la BD, se creará uno nuevo.');
-        }
-
-        if (existe) {
-          // Si el provider ya existe, actualizar userId y activarlo
-          if (existingByProviderId.userId !== userId) {
-            console.log(`🔄 Moviendo provider Google de ${existingByProviderId.userId || 'sin usuario'} a ${userId}`);
-            await pb.collection('user_providers').update(existingByProviderId.id, {
-              userId: userId,
-              isActive: true
-            });
-          } else {
-            // Ya existe para este usuario, solo activar
-            await pb.collection('user_providers').update(existingByProviderId.id, {
-              isActive: true
-            });
-          }
-          return existingByProviderId;
-        }
-      }
-    }
-
-    // Verificar si ya existe un provider con el mismo userId y provider
-    const existing = await pb.collection('user_providers').getFirstListItem(
-      `userId = "${userId}" && provider = "${providerData.provider}"`
-    ).catch(() => null);
-
-    if (existing) {
-      if (!existing.isActive) {
-        await pb.collection('user_providers').update(existing.id, { isActive: true });
-      }
-      return existing;
-    }
-
-    // Crear nuevo provider con isActive = true
-    const newProvider = await pb.collection('user_providers').create({
-      userId: userId,
-      ...providerData,
-      isActive: true,
-      linkedAt: new Date().toISOString()
+    // ✅ Llamamos a nuestro backend para que él haga la creación de forma segura
+    const res = await fetch('/api/auth/link-provider', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        provider: providerData.provider,
+        providerId: providerData.providerId,
+        email: providerData.email,
+        telefono: providerData.telefono,
+      }),
     });
 
-    console.log(`✅ Provider ${providerData.provider} agregado a usuario ${userId}`);
-    return newProvider;
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Error al vincular el proveedor');
+    }
+
+    console.log(`✅ Provider ${providerData.provider} vinculado exitosamente al usuario ${userId}`);
+    return data;
   } catch (error) {
     console.error('Error agregando provider:', error);
     throw error;
