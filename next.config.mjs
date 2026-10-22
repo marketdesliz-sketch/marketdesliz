@@ -10,7 +10,9 @@ const nextConfig = {
     unoptimized: true,           // Necesario para estático (y no molesta en SSR)
   },
 
-  // trailingSlash: true,        // Opcional
+  // ✅ FIX CRÍTICO: Evita redirecciones 308 en las API Routes.
+  // Telegram no sigue redirecciones, por lo que forzamos las rutas sin "/" al final.
+  trailingSlash: false,        
 };
 
 export default nextConfig;
