@@ -1,242 +1,186 @@
 // src/pages/registro.js
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
+import { User, Mail, Lock, Phone, ArrowLeft } from 'lucide-react';
 import pb from '../lib/pocketbase';
+import { T } from '../lib/tokens';
+import TerminalBar from '../components/TerminalBar';
 
 export default function RegistroPage() {
-    const router = useRouter();
-    const { producto, opcion } = router.query;
+  const router = useRouter();
+  const [formData, setFormData] = useState({
+    nombre: '',
+    email: '',
+    telefono: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-    const [productoData, setProductoData] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [formData, setFormData] = useState({
-        nombre: '',
-        telefono: '',
-        direccion: ''
-    });
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
-    useEffect(() => {
-        if (producto) {
-            cargarProducto();
-        }
-    }, [producto]);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
 
-    const cargarProducto = async () => {
-        try {
-            const record = await pb.collection('products').getOne(producto);
-            setProductoData(record);
-        } catch (error) {
-            console.error('Error:', error);
-        }
-    };
+    if (formData.password !== formData.confirmPassword) return setError('Las contraseñas no coinciden');
+    if (formData.password.length < 8) return setError('La contraseña debe tener al menos 8 caracteres');
+    if (!acceptTerms) return setError('Debes aceptar los términos y condiciones');
+    
+    // Validar teléfono opcional
+    let cleanPhone = formData.telefono.replace(/\D/g, '');
+    if (cleanPhone && cleanPhone.length !== 10) return setError('El teléfono debe tener 10 dígitos');
 
-    const getTitulo = () => {
-        switch (opcion) {
-            case 'visita': return 'Solicitar visita';
-            case 'entrega': return 'Agendar entrega';
-            default: return 'Completa tus datos';
-        }
-    };
+    setLoading(true);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
+    try {
+      // 1. Verificar si el email ya existe
+      try {
+        await pb.collection('users').getFirstListItem(`email = "${formData.email}"`);
+        throw new Error('Este correo ya está registrado. Intenta iniciar sesión.');
+      } catch (err) {
+        if (err.status !== 404) throw err; // Si el error no es "No encontrado", lo lanzamos
+      }
 
-        try {
-            const telefonoLimpio = formData.telefono.replace(/\D/g, '');
-            
-            // Validar que el teléfono tenga 10 dígitos
-            if (telefonoLimpio.length !== 10) {
-                alert('El teléfono debe tener 10 dígitos');
-                setLoading(false);
-                return;
-            }
+      // 2. Crear el usuario en PocketBase
+      const newUser = await pb.collection('users').create({
+        email: formData.email,
+        password: formData.password,
+        passwordConfirm: formData.confirmPassword,
+        nombre: formData.nombre,
+        telefono: cleanPhone || '',
+        role: 'cliente',
+        activo: true,
+      });
 
-            // Buscar usuario existente por teléfono
-            let cliente;
-            try {
-                const existentes = await pb.collection('users').getList(1, 1, {
-                    filter: `telefono = "${telefonoLimpio}"`
-                });
+      // 3. Iniciar sesión automáticamente
+      await pb.collection('users').authWithPassword(formData.email, formData.password);
 
-                if (existentes.items.length > 0) {
-                    cliente = existentes.items[0];
-                    console.log('✅ Usuario existente encontrado:', cliente.id);
-                }
-            } catch (searchError) {
-                console.log('Usuario no encontrado, se creará uno nuevo');
-            }
+      // 4. Crear registro en clients con términos aceptados
+      await pb.collection('clients').create({
+        userId: newUser.id,
+        nombre: formData.nombre,
+        telefono: cleanPhone || '',
+        nivel: 0,
+        estadoKyc: 'pendiente',
+        aceptaTerminos: true,
+        fechaAceptaTerminos: new Date().toISOString()
+      });
 
-            // Si no existe, crear nuevo usuario
-            if (!cliente) {
-                const tempEmail = `user_${telefonoLimpio}@marketdesliz.com`;
-                
-                // ✅ Crear usuario con TODOS los campos requeridos
-                cliente = await pb.collection('users').create({
-                    nombre: formData.nombre,
-                    telefono: telefonoLimpio,
-                    email: tempEmail,
-                    emailVisibility: false,      // ✅ Campo requerido
-                    verified: false,              // ✅ Campo requerido
-                    password: 'MarketDesliz2024!',
-                    passwordConfirm: 'MarketDesliz2024!',
-                    role: 'cliente',
-                    activo: true
-                });
+      // 5. Redirigir al perfil
+      router.push('/perfil');
 
-                console.log('✅ Usuario creado:', cliente.id);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Error al crear la cuenta. Verifica los datos.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-                // Crear registro en clients
-                try {
-                    await pb.collection('clients').create({
-                        userId: cliente.id,
-                        telefono: telefonoLimpio,           // ✅ Agregado
-                        nombre: formData.nombre,             // ✅ Agregado
-                        direccionCalle: formData.direccion || '',
-                        diaPago: 'lunes',
-                        nivel: 0,
-                        productosComprados: 0,
-                        productosPagados: 0,
-                        productosEnCurso: 0,
-                        deudaActual: 0,
-                        limiteDeuda: 5000,
-                        estadoKyc: 'pendiente',
-                        trustScore: 0,
-                        totalGastado: 0,
-                        fechaUltimaCompra: null,
-                        datosCompletos: true,
-                        aceptaTerminos: false,
-                        documentosCompletos: false,
-                        telefonoAlternativo: ''
-                    });
-                    console.log('✅ Registro en clients creado');
-                } catch (clientError) {
-                    console.warn('⚠️ Error creando registro en clients:', clientError.message);
-                    // No detenemos el flujo si falla clients
-                }
-            }
+  return (
+    <>
+      <Head><title>Crear Cuenta | MarketDesliz</title></Head>
+      <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+        <TerminalBar mode="rotating" />
+        
+        <main className="flex-1 flex items-center justify-center p-6">
+          <div className="w-full max-w-md">
+            <Link href="/" className="inline-flex items-center gap-2 text-[13px] mb-8" style={{ color: T.inkSoft }}>
+              <ArrowLeft size={14} /> Volver al inicio
+            </Link>
 
-            // Guardar en localStorage
-            localStorage.setItem('clienteId', cliente.id);
-            localStorage.setItem('clienteNombre', formData.nombre);
+            <div className="p-8" style={{ background: T.bg, border: `1px solid ${T.line}`, borderRadius: '12px' }}>
+              <h1 className="text-2xl font-bold mb-2" style={{ color: T.ink }}>Crea tu cuenta</h1>
+              <p className="text-sm mb-6" style={{ color: T.inkSoft }}>Únete a MarketDesliz y empieza a comprar.</p>
 
-            // Redirigir según la opción
-            if (producto && opcion) {
-                router.push(`/opciones/${opcion}?producto=${producto}&cliente=${cliente.id}`);
-            } else {
-                router.push('/perfil');
-            }
-
-        } catch (error) {
-            console.error('❌ Error detallado:', error);
-            
-            // Mostrar mensaje de error específico
-            let mensajeError = 'Error al procesar la solicitud';
-            
-            if (error.data?.data) {
-                // Error de campos específicos de PocketBase
-                const camposError = Object.entries(error.data.data)
-                    .map(([campo, info]) => `${campo}: ${info.message}`)
-                    .join(', ');
-                mensajeError = `Error en campos: ${camposError}`;
-            } else if (error.message?.includes('unique')) {
-                mensajeError = 'El teléfono o email ya está registrado';
-            } else if (error.message) {
-                mensajeError = error.message;
-            }
-            
-            alert(mensajeError);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <>
-            <Head>
-                <title>{getTitulo()} | MarketDesliz</title>
-                <style>{`
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; font-family: Arial, sans-serif; }
-          .header { background: white; padding: 15px 0; }
-          .header-content { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; }
-          .logo { font-size: 28px; font-weight: bold; color: #6C3BFF; cursor: pointer; }
-          .container { max-width: 600px; margin: 40px auto; padding: 0 20px; }
-          .card { background: white; border-radius: 16px; padding: 40px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); }
-          h1 { font-size: 28px; margin-bottom: 10px; color: #333; }
-          .subtitle { color: #666; margin-bottom: 30px; }
-          .form-group { margin-bottom: 20px; }
-          .form-group label { display: block; margin-bottom: 5px; font-weight: 500; color: #333; }
-          .form-group input, .form-group textarea { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px; }
-          .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #6C3BFF; }
-          .btn-primary { width: 100%; background: #6C3BFF; color: white; border: none; padding: 15px; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-          .btn-primary:hover { background: #5A2FE0; }
-          .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
-        `}</style>
-            </Head>
-
-            <div className="header">
-                <div className="header-content">
-                    <div className="logo" onClick={() => router.push('/')}>MarketDesliz</div>
-                    <Link href="/perfil" style={{ color: '#666', textDecoration: 'none' }}>Mi Cuenta</Link>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: T.inkFaint }}>Nombre completo</label>
+                  <div className="relative">
+                    <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: T.inkFaint }} />
+                    <input type="text" name="nombre" required value={formData.nombre} onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 outline-none text-sm"
+                      style={{ border: `1px solid ${T.line}`, borderRadius: '6px', background: 'transparent', color: T.ink }}
+                      placeholder="Ej: Juan Pérez" />
+                  </div>
                 </div>
-            </div>
 
-            <div className="container">
-                <div className="card">
-                    <h1>{getTitulo()}</h1>
-                    <p className="subtitle">Completa tus datos para continuar</p>
-
-                    {productoData && (
-                        <div style={{ background: '#F3F0FF', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
-                            <p><strong>Producto:</strong> {productoData.nombre}</p>
-                            <p><strong>Precio:</strong> ${productoData.precio?.toLocaleString()}</p>
-                        </div>
-                    )}
-
-                    <form onSubmit={handleSubmit}>
-                        <div className="form-group">
-                            <label>Nombre completo *</label>
-                            <input
-                                type="text"
-                                required
-                                value={formData.nombre}
-                                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                                placeholder="Ej: Juan Pérez"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Teléfono (10 dígitos) *</label>
-                            <input
-                                type="tel"
-                                required
-                                value={formData.telefono}
-                                onChange={(e) => setFormData({ ...formData, telefono: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                                placeholder="Ej: 5512345678"
-                            />
-                            <small style={{ color: '#666', fontSize: '12px' }}>10 dígitos, sin espacios ni guiones</small>
-                        </div>
-
-                        <div className="form-group">
-                            <label>Dirección *</label>
-                            <textarea
-                                required
-                                value={formData.direccion}
-                                onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-                                placeholder="Calle, número, colonia, ciudad"
-                                rows="3"
-                            />
-                        </div>
-
-                        <button type="submit" className="btn-primary" disabled={loading}>
-                            {loading ? 'Procesando...' : 'Continuar'}
-                        </button>
-                    </form>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: T.inkFaint }}>Correo electrónico</label>
+                  <div className="relative">
+                    <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: T.inkFaint }} />
+                    <input type="email" name="email" required value={formData.email} onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 outline-none text-sm"
+                      style={{ border: `1px solid ${T.line}`, borderRadius: '6px', background: 'transparent', color: T.ink }}
+                      placeholder="tu@correo.com" />
+                  </div>
                 </div>
+
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: T.inkFaint }}>Teléfono (Opcional)</label>
+                  <div className="relative">
+                    <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: T.inkFaint }} />
+                    <input type="tel" name="telefono" value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value.replace(/\D/g, '').slice(0,10)})}
+                      className="w-full pl-10 pr-4 py-2.5 outline-none text-sm"
+                      style={{ border: `1px solid ${T.line}`, borderRadius: '6px', background: 'transparent', color: T.ink }}
+                      placeholder="10 dígitos" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: T.inkFaint }}>Contraseña</label>
+                  <div className="relative">
+                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: T.inkFaint }} />
+                    <input type="password" name="password" required value={formData.password} onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 outline-none text-sm"
+                      style={{ border: `1px solid ${T.line}`, borderRadius: '6px', background: 'transparent', color: T.ink }}
+                      placeholder="Mínimo 8 caracteres" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: T.inkFaint }}>Confirmar contraseña</label>
+                  <div className="relative">
+                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: T.inkFaint }} />
+                    <input type="password" name="confirmPassword" required value={formData.confirmPassword} onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 outline-none text-sm"
+                      style={{ border: `1px solid ${T.line}`, borderRadius: '6px', background: 'transparent', color: T.ink }}
+                      placeholder="Repite la contraseña" />
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2 pt-2">
+                  <input type="checkbox" id="terms" checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)} className="mt-1" />
+                  <label htmlFor="terms" className="text-[11px] leading-tight" style={{ color: T.inkSoft }}>
+                    Acepto los <a href="/terminos-condiciones" target="_blank" className="underline" style={{ color: T.accent }}>Términos y Condiciones</a> y el <a href="/privacidad" target="_blank" className="underline" style={{ color: T.accent }}>Aviso de Privacidad</a>.
+                  </label>
+                </div>
+
+                {error && <p className="text-red-500 text-xs">{error}</p>}
+
+                <button type="submit" disabled={loading}
+                  className="w-full py-3 text-white text-sm font-medium disabled:opacity-50 mt-4"
+                  style={{ background: T.accent, borderRadius: '6px' }}>
+                  {loading ? 'Creando cuenta...' : 'Crear cuenta'}
+                </button>
+              </form>
+
+              <div className="text-center mt-6">
+                <p className="text-[12px]" style={{ color: T.inkSoft }}>
+                  ¿Ya tienes una cuenta? <Link href="/" className="font-medium" style={{ color: T.accent }}>Inicia sesión</Link>
+                </p>
+              </div>
             </div>
-        </>
-    );
+          </div>
+        </main>
+      </div>
+    </>
+  );
 }
