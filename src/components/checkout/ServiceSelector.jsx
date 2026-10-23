@@ -14,7 +14,7 @@ export default function ServiceSelector({ product, planCalculado, onSelect }) {
 
   // ✅ Usar precioTotal (o precio como fallback)
   const precioTotal = product?.precioTotal || product?.precio || 0;
-  const precioContado = Math.round(precioTotal * 2 / 3);
+  const precioContado = Math.round(precioTotal * 0.75);
 
   // ✅ Obtener enganche de forma segura
   const enganche = planCalculado?.enganche || Math.round(precioTotal * 0.25);

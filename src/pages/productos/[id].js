@@ -376,6 +376,39 @@ function ProductoRelacionadoCard({ producto }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// ServiceOptionButton · Botón de opción de servicio (extraído para evitar
+// usar hooks dentro de un .map())
+// ─────────────────────────────────────────────────────────────────────────
+function ServiceOptionButton({ id, Icon, title, desc, fg, bg, onClick, isAuthenticated }) {
+  const [hover, setHover] = useState(false);
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      className="flex flex-col items-start gap-2 p-5 text-left transition-all duration-200"
+      style={{
+        background: hover ? bg : T.bg,
+        border: `1px solid ${hover ? fg : T.line}`,
+        borderRadius: '8px',
+        cursor: 'pointer',
+        WebkitTapHighlightColor: 'transparent',
+        transitionTimingFunction: T.ease,
+      }}
+    >
+      <Icon size={20} strokeWidth={1.5} style={{ color: fg }} />
+      <span className="text-[13px] mt-1" style={{ color: T.ink, fontWeight: 500 }}>
+        {title}
+      </span>
+      <span className="text-[11.5px] leading-[1.5]" style={{ color: T.inkSoft, fontWeight: 450 }}>
+        {desc}
+      </span>
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────
 export default function ProductoDetalle() {
@@ -535,6 +568,8 @@ export default function ProductoDetalle() {
         id: record.id,
         nombre: record.nombre || 'Producto sin nombre',
         descripcion: record.descripcion || 'Sin descripción',
+        precio: record.precio || 0, 
+        precioBase: record.precio || 0,
         precioTotal: record.precio || 0,
         enganche: record.enganche || 0,
         pagoSemanal: record.pagoSemanal || 0,
@@ -2301,50 +2336,28 @@ export default function ProductoDetalle() {
                     fg: '#B8820E',
                     bg: 'rgba(184, 130, 14, 0.06)',
                   },
-                ].map(({ id, icon: Icon, title, desc, fg, bg }) => {
-                  const [hover, setHover] = useState(false);
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => {
-                        if (!isAuthenticated) {
-                          sessionStorage.setItem('servicioPendiente', id);
-                          setShowServiceSelector(false);
-                          openLogin();
-                          return;
-                        }
+                ].map(({ id, icon, title, desc, fg, bg }) => (
+                  <ServiceOptionButton
+                    key={id}
+                    id={id}
+                    Icon={icon}
+                    title={title}
+                    desc={desc}
+                    fg={fg}
+                    bg={bg}
+                    isAuthenticated={isAuthenticated}
+                    onClick={() => {
+                      if (!isAuthenticated) {
+                        sessionStorage.setItem('servicioPendiente', id);
                         setShowServiceSelector(false);
-                        handleServiceSelect(id);
-                      }}
-                      onMouseEnter={() => setHover(true)}
-                      onMouseLeave={() => setHover(false)}
-                      className="flex flex-col items-start gap-2 p-5 text-left transition-all duration-200"
-                      style={{
-                        background: hover ? bg : T.bg,
-                        border: `1px solid ${hover ? fg : T.line
-                          }`,
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        WebkitTapHighlightColor: 'transparent',
-                        transitionTimingFunction: T.ease,
-                      }}
-                    >
-                      <Icon size={20} strokeWidth={1.5} style={{ color: fg }} />
-                      <span
-                        className="text-[13px] mt-1"
-                        style={{ color: T.ink, fontWeight: 500 }}
-                      >
-                        {title}
-                      </span>
-                      <span
-                        className="text-[11.5px] leading-[1.5]"
-                        style={{ color: T.inkSoft, fontWeight: 450 }}
-                      >
-                        {desc}
-                      </span>
-                    </button>
-                  );
-                })}
+                        openLogin();
+                        return;
+                      }
+                      setShowServiceSelector(false);
+                      handleServiceSelect(id);
+                    }}
+                  />
+                ))}
               </div>
 
               {!isAuthenticated && (

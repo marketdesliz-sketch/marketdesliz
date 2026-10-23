@@ -182,12 +182,6 @@ export default function MetodoPagoModal({ product, orderData, onClose, onMetodoS
                 <p className="text-sm text-gray-500 mt-1">
                   Escanea el código QR del vendedor autorizado. El vendedor validará tu compra al instante.
                 </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Validación inmediata</span>
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">✓ Seguro</span>
-                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">✓ Sin comprobante</span>
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Sin límite</span>
-                </div>
               </div>
               {metodoSeleccionado === 'qr_vendedor' && (
                 <div className="w-7 h-7 bg-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
@@ -232,21 +226,7 @@ export default function MetodoPagoModal({ product, orderData, onClose, onMetodoS
                   }
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {limiteTransferencia ? (
-                    <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">🚫 Límite $3,500/semana</span>
-                  ) : (
-                    <>
-                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Comprobante digital</span>
-                      <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">⏳ Validación 24h</span>
-                      <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">🏦 SPEI</span>
-                    </>
-                  )}
                 </div>
-                {!limiteTransferencia && (
-                  <div className="mt-2 text-xs text-gray-400">
-                    💡 Límite semanal: ${LIMITE_SEMANAL.toLocaleString()} · Transferido esta semana: ${totalSemanal.toLocaleString()}
-                  </div>
-                )}
               </div>
               {metodoSeleccionado === 'transferencia' && !limiteTransferencia && (
                 <div className="w-7 h-7 bg-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
@@ -263,17 +243,6 @@ export default function MetodoPagoModal({ product, orderData, onClose, onMetodoS
               {error}
             </div>
           )}
-
-          {/* Información importante */}
-          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-xs">
-            <p className="font-semibold mb-1">📌 Información importante:</p>
-            <ul className="space-y-0.5 list-disc list-inside">
-              <li>El pago del enganche es necesario para apartar tu producto</li>
-              <li>Los pagos semanales inician la próxima semana</li>
-              <li>Días de pago: <strong>Lunes y Martes</strong></li>
-              <li>Transferencia: máximo <strong>$3,500 MXN por semana</strong></li>
-            </ul>
-          </div>
 
           {/* Botones de acción */}
           <div className="flex gap-3">

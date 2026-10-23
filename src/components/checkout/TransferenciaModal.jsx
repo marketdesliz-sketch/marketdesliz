@@ -195,8 +195,6 @@ export default function TransferenciaModal({ orderData, product, onClose, onComp
           {/* Aviso de límite semanal */}
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4">
             <p className="text-sm text-blue-800 flex items-start gap-2">
-              <span>💡</span>
-              <span>Límite de transferencia: <strong>$3,500 MXN por semana</strong>. Si excedes este monto, deberás usar QR del vendedor.</span>
             </p>
           </div>
 

@@ -51,9 +51,8 @@ function StepIndicator({ current }) {
         return (
           <div key={n} className="flex items-center flex-1 last:flex-none">
             <div className="flex flex-col items-center gap-1">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                done ? 'bg-[#10b981] text-white' : active ? 'bg-[#6C3BFF] text-white' : 'bg-gray-100 text-gray-400'
-              }`}>
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${done ? 'bg-[#10b981] text-white' : active ? 'bg-[#6C3BFF] text-white' : 'bg-gray-100 text-gray-400'
+                }`}>
                 {done ? '✓' : n}
               </div>
               <span className={`text-[10px] whitespace-nowrap ${active ? 'text-[#6C3BFF] font-semibold' : 'text-gray-400'}`}>
@@ -133,13 +132,19 @@ export default function CheckoutForm({ product, phone, tipoSolicitud, planCalcul
         montoPagado: 0, fechaVencimiento: new Date().toISOString().split('T')[0],
         estado: 'pendiente', metodoPago: 'qr'
       });
-      for (let i = 1; i <= plan.semanas; i++) {
+
+      // ✅ CORREGIDO: usar totalPeriodos en vez de semanas
+      for (let i = 1; i <= plan.totalPeriodos; i++) {
         const fechaVencimiento = new Date();
-        fechaVencimiento.setDate(fechaVencimiento.getDate() + (i * 7));
-        let monto = plan.pagoSemanal;
-        if (i === plan.semanas && plan.ultimoPago && plan.ultimoPago > 0 && plan.ultimoPago !== plan.pagoSemanal) {
+        // ✅ CORREGIDO: sumar 7 días si es semanal, 14 si es quincenal
+        const daysToAdd = plan.frecuenciaPago === 'quincenal' ? 14 : 7;
+        fechaVencimiento.setDate(fechaVencimiento.getDate() + (i * daysToAdd));
+
+        let monto = plan.pagoMonto; // ✅ CORREGIDO: usar pagoMonto en vez de pagoSemanal
+        if (i === plan.totalPeriodos && plan.ultimoPago && plan.ultimoPago > 0 && plan.ultimoPago !== plan.pagoMonto) {
           monto = plan.ultimoPago;
         }
+
         await paymentsCollection.create({
           orderId, userId, numeroSemana: i, montoProgramado: monto,
           montoPagado: 0, fechaVencimiento: fechaVencimiento.toISOString().split('T')[0],
@@ -182,10 +187,12 @@ export default function CheckoutForm({ product, phone, tipoSolicitud, planCalcul
       if (!currentUser) throw new Error('Usuario no autenticado');
       const direccionCompleta = `${formData.calle} ${formData.numeroExterior}, ${formData.colonia}, ${formData.municipio}, ${formData.ciudad}, ${formData.estado} CP ${formData.codigoPostal}`;
 
-      await pb.collection('users').update(currentUser.id, {
-        nombre: formData.nombre,
-        email: formData.email || `${phone}@temp.com`,
-      });
+      // ✅ Actualizar solo si hay datos válidos, sin inventar correos
+      const userUpdateData = { nombre: formData.nombre };
+      if (formData.email && formData.email.includes('@')) {
+        userUpdateData.email = formData.email;
+      }
+      await pb.collection('users').update(currentUser.id, userUpdateData);
 
       const clientData = {
         direccionCalle: formData.calle, direccionNumero: formData.numeroExterior,
@@ -209,7 +216,7 @@ export default function CheckoutForm({ product, phone, tipoSolicitud, planCalcul
       let esCredito = false;
 
       if (tipoSolicitud === 'contado') {
-        totalPrice = Math.round(product.precio * 2 / 3);
+        totalPrice = Math.round(product.precio * 0.75);
         const order = await createCashOrderSimple({
           clientId: currentUser.id, productId: product.id, productName: product.nombre,
           productPrice: product.precio, totalPrice: product.precio, cashPrice: totalPrice,
@@ -224,7 +231,8 @@ export default function CheckoutForm({ product, phone, tipoSolicitud, planCalcul
           clientId: currentUser.id, productId: product.id, productName: product.nombre,
           productPrice: product.precio, totalPrice: planCalculado.totalPagar,
           downPayment: planCalculado.enganche, downPaymentPercentage: planCalculado.enganchePorcentaje,
-          weeklyAmount: planCalculado.pagoSemanal, totalWeeks: planCalculado.semanas,
+          weeklyAmount: planCalculado.pagoMonto,
+          totalWeeks: planCalculado.totalPeriodos,
           weeklyPayments: planCalculado.pagos, remainingBalance: planCalculado.saldoRestante,
           diaPago: formData.diaPago, paymentMethod: metodoPago,
           clientData: { ...formData, direccionCompleta, telefono: phone },
@@ -267,7 +275,12 @@ export default function CheckoutForm({ product, phone, tipoSolicitud, planCalcul
       if (!currentUser) throw new Error('Usuario no autenticado');
       const direccionCompleta = `${formData.calle} ${formData.numeroExterior}, ${formData.colonia}, ${formData.municipio}, ${formData.ciudad}, ${formData.estado} CP ${formData.codigoPostal}`;
 
-      await pb.collection('users').update(currentUser.id, { nombre: formData.nombre, email: formData.email || `${phone}@temp.com` });
+      // ✅ Actualizar solo si hay datos válidos, sin inventar correos
+      const userUpdateData = { nombre: formData.nombre };
+      if (formData.email && formData.email.includes('@')) {
+        userUpdateData.email = formData.email;
+      }
+      await pb.collection('users').update(currentUser.id, userUpdateData);
 
       const clientData = {
         direccionCalle: formData.calle, direccionNumero: formData.numeroExterior,
@@ -341,12 +354,18 @@ export default function CheckoutForm({ product, phone, tipoSolicitud, planCalcul
     );
   }
 
+  // ✅ Validar que el plan exista y tenga la propiedad correcta
+  const totalWeeks = planCalculado?.totalPeriodos || planCalculado?.semanas || 0;
+
   const orderData = {
     tipoSolicitud,
-    totalPrice: tipoSolicitud === 'contado' ? Math.round(product.precio * 2 / 3) : planCalculado?.totalPagar || product.precio,
+    totalPrice: tipoSolicitud === 'contado'
+      ? Math.round((product.precioTotal || product.precio) * 0.75)
+      : planCalculado?.totalPagar || product.precioTotal || product.precio,
     downPayment: planCalculado?.enganche || 0,
-    weeklyAmount: planCalculado?.pagoSemanal || 0,
-    totalWeeks: planCalculado?.semanas || 0,
+    weeklyAmount: planCalculado?.pagoMonto || 0,
+    totalWeeks: totalWeeks, // ✅ Ahora sí tomará el valor de totalPeriodos
+    frecuenciaPago: planCalculado?.frecuenciaPago || 'semanal',
     product: product.id
   };
 
@@ -498,30 +517,69 @@ export default function CheckoutForm({ product, phone, tipoSolicitud, planCalcul
         <div className="space-y-4">
           <p className="text-sm font-bold text-gray-800 mb-4">Confirmar datos</p>
 
-          {/* Resumen producto */}
-          <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 space-y-2">
-            <p className="text-xs font-bold text-[#6C3BFF] mb-3 uppercase tracking-wide">Producto</p>
-            {[
-              ['Producto', product.nombre],
-              ['Precio total', formatMoney(product.precio)],
-              tipoSolicitud === 'contado' ? ['Precio de contado', formatMoney(Math.round(product.precio * 2 / 3))] : null,
-              tipoSolicitud === 'credito' && planCalculado ? ['Enganche', formatMoney(planCalculado.enganche)] : null,
-              tipoSolicitud === 'credito' && planCalculado ? ['Pago semanal', `${formatMoney(planCalculado.pagoSemanal)} × ${planCalculado.semanas} semanas`] : null,
-            ].filter(Boolean).map(([label, value]) => (
-              <div key={label} className="flex justify-between text-sm">
-                <span className="text-gray-500">{label}</span>
-                <span className="font-semibold text-gray-800">{value}</span>
+          {/* Resumen producto (Diseño Premium) */}
+          <div className="bg-[#6C3BFF]/5 rounded-2xl p-4 border border-[#6C3BFF]/15 mb-4">
+            <p className="text-[10px] font-bold text-[#6C3BFF] mb-3 uppercase tracking-wide">
+              {tipoSolicitud === 'credito' ? 'Tu plan de pagos' : 'Resumen de compra'}
+            </p>
+
+            <div className="space-y-2.5">
+              <div className="flex justify-between text-[13px]">
+                <span className="text-gray-500">Producto</span>
+                <span className="font-medium text-gray-800">{product.nombre}</span>
               </div>
-            ))}
-            {tipoSolicitud === 'credito' && planCalculado && (
-              <div className="flex justify-between text-sm pt-2 border-t border-gray-200">
-                <span className="font-bold text-gray-800">Total a pagar</span>
-                <span className="font-bold text-[#6C3BFF]">{formatMoney(planCalculado.totalPagar)}</span>
+
+              <div className="flex justify-between text-[13px]">
+                <span className="text-gray-500">Precio total a crédito</span>
+                <span className="text-gray-500">{formatMoney(product.precioTotal || product.precio)}</span>
               </div>
-            )}
+
+              {tipoSolicitud === 'contado' ? (
+                <>
+                  <div className="flex justify-between text-[13px]">
+                    <span className="text-gray-500">Descuento por contado (25%)</span>
+                    <span className="text-[#10b981]">-{formatMoney((product.precioTotal || product.precio) * 0.25)}</span>
+                  </div>
+                  <div className="flex justify-between text-[13px] pt-2 border-t border-[#6C3BFF]/15">
+                    <span className="font-bold text-gray-800">Total a pagar</span>
+                    <span className="font-bold text-[#10b981] text-base">{formatMoney(Math.round((product.precioTotal || product.precio) * 0.75))}</span>
+                  </div>
+                </>
+              ) : (
+                planCalculado && (
+                  <>
+                    <div className="flex justify-between text-[13px]">
+                      <span className="text-gray-500">Enganche inicial</span>
+                      <span className="font-bold text-[#6C3BFF]">{formatMoney(planCalculado.enganche)}</span>
+                    </div>
+                    <div className="flex justify-between text-[13px]">
+                      <span className="text-gray-500">Saldo a financiar</span>
+                      <span className="font-medium text-gray-800">{formatMoney(planCalculado.saldoRestante)}</span>
+                    </div>
+                    <div className="flex justify-between text-[13px]">
+                      <span className="text-gray-500 capitalize">Pago {planCalculado.frecuenciaPago}</span>
+                      <span className="font-medium text-gray-800">
+                        {formatMoney(planCalculado.pagoMonto)} × {planCalculado.totalPeriodos} {planCalculado.frecuenciaPago === 'semanal' ? 'sem' : 'quin'}
+                      </span>
+                    </div>
+                    {planCalculado.ultimoPago > 0 && planCalculado.ultimoPago !== planCalculado.pagoMonto && (
+                      <div className="flex justify-between text-[13px]">
+                        <span className="text-gray-500">Último pago</span>
+                        <span className="font-medium text-gray-800">{formatMoney(planCalculado.ultimoPago)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-[13px] pt-2 border-t border-[#6C3BFF]/15">
+                      <span className="font-bold text-gray-800">Total a pagar</span>
+                      <span className="font-bold text-[#6C3BFF] text-base">{formatMoney(planCalculado.totalPagar)}</span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-2 text-center">Sin intereses · Último pago ajustado automáticamente</p>
+                  </>
+                )
+              )}
+            </div>
           </div>
 
-          {/* Datos personales */}
+          {/* Datos personales (sin cambios) */}
           <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 space-y-1.5">
             <p className="text-xs font-bold text-[#6C3BFF] mb-3 uppercase tracking-wide">Datos personales</p>
             {[
@@ -538,7 +596,7 @@ export default function CheckoutForm({ product, phone, tipoSolicitud, planCalcul
             ))}
           </div>
 
-          {/* Dirección */}
+          {/* Dirección (sin cambios) */}
           <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
             <p className="text-xs font-bold text-[#6C3BFF] mb-3 uppercase tracking-wide">
               {tipoSolicitud === 'visita' ? 'Dirección de visita' : tipoSolicitud === 'entrega' ? 'Dirección de entrega' : 'Domicilio'}

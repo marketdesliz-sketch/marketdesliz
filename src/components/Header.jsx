@@ -1,16 +1,17 @@
 // src/components/Header.jsx
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import { Bell as BellIcon, X, User, ChevronDown, Search, LogOut, Package } from 'lucide-react';
+import { 
+  Bell as BellIcon, X, User, ChevronDown, Search, LogOut, Package, 
+  CreditCard, Wallet, Heart 
+} from 'lucide-react';
 import Logo from './Logo';
 import LoginDropdown from './LoginDropdown';
 import { useAuth } from '../contexts/AuthContext';
 import { T } from '../lib/tokens';
+import pb from '../lib/pocketbase';
 
-// ─────────────────────────────────────────────────────────────────────────
-// HeaderLink · link de texto con touch
-// ─────────────────────────────────────────────────────────────────────────
 function HeaderLink({ href, label, onClick }) {
   const [hover, setHover] = useState(false);
   const style = {
@@ -32,9 +33,6 @@ function HeaderLink({ href, label, onClick }) {
   return <button onClick={onClick} style={style} {...handlers}>{label}</button>;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Header · compartido entre todas las páginas
-// ─────────────────────────────────────────────────────────────────────────
 export default function Header({
   notifications = [],
   unreadCount = 0,
@@ -46,9 +44,12 @@ export default function Header({
 }) {
   const router = useRouter();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false); // ✅ NUEVO: Estado para el menú de usuario
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const { user, showLogin, openLogin, closeLogin, logout } = useAuth();
+  
+  // ✅ Estado para guardar el nivel y saldo del cliente
+  const [clientData, setClientData] = useState(null);
 
   const goTo = (path) => {
     setShowUserMenu(false);
@@ -62,7 +63,30 @@ export default function Header({
     { href: '/eshe-parallel', label: 'Éshé Parallel' },
   ];
 
-  // ✅ FIX: Cerrar todos los menús al cambiar de ruta
+  // ✅ Cargar datos del cliente (Nivel, Saldo) cuando el usuario se loguea
+  useEffect(() => {
+    if (!user) {
+      setClientData(null);
+      return;
+    }
+    
+    const fetchClientData = async () => {
+      try {
+        const record = await pb.collection('clients').getFirstListItem(`userId = "${user.id}"`);
+        setClientData({
+          nivel: record.nivel || 0,
+          // Usamos deudaActual o una lógica de saldo a favor si la tienes
+          saldoDisponible: record.deudaActual ? -record.deudaActual : 0, 
+        });
+      } catch (error) {
+        // Si no tiene registro en clients aún, mostramos valores por defecto
+        setClientData({ nivel: 0, saldoDisponible: 0 });
+      }
+    };
+    
+    fetchClientData();
+  }, [user]);
+
   useEffect(() => {
     const handleRouteChange = () => {
       closeLogin();
@@ -108,7 +132,7 @@ export default function Header({
     <header
       className="sticky top-0 z-30"
       style={{
-        background: 'rgba(250, 250, 249, 0.85)',
+        background: 'rgba(250, 250, 249, 0.75)',
         backdropFilter: 'saturate(180%) blur(16px)',
         WebkitBackdropFilter: 'saturate(180%) blur(16px)',
         borderBottom: `1px solid ${T.line}`,
@@ -191,7 +215,6 @@ export default function Header({
           {/* Cuenta / Menú de Usuario */}
           <div className="relative">
             {user ? (
-              // ✅ SI HAY USUARIO: Mostrar menú de usuario
               <>
                 <button
                   className="flex items-center gap-2"
@@ -208,26 +231,53 @@ export default function Header({
                 {showUserMenu && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
-                    <div className="absolute right-0 mt-2 w-[200px] overflow-hidden z-50" style={{ background: T.bg, border: `1px solid ${T.line}`, borderRadius: '8px', boxShadow: '0 1px 2px rgba(15,15,15,0.04), 0 12px 40px rgba(15,15,15,0.10)' }}>
-                      <div className="px-4 py-3" style={{ borderBottom: `1px solid ${T.line}` }}>
-                        <p className="text-[13px] font-medium truncate" style={{ color: T.ink }}>{user.nombre}</p>
-                        <p className="text-[11px] truncate mt-0.5" style={{ color: T.inkFaint }}>{user.email}</p>
+                    <div className="absolute right-0 mt-2 w-[260px] overflow-hidden z-50" style={{ background: T.bg, border: `1px solid ${T.line}`, borderRadius: '12px', boxShadow: '0 1px 2px rgba(15,15,15,0.04), 0 12px 40px rgba(15,15,15,0.10)' }}>
+                      
+                      {/* ✅ Resumen del Cliente (Nivel y Saldo) */}
+                      <div className="px-5 py-4" style={{ borderBottom: `1px solid ${T.line}` }}>
+                        <p className="text-[14px] font-medium truncate mb-1" style={{ color: T.ink }}>
+                          {user.nombre}
+                        </p>
+                        <p className="text-[11px] truncate mb-3" style={{ color: T.inkFaint }}>
+                          {user.email}
+                        </p>
+                        <div className="flex items-center justify-between text-[12px]">
+                          <span style={{ color: T.inkSoft }}>Nivel: <strong style={{ color: T.ink }}>{clientData?.nivel ?? 0}</strong></span>
+                          <span style={{ color: T.inkSoft }}>Saldo: <strong style={{ color: T.green }}>${(clientData?.saldoDisponible || 0).toFixed(2)}</strong></span>
+                        </div>
                       </div>
-                      <button onClick={() => goTo('/perfil')} className="w-full flex items-center gap-2 px-4 py-3 text-left text-[13px] hover:bg-black/[0.02]" style={{ color: T.inkMid }}>
-                        <User size={14} /> Mi Perfil
-                      </button>
-                      <button onClick={() => goTo('/perfil/ordenes')} className="w-full flex items-center gap-2 px-4 py-3 text-left text-[13px] hover:bg-black/[0.02] border-t border-gray-100" style={{ color: T.inkMid }}>
-                        <Package size={14} /> Mis Órdenes
-                      </button>
-                      <button onClick={handleLogout} className="w-full flex items-center gap-2 px-4 py-3 text-left text-[13px] text-red-500 hover:bg-red-50 border-t border-gray-100">
-                        <LogOut size={14} /> Cerrar Sesión
-                      </button>
+
+                      {/* Enlaces del Menú */}
+                      <div className="py-2">
+                        <button onClick={() => goTo('/perfil')} className="w-full flex items-center gap-3 px-5 py-2.5 text-left text-[13.5px] hover:bg-black/[0.02]" style={{ color: T.inkMid }}>
+                          <User size={16} strokeWidth={1.5} /> Mi perfil
+                        </button>
+                        <button onClick={() => goTo('/perfil/ordenes')} className="w-full flex items-center gap-3 px-5 py-2.5 text-left text-[13.5px] hover:bg-black/[0.02]" style={{ color: T.inkMid }}>
+                          <Package size={16} strokeWidth={1.5} /> Mis órdenes
+                        </button>
+                        <button onClick={() => goTo('/perfil/pagos')} className="w-full flex items-center gap-3 px-5 py-2.5 text-left text-[13.5px] hover:bg-black/[0.02]" style={{ color: T.inkMid }}>
+                          <CreditCard size={16} strokeWidth={1.5} /> Mis pagos
+                        </button>
+                        <button onClick={() => goTo('/perfil/tarjeta')} className="w-full flex items-center gap-3 px-5 py-2.5 text-left text-[13.5px] hover:bg-black/[0.02]" style={{ color: T.inkMid }}>
+                          <Wallet size={16} strokeWidth={1.5} /> Mi tarjeta virtual
+                        </button>
+                        <button onClick={() => goTo('/perfil/favoritos')} className="w-full flex items-center gap-3 px-5 py-2.5 text-left text-[13.5px] hover:bg-black/[0.02]" style={{ color: T.inkMid }}>
+                          <Heart size={16} strokeWidth={1.5} /> Favoritos
+                        </button>
+                      </div>
+
+                      {/* Botón de Cerrar Sesión */}
+                      <div style={{ borderTop: `1px solid ${T.line}` }}>
+                        <button onClick={handleLogout} className="w-full flex items-center gap-3 px-5 py-3 text-left text-[13.5px] text-red-500 hover:bg-red-50" style={{ color: T.red }}>
+                          <LogOut size={16} strokeWidth={1.5} /> Cerrar sesión
+                        </button>
+                      </div>
+
                     </div>
                   </>
                 )}
               </>
             ) : (
-              // ✅ SI NO HAY USUARIO: Mostrar botón de Login
               <>
                 <button
                   className="flex items-center gap-2"

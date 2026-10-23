@@ -2,25 +2,27 @@
 import { useEffect, useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import StoreLayout from '../../layouts/StoreLayout';
+import { Clock, CheckCircle, XCircle, AlertCircle, ShieldCheck, ChevronRight } from 'lucide-react';
 import { getClientKYC } from '../../lib/kycService';
 import pb from '../../lib/pocketbase';
+import { T } from '../../lib/tokens';
+import TerminalBar from '../../components/TerminalBar';
+import Header from '../../components/Header';
+import Footer from '../../components/Footer';
+import BackButton from '../../components/BackButton';
 
 export default function KYCStatusPage() {
   const router = useRouter();
   const [kyc, setKyc] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
 
   useEffect(() => {
     if (!pb.authStore.isValid) {
-      router.push('/solicitar');
+      router.push('/');
       return;
     }
-    const currentUser = pb.authStore.model;
-    setUser(currentUser);
-    cargarKYC(currentUser.id);
-  }, []);
+    cargarKYC(pb.authStore.model.id);
+  }, [router]);
 
   const cargarKYC = async (userId) => {
     try {
@@ -36,176 +38,146 @@ export default function KYCStatusPage() {
   const getStatusInfo = () => {
     if (!kyc) {
       return {
-        icon: '📤',
+        Icon: AlertCircle, color: T.inkMid, bg: 'rgba(15, 15, 15, 0.04)',
         title: 'Verificación pendiente',
         message: 'Aún no has enviado tus documentos de verificación.',
-        color: 'gray',
-        action: 'Enviar documentos',
-        link: '/kyc'
+        action: 'Enviar documentos', link: '/kyc'
       };
     }
 
     switch (kyc.estado) {
       case 'pendiente':
         return {
-          icon: '⏳',
+          Icon: Clock, color: '#B8820E', bg: 'rgba(184, 130, 14, 0.08)',
           title: 'Documentos en revisión',
-          message: 'Tus documentos están siendo revisados por nuestro equipo. Te notificaremos cuando estén listos.',
-          color: 'yellow',
-          action: null,
-          link: null
+          message: 'Nuestro equipo está revisando tu información. Te notificaremos cuando esté listo.',
+          action: null, link: null
         };
       case 'aprobado':
         return {
-          icon: '✅',
-          title: '¡Verificación aprobada!',
-          message: 'Tu identidad ha sido verificada. Ya puedes unirte a las tandas y disfrutar de todos los beneficios.',
-          color: 'green',
-          action: 'Ver tandas disponibles',
-          link: '/tandas'
+          Icon: CheckCircle, color: T.green, bg: 'rgba(26, 127, 75, 0.08)',
+          title: '¡Identidad verificada!',
+          message: 'Ya puedes unirte a tandas y disfrutar de todos los beneficios.',
+          action: 'Ver tandas', link: '/tandas'
         };
       case 'rechazado':
-        const motivo = kyc.motivoRechazo || kyc.notas || 'Tus documentos no fueron aprobados.';
         return {
-          icon: '❌',
+          Icon: XCircle, color: T.red, bg: 'rgba(197, 48, 48, 0.08)',
           title: 'Documentos rechazados',
-          message: motivo,
-          color: 'red',
-          action: 'Reintentar verificación',
-          link: '/kyc'
+          message: kyc.motivoRechazo || kyc.notas || 'Tus documentos no fueron aprobados.',
+          action: 'Reintentar', link: '/kyc'
         };
       default:
         return {
-          icon: '⚠️',
+          Icon: AlertCircle, color: T.inkMid, bg: 'rgba(15, 15, 15, 0.04)',
           title: 'Estado desconocido',
           message: 'Contacta a soporte para más información.',
-          color: 'gray',
-          action: 'Contactar soporte',
-          link: '/soporte'
+          action: 'Soporte', link: '/soporte'
         };
     }
   };
 
   const info = getStatusInfo();
+  const StatusIcon = info.Icon;
 
-  const getFechaEnvio = () => {
-    if (kyc?.fechaEnvio) return new Date(kyc.fechaEnvio).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
-    if (kyc?.fechaSolicitud) return new Date(kyc.fechaSolicitud).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
-    if (kyc?.created) return new Date(kyc.created).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
-    return 'No disponible';
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'No disponible';
+    return new Date(dateStr).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
   };
 
-  const getFechaRevision = () => {
-    if (kyc?.fechaActualizacion) return new Date(kyc.fechaActualizacion).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
-    if (kyc?.fechaRevision) return new Date(kyc.fechaRevision).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
-    return null;
-  };
-
-  const getColorClasses = (color) => {
-    const classes = {
-      green: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', icon: 'text-green-500' },
-      yellow: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700', icon: 'text-yellow-500' },
-      red: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', icon: 'text-red-500' },
-      gray: { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', icon: 'text-gray-500' }
-    };
-    return classes[color] || classes.gray;
-  };
-
-  const colors = getColorClasses(info.color);
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: T.bg }}>
+        <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: T.line, borderTopColor: T.accent }} />
+      </div>
+    );
+  }
 
   return (
     <>
-      <Head>
-        <title>Estado KYC | MarketDesliz</title>
-        <style>{`
-          .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; }
-          .card { background: white; border-radius: 16px; padding: 40px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; }
-          .icon { font-size: 64px; margin-bottom: 20px; }
-          .title { font-size: 24px; margin-bottom: 10px; }
-          .message { color: #666; margin-bottom: 30px; line-height: 1.6; }
-          .info-box { background: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; }
-          .info-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
-          .info-item:last-child { border-bottom: none; }
-          .info-label { color: #666; }
-          .info-value { font-weight: 500; }
-          .btn { background: #6C3BFF; color: white; border: none; padding: 15px 30px; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
-          .btn:hover { background: #5A2FE0; }
-          .btn-outline { background: white; color: #6C3BFF; border: 2px solid #6C3BFF; padding: 15px 30px; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
-          .btn-outline:hover { background: #6C3BFF; color: white; }
-          .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #6C3BFF; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px; }
-          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        `}</style>
-      </Head>
+      <Head><title>Estado KYC | MarketDesliz</title></Head>
+      <div className="min-h-screen flex flex-col" style={{ background: T.bg }}>
+        <BackButton fallback="/perfil" />
+        <TerminalBar mode="rotating" />
+        <Header />
 
-      <StoreLayout>
-        <div className="container">
-          <div className="card">
-            {loading ? (
-              <>
-                <div className="spinner"></div>
-                <p style={{ color: '#666' }}>Cargando información de verificación...</p>
-              </>
-            ) : (
-              <>
-                <div className="icon">{info.icon}</div>
-                <h1 className="title" style={{ color: '#1a1a1a' }}>{info.title}</h1>
-                <p className="message">{info.message}</p>
+        <main className="flex-1 max-w-[600px] mx-auto px-6 md:px-14 py-12 md:py-16 w-full">
+          
+          <section className="mb-10 text-center">
+            <p className="text-[10px] uppercase tracking-[0.28em] mb-4" style={{ color: T.inkFaint, fontWeight: 500 }}>
+              Verificación KYC
+            </p>
+            <h1 className="text-[32px] md:text-[44px] leading-[1.02] tracking-[-0.03em]" style={{ color: T.ink, fontWeight: 400 }}>
+              Tu estado
+              <span className="font-serif italic" style={{ color: T.inkMid }}> actual.</span>
+            </h1>
+          </section>
 
-                {kyc && (
-                  <div className="info-box">
-                    <div className="info-item">
-                      <span className="info-label">📅 Fecha de envío:</span>
-                      <span className="info-value">{getFechaEnvio()}</span>
-                    </div>
-                    {getFechaRevision() && (
-                      <div className="info-item">
-                        <span className="info-label">🔍 Fecha de revisión:</span>
-                        <span className="info-value">{getFechaRevision()}</span>
-                      </div>
-                    )}
-                    {kyc.termsAccepted && (
-                      <div className="info-item">
-                        <span className="info-label">📋 Términos aceptados:</span>
-                        <span className="info-value" style={{ color: '#10b981' }}>✅ Sí</span>
-                      </div>
-                    )}
-                    {kyc.estado === 'rechazado' && kyc.motivoRechazo && (
-                      <div className="info-item" style={{ flexDirection: 'column' }}>
-                        <span className="info-label" style={{ marginBottom: '8px' }}>❌ Motivo del rechazo:</span>
-                        <span className="info-value" style={{ color: '#dc2626', fontWeight: 'normal' }}>{kyc.motivoRechazo}</span>
-                      </div>
-                    )}
+          <div className="p-8 md:p-10 text-center" style={{ background: T.bg, border: `1px solid ${T.line}`, borderRadius: '12px' }}>
+            
+            <div 
+              className="inline-flex items-center justify-center mx-auto mb-6"
+              style={{ width: '64px', height: '64px', background: info.bg, borderRadius: '50%' }}
+            >
+              <StatusIcon size={32} style={{ color: info.color }} />
+            </div>
+
+            <h2 className="text-[20px] md:text-[24px] mb-2" style={{ color: T.ink, fontWeight: 500 }}>
+              {info.title}
+            </h2>
+            <p className="text-[14px] leading-[1.6] max-w-sm mx-auto mb-8" style={{ color: T.inkSoft }}>
+              {info.message}
+            </p>
+
+            {kyc && (
+              <div className="text-left mb-8" style={{ background: 'rgba(15,15,15,0.02)', border: `1px solid ${T.line}`, borderRadius: '8px', padding: '20px' }}>
+                <div className="flex justify-between items-center py-2 border-b" style={{ borderColor: T.line }}>
+                  <span className="text-[12px] uppercase tracking-[0.1em]" style={{ color: T.inkFaint }}>Fecha de envío</span>
+                  <span className="text-[13px] font-medium" style={{ color: T.ink }}>{formatDate(kyc.fechaEnvio || kyc.fechaSolicitud || kyc.created)}</span>
+                </div>
+                {kyc.fechaRevision && (
+                  <div className="flex justify-between items-center py-2 border-b" style={{ borderColor: T.line }}>
+                    <span className="text-[12px] uppercase tracking-[0.1em]" style={{ color: T.inkFaint }}>Fecha de revisión</span>
+                    <span className="text-[13px] font-medium" style={{ color: T.ink }}>{formatDate(kyc.fechaRevision)}</span>
                   </div>
                 )}
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '24px' }}>
-                  {info.link && (
-                    <button className="btn" onClick={() => router.push(info.link)}>
-                      {info.action}
-                    </button>
-                  )}
-
-                  {!kyc && (
-                    <button className="btn" onClick={() => router.push('/kyc')}>
-                      Iniciar verificación
-                    </button>
-                  )}
-
-                  <button className="btn-outline" onClick={() => router.push('/perfil')}>
-                    ← Volver a mi perfil
-                  </button>
-                </div>
-
-                {kyc?.estado === 'pendiente' && (
-                  <p style={{ color: '#999', fontSize: '12px', marginTop: '16px' }}>
-                    ⏳ El proceso de verificación puede tomar hasta 24 horas.
-                  </p>
+                {kyc.estado === 'rechazado' && kyc.motivoRechazo && (
+                  <div className="pt-3 mt-1">
+                    <span className="block text-[12px] uppercase tracking-[0.1em] mb-1" style={{ color: T.red }}>Motivo del rechazo</span>
+                    <span className="block text-[13px] leading-relaxed" style={{ color: T.red }}>{kyc.motivoRechazo}</span>
+                  </div>
                 )}
-              </>
+              </div>
             )}
+
+            <div className="flex flex-col gap-3">
+              {info.link && (
+                <button 
+                  onClick={() => router.push(info.link)}
+                  className="w-full h-12 flex items-center justify-center gap-2 text-[13px] text-white transition-colors"
+                  style={{ background: T.accent, borderRadius: '6px', fontWeight: 500 }}
+                  onMouseEnter={e => e.currentTarget.style.background = T.accentDeep}
+                  onMouseLeave={e => e.currentTarget.style.background = T.accent}
+                >
+                  {info.action} <ChevronRight size={16} />
+                </button>
+              )}
+              
+              <button 
+                onClick={() => router.push('/perfil')}
+                className="w-full h-12 flex items-center justify-center text-[13px] transition-colors"
+                style={{ background: 'transparent', border: `1px solid ${T.line}`, color: T.inkMid, borderRadius: '6px', fontWeight: 500 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(15,15,15,0.03)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                Volver a mi perfil
+              </button>
+            </div>
+
           </div>
-        </div>
-      </StoreLayout>
+        </main>
+        <Footer variant="minimal" />
+      </div>
     </>
   );
 }
